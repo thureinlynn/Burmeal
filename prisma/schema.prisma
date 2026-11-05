@@ -1,0 +1,137 @@
+// schema.prisma
+// Production-ready PostgreSQL schema designed for Vercel + Neon / Supabase deployment
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  CUSTOMER
+  SHOP_OWNER
+  ADMIN
+}
+
+enum ShopStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum MenuType {
+  SPECIAL     // One-day special menu (designated single date)
+  WEEKLY      // Weekly menu (rotating weekly schedule)
+  PERMANENT   // Regular master menu (core permanent menu)
+}
+
+model User {
+  id           String       @id @default(cuid())
+  email        String       @unique
+  passwordHash String       @map("password_hash")
+  name         String
+  role         Role         @default(CUSTOMER)
+  avatarUrl    String?      @map("avatar_url")
+  createdAt    DateTime     @default(now()) @map("created_at")
+  updatedAt    DateTime     @updatedAt @map("updated_at")
+
+  shops        Shop[]       @relation("OwnerShops")
+  sessions     Session[]
+  follows      Follow[]
+  savedItems   SavedItem[]
+
+  @@map("users")
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String   @map("user_id")
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model Shop {
+  id            String      @id @default(cuid())
+  ownerId       String      @map("owner_id")
+  name          String
+  bio           String
+  coverImage    String      @map("cover_image")
+  avatarImage   String      @map("avatar_image")
+  status        ShopStatus  @default(PENDING)
+  cuisineType   String      @map("cuisine_type")
+  locationArea  String      @map("location_area")
+
+  // Direct-contact deep links & phone numbers
+  facebookUrl   String?     @map("facebook_url")
+  whatsappPhone String?     @map("whatsapp_phone")
+  viberPhone    String?     @map("viber_phone")
+  lineId        String?     @map("line_id")
+  phoneNumber   String?     @map("phone_number")
+
+  createdAt     DateTime    @default(now()) @map("created_at")
+  updatedAt     DateTime    @updatedAt @map("updated_at")
+
+  owner         User        @relation("OwnerShops", fields: [ownerId], references: [id], onDelete: Cascade)
+  menuItems     MenuItem[]
+  followers     Follow[]
+
+  @@map("shops")
+}
+
+model MenuItem {
+  id            String      @id @default(cuid())
+  shopId        String      @map("shop_id")
+  title         String
+  description   String
+  image         String
+  price         Decimal     @db.Decimal(10, 2)
+  category      String
+  menuType      MenuType    @map("menu_type")
+
+  isVegetarian  Boolean     @default(false) @map("is_vegetarian")
+  isHalal       Boolean     @default(false) @map("is_halal")
+
+  // Availability schedule
+  specialDate   String?     @map("special_date")   // YYYY-MM-DD
+  availableDays String[]    @map("available_days") // e.g. ["Mon", "Wed", "Fri"]
+
+  createdAt     DateTime    @default(now()) @map("created_at")
+  updatedAt     DateTime    @updatedAt @map("updated_at")
+
+  shop          Shop        @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  savedBy       SavedItem[]
+
+  @@map("menu_items")
+}
+
+model Follow {
+  customerId String   @map("customer_id")
+  shopId     String   @map("shop_id")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  customer   User     @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  shop       Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  @@id([customerId, shopId])
+  @@map("follows")
+}
+
+model SavedItem {
+  customerId String   @map("customer_id")
+  itemId     String   @map("item_id")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  customer   User     @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  menuItem   MenuItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@id([customerId, itemId])
+  @@map("saved_items")
+}

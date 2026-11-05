@@ -1,0 +1,8 @@
+{
+  "name": "BurMeal - Public Food Discovery & Shop Platform",
+  "description": "Public-facing food discovery and direct-contact platform connecting customers with authentic Burmese and artisanal food shops. Features 3-tier menus (Daily Special, Weekly, Regular), dietary tags, and deep-link contact via WhatsApp, Viber, LINE, and Facebook.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
