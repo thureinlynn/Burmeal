@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from './context/AuthContext';
 import { useLanguage } from './context/LanguageContext';
 import { MenuItem, Shop, MenuType } from './types';
+import { apiClient } from './services/apiClient';
 import { Navbar } from './components/Navbar';
 import { BottomNav } from './components/BottomNav';
 import { FilterBar } from './components/FilterBar';
@@ -55,13 +56,8 @@ export default function App() {
   // Load Shops
   const loadShops = async () => {
     try {
-      const headers: Record<string, string> = {};
-      if (token) headers['Authorization'] = `Bearer ${token}`;
-      const res = await fetch('/api/shops', { headers });
-      if (res.ok) {
-        const data = await res.json();
-        setShops(data);
-      }
+      const data = await apiClient.getShops(token);
+      setShops(data);
     } catch (err) {
       console.error('Failed to load shops', err);
     }
@@ -71,27 +67,21 @@ export default function App() {
   const loadMenuItems = async (feedTypeOverride?: 'FOLLOWED') => {
     setIsLoading(true);
     try {
-      const params = new URLSearchParams();
-      if (selectedShopId) params.append('shopId', selectedShopId);
-      if (selectedMenuType !== 'ALL') params.append('menuType', selectedMenuType);
-      if (selectedCategory !== 'ALL') params.append('category', selectedCategory);
-      if (isVegetarian) params.append('isVegetarian', 'true');
-      if (isHalal) params.append('isHalal', 'true');
-      if (searchQuery.trim()) params.append('query', searchQuery.trim());
-      if (currentTab === 'following' || feedTypeOverride === 'FOLLOWED') {
-        params.append('feedType', 'FOLLOWED');
-      }
-
-      const headers: Record<string, string> = {};
-      if (token) headers['Authorization'] = `Bearer ${token}`;
-
-      const res = await fetch(`/api/menu-items?${params.toString()}`, { headers });
-      if (res.ok) {
-        const data = await res.json();
-        setMenuItems(data.items || []);
-        setFeedSource(data.feedSource || 'DISCOVER');
-        setFollowedCount(data.followedCount || 0);
-      }
+      const data = await apiClient.getMenuItems(
+        {
+          shopId: selectedShopId,
+          menuType: selectedMenuType,
+          category: selectedCategory,
+          isVegetarian,
+          isHalal,
+          query: searchQuery.trim(),
+          feedType: currentTab === 'following' || feedTypeOverride === 'FOLLOWED' ? 'FOLLOWED' : undefined,
+        },
+        token
+      );
+      setMenuItems(data.items || []);
+      setFeedSource((data.feedSource as any) || 'DISCOVER');
+      setFollowedCount(data.followedCount || 0);
     } catch (err) {
       console.error('Failed to load menu items', err);
     } finally {
@@ -106,13 +96,8 @@ export default function App() {
       return;
     }
     try {
-      const res = await fetch('/api/saved-items', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setSavedItems(data);
-      }
+      const data = await apiClient.getSavedItems(token);
+      setSavedItems(data);
     } catch (err) {
       console.error('Failed to load saved items', err);
     }
@@ -149,11 +134,8 @@ export default function App() {
       return;
     }
     try {
-      const res = await fetch(`/api/shops/${targetShopId}/follow`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (res.ok) {
+      const res = await apiClient.toggleFollow(targetShopId, token);
+      if (res) {
         await loadShops();
         await loadMenuItems();
       }
@@ -170,11 +152,8 @@ export default function App() {
       return;
     }
     try {
-      const res = await fetch(`/api/menu-items/${item.id}/save`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (res.ok) {
+      const res = await apiClient.toggleSave(item.id, token);
+      if (res) {
         setMenuItems((prev) =>
           prev.map((i) => (i.id === item.id ? { ...i, isSaved: !i.isSaved } : i))
         );
@@ -197,15 +176,8 @@ export default function App() {
   const handleUpdateShopProfile = async (data: Partial<Shop>) => {
     if (!shopId || !token) return;
     try {
-      await fetch(`/api/shops/${shopId}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(data),
-      });
-      loadShops();
+      await apiClient.updateShop(shopId, data, token);
+      await loadShops();
     } catch (err) {
       console.error('Profile update error:', err);
     }
@@ -213,63 +185,62 @@ export default function App() {
 
   const handleCreateMenuItem = async (data: any) => {
     if (!token) return;
-    await fetch('/api/menu-items', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify(data),
-    });
-    loadMenuItems();
+    try {
+      await apiClient.createMenuItem(data, token);
+      await loadMenuItems();
+    } catch (err) {
+      console.error('Create menu item error:', err);
+    }
   };
 
   const handleUpdateMenuItem = async (id: string, data: any) => {
     if (!token) return;
-    await fetch(`/api/menu-items/${id}`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify(data),
-    });
-    loadMenuItems();
+    try {
+      await apiClient.updateMenuItem(id, data, token);
+      await loadMenuItems();
+    } catch (err) {
+      console.error('Update menu item error:', err);
+    }
   };
 
   const handleDeleteMenuItem = async (id: string) => {
     if (!token) return;
-    await fetch(`/api/menu-items/${id}`, {
-      method: 'DELETE',
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    loadMenuItems();
+    try {
+      await apiClient.deleteMenuItem(id, token);
+      await loadMenuItems();
+    } catch (err) {
+      console.error('Delete menu item error:', err);
+    }
   };
 
   const handleAdminStatusUpdate = async (id: string, status: 'APPROVED' | 'REJECTED') => {
     if (!token) return;
-    await fetch(`/api/admin/shops/${id}/status`, {
-      method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({ status }),
-    });
-    loadShops();
-    loadMenuItems();
+    try {
+      await apiClient.adminUpdateStatus(id, status, token);
+      await loadShops();
+      await loadMenuItems();
+    } catch (err) {
+      console.error('Admin status update error:', err);
+    }
   };
 
   const activeDetailShop = shops.find((s) => s.id === selectedShopId);
   const currentOwnerShop = shops.find((s) => s.id === shopId || s.ownerId === user?.id);
   const followedShopsList = shops.filter((s) => (s as any).isFollowed);
 
-  // If user is SHOP_OWNER and currentTab is one of customer tabs, switch default to shop_overview
+  // If user is SHOP_OWNER and currentTab is one of customer tabs or feed, switch default to shop_overview
   useEffect(() => {
-    if (user?.role === 'SHOP_OWNER' && (currentTab === 'following' || currentTab === 'profile')) {
-      setCurrentTab('shop_overview');
+    if (user?.role === 'SHOP_OWNER') {
+      if (
+        currentTab === 'following' ||
+        currentTab === 'profile' ||
+        currentTab === 'feed' ||
+        currentTab === 'shops'
+      ) {
+        setCurrentTab('shop_overview');
+      }
     }
-  }, [user]);
+  }, [user, user?.role]);
 
   return (
     <div className="min-h-screen flex flex-col bg-[#FAFAF9] dark:bg-stone-950 text-stone-900 dark:text-stone-100 transition-colors pb-20 md:pb-8">
@@ -527,8 +498,8 @@ export default function App() {
         {(currentTab === 'shop_overview' ||
           currentTab === 'shop_menus' ||
           currentTab === 'shop_profile' ||
-          currentTab === 'shop_settings') &&
-          currentOwnerShop && (
+          currentTab === 'shop_settings') && (
+          currentOwnerShop ? (
             <ShopDashboard
               shop={currentOwnerShop}
               menuItems={menuItems.filter((m) => m.shopId === currentOwnerShop.id)}
@@ -536,6 +507,10 @@ export default function App() {
                 currentTab as 'shop_overview' | 'shop_menus' | 'shop_profile' | 'shop_settings'
               }
               onSubTabChange={(tab) => setCurrentTab(tab)}
+              onVisitShop={(sId) => {
+                setSelectedShopId(sId);
+                setCurrentTab('shop_detail');
+              }}
               onRefresh={() => {
                 loadShops();
                 loadMenuItems();
@@ -545,7 +520,27 @@ export default function App() {
               onUpdateMenuItem={handleUpdateMenuItem}
               onDeleteMenuItem={handleDeleteMenuItem}
             />
-          )}
+          ) : user?.role === 'SHOP_OWNER' ? (
+            <div className="bg-white dark:bg-stone-900 rounded-3xl border border-stone-200 dark:border-stone-800 p-8 text-center max-w-lg mx-auto my-8 shadow-sm">
+              <Store className="w-12 h-12 text-amber-600 mx-auto mb-3" />
+              <h2 className="text-lg font-bold font-display text-stone-900 dark:text-stone-100">
+                Setting Up Your Shop Profile
+              </h2>
+              <p className="text-xs text-stone-500 dark:text-stone-400 mt-1 mb-4 leading-relaxed">
+                We are configuring your kitchen dashboard and storefront. Tap below to reload your shop catalog.
+              </p>
+              <button
+                onClick={() => {
+                  loadShops();
+                  loadMenuItems();
+                }}
+                className="px-5 py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs"
+              >
+                Refresh Shop Dashboard
+              </button>
+            </div>
+          ) : null
+        )}
 
         {/* ================= VIEW 8: ADMIN APPROVAL PANEL ================= */}
         {currentTab === 'admin' && user?.role === 'ADMIN' && (

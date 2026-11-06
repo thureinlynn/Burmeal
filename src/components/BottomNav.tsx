@@ -104,10 +104,10 @@ export const BottomNav: React.FC<BottomNavProps> = ({
     );
   }
 
-  // SHOP_OWNER Navigation with Settings
+  // SHOP_OWNER Navigation: 4 clean distinct tabs (Overview, Menus, Shop Info, Settings)
   return (
     <nav aria-label="Shop Navigation" className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-stone-900/95 backdrop-blur border-t border-stone-200 dark:border-stone-800 px-1 py-1 shadow-lg transition-colors">
-      <div className="grid grid-cols-5 items-center">
+      <div className="grid grid-cols-4 items-center">
         {/* Tab 1: Overview */}
         <button
           onClick={() => onSelectTab('shop_overview')}
@@ -118,7 +118,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
           }`}
         >
           <LayoutDashboard className="w-4 h-4 mb-0.5" />
-          <span className="text-[10px] leading-tight truncate max-w-[55px]">{t.shopNavOverview}</span>
+          <span className="text-[10px] leading-tight truncate max-w-[65px]">{t.shopNavOverview}</span>
         </button>
 
         {/* Tab 2: Menus */}
@@ -131,7 +131,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
           }`}
         >
           <UtensilsCrossed className="w-4 h-4 mb-0.5" />
-          <span className="text-[10px] leading-tight truncate max-w-[55px]">{t.shopNavMenus}</span>
+          <span className="text-[10px] leading-tight truncate max-w-[65px]">{t.shopNavMenus}</span>
         </button>
 
         {/* Tab 3: Shop Info */}
@@ -144,23 +144,10 @@ export const BottomNav: React.FC<BottomNavProps> = ({
           }`}
         >
           <Store className="w-4 h-4 mb-0.5" />
-          <span className="text-[10px] leading-tight truncate max-w-[55px]">{t.shopNavProfile}</span>
+          <span className="text-[10px] leading-tight truncate max-w-[65px]">{t.shopNavProfile}</span>
         </button>
 
-        {/* Tab 4: Shop Settings */}
-        <button
-          onClick={() => onSelectTab('shop_settings')}
-          className={`flex flex-col items-center justify-center py-1 transition-colors ${
-            currentTab === 'shop_settings'
-              ? 'text-amber-600 dark:text-amber-400 font-bold'
-              : 'text-stone-500 dark:text-stone-400 hover:text-stone-800'
-          }`}
-        >
-          <User className="w-4 h-4 mb-0.5" />
-          <span className="text-[10px] leading-tight truncate max-w-[55px]">{t.shopNavSettings}</span>
-        </button>
-
-        {/* Tab 5: App Settings */}
+        {/* Tab 4: Settings (Unified App & Shop Settings) */}
         <button
           onClick={() => onSelectTab('settings')}
           className={`flex flex-col items-center justify-center py-1 transition-colors ${
@@ -170,7 +157,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
           }`}
         >
           <SettingsIcon className="w-4 h-4 mb-0.5" />
-          <span className="text-[10px] leading-tight truncate max-w-[55px]">{t.navSettings}</span>
+          <span className="text-[10px] leading-tight truncate max-w-[65px]">{t.navSettings}</span>
         </button>
       </div>
     </nav>

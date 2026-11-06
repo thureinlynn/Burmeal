@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useLanguage } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
+import { useAuth } from '../context/AuthContext';
 import {
   Settings as SettingsIcon,
   Sun,
@@ -12,11 +13,15 @@ import {
   DollarSign,
   Info,
   Check,
+  Store,
+  LogOut,
+  User,
 } from 'lucide-react';
 
 export const SettingsView: React.FC = () => {
   const { lang, setLang, t } = useLanguage();
   const { theme, setTheme } = useTheme();
+  const { user, logout } = useAuth();
 
   // Platform setting states
   const [prioritizeHalal, setPrioritizeHalal] = useState(() => {
@@ -190,6 +195,38 @@ export const SettingsView: React.FC = () => {
           />
         </label>
       </div>
+
+      {/* 5. Account & Session Status (if logged in) */}
+      {user && (
+        <div className="bg-white dark:bg-stone-900 rounded-2xl border border-stone-200 dark:border-stone-800 p-5 shadow-xs space-y-3">
+          <h2 className="text-sm font-bold font-display text-stone-900 dark:text-stone-100 flex items-center gap-2">
+            {user.role === 'SHOP_OWNER' ? (
+              <Store className="w-4 h-4 text-amber-600" />
+            ) : (
+              <User className="w-4 h-4 text-amber-600" />
+            )}
+            <span>
+              {user.role === 'SHOP_OWNER' ? 'Shop Owner Account' : 'Customer Account'}
+            </span>
+          </h2>
+          <div className="p-3 bg-stone-50 dark:bg-stone-800/60 rounded-xl border border-stone-100 dark:border-stone-800 flex items-center justify-between">
+            <div>
+              <p className="text-xs font-bold text-stone-900 dark:text-stone-100">{user.name}</p>
+              <p className="text-[11px] text-stone-500 dark:text-stone-400">{user.email}</p>
+              <span className="inline-block mt-1 text-[10px] font-bold px-2 py-0.5 rounded bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 uppercase tracking-wider">
+                {user.role}
+              </span>
+            </div>
+            <button
+              onClick={() => logout()}
+              className="flex items-center gap-1.5 px-3.5 py-1.5 bg-stone-200 dark:bg-stone-700 hover:bg-rose-100 dark:hover:bg-rose-950 hover:text-rose-700 dark:hover:text-rose-300 text-stone-700 dark:text-stone-200 rounded-xl text-xs font-semibold transition-colors"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              <span>{t.signOut}</span>
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* App Info Footer */}
       <div className="text-center text-xs text-stone-400 dark:text-stone-500 pt-2 flex items-center justify-center gap-1.5">

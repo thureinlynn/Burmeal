@@ -23,6 +23,7 @@ import {
   ShieldCheck,
   MapPin,
   Globe,
+  Calendar,
 } from 'lucide-react';
 
 interface ShopDashboardProps {
@@ -30,6 +31,7 @@ interface ShopDashboardProps {
   menuItems: MenuItem[];
   activeSubTab?: 'shop_overview' | 'shop_menus' | 'shop_profile' | 'shop_settings';
   onSubTabChange?: (tab: 'shop_overview' | 'shop_menus' | 'shop_profile' | 'shop_settings') => void;
+  onVisitShop?: (shopId: string) => void;
   onRefresh: () => void;
   onUpdateShopProfile: (data: Partial<Shop>) => Promise<void>;
   onCreateMenuItem: (data: any) => Promise<void>;
@@ -44,6 +46,7 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
   menuItems,
   activeSubTab = 'shop_overview',
   onSubTabChange,
+  onVisitShop,
   onRefresh,
   onUpdateShopProfile,
   onCreateMenuItem,
@@ -296,75 +299,427 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
       </div>
 
       {/* ================= TAB 1: OVERVIEW & INSIGHTS ================= */}
-      {currentTab === 'shop_overview' && (
-        <div className="space-y-6">
-          {/* Summary Stat Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div className="bg-white rounded-2xl border border-stone-200 p-5 shadow-xs">
-              <div className="flex items-center justify-between text-stone-500 mb-2">
-                <span className="text-xs font-semibold">{t.totalDishes}</span>
-                <UtensilsCrossed className="w-4 h-4 text-amber-600" />
+      {currentTab === 'shop_overview' && (() => {
+        const todayStr = new Date().toISOString().slice(0, 10);
+        const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+        const currentDayName = dayNames[new Date().getDay()];
+
+        const dailySpecials = menuItems.filter((m) => m.menuType === 'SPECIAL');
+        const weeklyItems = menuItems.filter((m) => m.menuType === 'WEEKLY');
+        const regularItems = menuItems.filter((m) => m.menuType === 'PERMANENT');
+
+        // Check if there is an active special for today or recent
+        const todaysSpecial = dailySpecials.find((m) => m.specialDate === todayStr) || dailySpecials[0];
+        
+        // Count active contact channels
+        const contactChannelsCount = [
+          shop.whatsappPhone,
+          shop.viberPhone,
+          shop.lineId,
+          shop.facebookUrl,
+          shop.phoneNumber,
+        ].filter(Boolean).length;
+
+        // Health score calculation (out of 100)
+        let healthScore = 20; // base registered
+        if (shop.status === 'APPROVED') healthScore += 25;
+        if (menuItems.length >= 3) healthScore += 20;
+        else if (menuItems.length > 0) healthScore += 10;
+        if (contactChannelsCount >= 2) healthScore += 20;
+        else if (contactChannelsCount === 1) healthScore += 10;
+        if (shop.address && shop.city) healthScore += 15;
+
+        return (
+          <div className="space-y-6">
+            {/* Top Store Overview & Quick Actions Banner */}
+            <div className="bg-gradient-to-r from-amber-600 to-orange-600 rounded-3xl p-5 sm:p-7 text-white shadow-md relative overflow-hidden">
+              <div className="absolute right-0 top-0 bottom-0 w-1/3 opacity-10 pointer-events-none flex items-center justify-end pr-6">
+                <Store className="w-48 h-48" />
               </div>
-              <p className="text-3xl font-bold font-display text-stone-900 tabular-nums">
-                {menuItems.length}
-              </p>
-              <p className="text-[11px] text-stone-400 mt-1">Across 3 menu classifications</p>
+              <div className="relative z-10 max-w-xl">
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/20 backdrop-blur text-[11px] font-bold tracking-wide mb-3">
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-300" />
+                  <span>
+                    {shop.status === 'APPROVED'
+                      ? 'Verified Storefront'
+                      : shop.status === 'PENDING'
+                      ? 'Pending Admin Verification'
+                      : 'Storefront Review Needed'}
+                  </span>
+                </div>
+                <h2 className="text-2xl sm:text-3xl font-extrabold font-display leading-tight mb-2">
+                  Welcome to {shop.name}
+                </h2>
+                <p className="text-xs sm:text-sm text-amber-100 leading-relaxed mb-5">
+                  Manage your multi-tier culinary offerings (Daily Specials, Weekly Rotating Menus, and Regular Master Dishes) and connect with hungry customers across your city.
+                </p>
+
+                <div className="flex flex-wrap items-center gap-2.5">
+                  <button
+                    onClick={() => openCreateModal('SPECIAL')}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 bg-white text-stone-900 hover:bg-stone-100 rounded-xl text-xs font-bold shadow-sm transition-all active:scale-95"
+                  >
+                    <Plus className="w-3.5 h-3.5 text-rose-600" />
+                    <span>+ Add Today's Special</span>
+                  </button>
+                  <button
+                    onClick={() => openCreateModal('WEEKLY')}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white/15 hover:bg-white/25 border border-white/25 rounded-xl text-xs font-bold transition-all text-white active:scale-95"
+                  >
+                    <Plus className="w-3.5 h-3.5 text-amber-300" />
+                    <span>+ Add Weekly Dish</span>
+                  </button>
+                  {onVisitShop && (
+                    <button
+                      onClick={() => onVisitShop(shop.id)}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white/10 hover:bg-white/20 border border-white/20 rounded-xl text-xs font-bold transition-all text-white"
+                    >
+                      <Eye className="w-3.5 h-3.5" />
+                      <span>View Public Storefront</span>
+                    </button>
+                  )}
+                </div>
+              </div>
             </div>
 
-            <div className="bg-white rounded-2xl border border-stone-200 p-5 shadow-xs">
-              <div className="flex items-center justify-between text-stone-500 mb-2">
-                <span className="text-xs font-semibold">{t.totalFollowers}</span>
-                <Heart className="w-4 h-4 text-rose-600" />
+            {/* Metric KPI Cards & Store Health */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+              {/* Card 1: Total Dishes */}
+              <div className="bg-white dark:bg-stone-900 rounded-2xl border border-stone-200 dark:border-stone-800 p-4 sm:p-5 shadow-xs">
+                <div className="flex items-center justify-between text-stone-500 dark:text-stone-400 mb-2">
+                  <span className="text-[11px] font-semibold uppercase tracking-wider">{t.totalDishes}</span>
+                  <div className="p-1.5 bg-amber-50 dark:bg-amber-950/40 rounded-lg text-amber-600 dark:text-amber-400">
+                    <UtensilsCrossed className="w-4 h-4" />
+                  </div>
+                </div>
+                <p className="text-2xl sm:text-3xl font-extrabold font-display text-stone-900 dark:text-stone-100 tabular-nums">
+                  {menuItems.length}
+                </p>
+                <div className="mt-2 flex items-center gap-1 text-[11px] text-stone-500 dark:text-stone-400">
+                  <span className="font-semibold text-rose-600">{dailySpecials.length} daily</span>
+                  <span>·</span>
+                  <span className="font-semibold text-amber-600">{weeklyItems.length} weekly</span>
+                  <span>·</span>
+                  <span className="font-semibold text-stone-700 dark:text-stone-300">{regularItems.length} reg</span>
+                </div>
               </div>
-              <p className="text-3xl font-bold font-display text-stone-900 tabular-nums">
-                {shop.followerCount || 0}
-              </p>
-              <p className="text-[11px] text-stone-400 mt-1">Customers receiving your feed updates</p>
+
+              {/* Card 2: Followers */}
+              <div className="bg-white dark:bg-stone-900 rounded-2xl border border-stone-200 dark:border-stone-800 p-4 sm:p-5 shadow-xs">
+                <div className="flex items-center justify-between text-stone-500 dark:text-stone-400 mb-2">
+                  <span className="text-[11px] font-semibold uppercase tracking-wider">{t.totalFollowers}</span>
+                  <div className="p-1.5 bg-rose-50 dark:bg-rose-950/40 rounded-lg text-rose-600 dark:text-rose-400">
+                    <Heart className="w-4 h-4" />
+                  </div>
+                </div>
+                <p className="text-2xl sm:text-3xl font-extrabold font-display text-stone-900 dark:text-stone-100 tabular-nums">
+                  {shop.followerCount || 0}
+                </p>
+                <p className="text-[11px] text-stone-400 mt-2">
+                  Engaged customers receiving updates in their Following feed
+                </p>
+              </div>
+
+              {/* Card 3: Direct Ordering Channels */}
+              <div className="bg-white dark:bg-stone-900 rounded-2xl border border-stone-200 dark:border-stone-800 p-4 sm:p-5 shadow-xs">
+                <div className="flex items-center justify-between text-stone-500 dark:text-stone-400 mb-2">
+                  <span className="text-[11px] font-semibold uppercase tracking-wider">Ordering Channels</span>
+                  <div className="p-1.5 bg-emerald-50 dark:bg-emerald-950/40 rounded-lg text-emerald-600 dark:text-emerald-400">
+                    <Globe className="w-4 h-4" />
+                  </div>
+                </div>
+                <p className="text-2xl sm:text-3xl font-extrabold font-display text-stone-900 dark:text-stone-100 tabular-nums">
+                  {contactChannelsCount} <span className="text-xs font-normal text-stone-400">/ 5 Active</span>
+                </p>
+                <div className="mt-2 flex items-center gap-1.5 flex-wrap">
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${shop.whatsappPhone ? 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300' : 'bg-stone-100 dark:bg-stone-800 text-stone-400 line-through'}`}>WA</span>
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${shop.viberPhone ? 'bg-purple-100 dark:bg-purple-950/60 text-purple-800 dark:text-purple-300' : 'bg-stone-100 dark:bg-stone-800 text-stone-400 line-through'}`}>Viber</span>
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${shop.lineId ? 'bg-green-100 dark:bg-green-950/60 text-green-800 dark:text-green-300' : 'bg-stone-100 dark:bg-stone-800 text-stone-400 line-through'}`}>LINE</span>
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${shop.facebookUrl ? 'bg-blue-100 dark:bg-blue-950/60 text-blue-800 dark:text-blue-300' : 'bg-stone-100 dark:bg-stone-800 text-stone-400 line-through'}`}>FB</span>
+                </div>
+              </div>
+
+              {/* Card 4: Store Health Score */}
+              <div className="bg-white dark:bg-stone-900 rounded-2xl border border-stone-200 dark:border-stone-800 p-4 sm:p-5 shadow-xs">
+                <div className="flex items-center justify-between text-stone-500 dark:text-stone-400 mb-2">
+                  <span className="text-[11px] font-semibold uppercase tracking-wider">Store Health</span>
+                  <div className="p-1.5 bg-sky-50 dark:bg-sky-950/40 rounded-lg text-sky-600 dark:text-sky-400">
+                    <ShieldCheck className="w-4 h-4" />
+                  </div>
+                </div>
+                <div className="flex items-baseline gap-1">
+                  <p className="text-2xl sm:text-3xl font-extrabold font-display text-stone-900 dark:text-stone-100 tabular-nums">
+                    {healthScore}%
+                  </p>
+                  <span className="text-xs font-semibold text-emerald-600">
+                    {healthScore >= 80 ? 'Excellent' : healthScore >= 50 ? 'Good' : 'Needs Setup'}
+                  </span>
+                </div>
+                <div className="w-full bg-stone-100 dark:bg-stone-800 h-1.5 rounded-full mt-3 overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all duration-500 ${
+                      healthScore >= 80 ? 'bg-emerald-500' : healthScore >= 50 ? 'bg-amber-500' : 'bg-rose-500'
+                    }`}
+                    style={{ width: `${healthScore}%` }}
+                  />
+                </div>
+              </div>
             </div>
 
-            <div className="bg-white rounded-2xl border border-stone-200 p-5 shadow-xs">
-              <div className="flex items-center justify-between text-stone-500 mb-2">
-                <span className="text-xs font-semibold">Active Menu Tiers</span>
-                <Clock className="w-4 h-4 text-emerald-600" />
+            {/* Split Row: Today's Featured Special & Rotating Weekly Matrix */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Today's Daily Special Focus */}
+              <div className="bg-white dark:bg-stone-900 rounded-3xl border border-stone-200 dark:border-stone-800 p-5 shadow-xs flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse"></span>
+                      <h3 className="text-sm font-bold font-display text-stone-900 dark:text-stone-100">
+                        Today's Active Daily Special
+                      </h3>
+                    </div>
+                    <span className="text-[11px] font-semibold px-2 py-0.5 bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 rounded-md">
+                      {todayStr} ({currentDayName})
+                    </span>
+                  </div>
+
+                  {todaysSpecial ? (
+                    <div className="flex gap-4 p-3 bg-stone-50 dark:bg-stone-800/60 rounded-2xl border border-stone-200 dark:border-stone-700 mt-2">
+                      <img
+                        src={todaysSpecial.image}
+                        alt={todaysSpecial.title}
+                        className="w-20 h-20 sm:w-24 sm:h-24 rounded-xl object-cover shrink-0 border border-stone-200 dark:border-stone-700"
+                        referrerPolicy="no-referrer"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-[10px] font-bold bg-rose-600 text-white px-2 py-0.5 rounded">
+                            DAILY SPECIAL
+                          </span>
+                          <span className="text-[10px] text-stone-500 dark:text-stone-400">
+                            {todaysSpecial.category}
+                          </span>
+                        </div>
+                        <h4 className="font-bold text-sm sm:text-base text-stone-900 dark:text-stone-100 truncate mt-1">
+                          {todaysSpecial.title}
+                        </h4>
+                        <p className="text-xs text-stone-500 dark:text-stone-400 line-clamp-1 mt-0.5">
+                          {todaysSpecial.description}
+                        </p>
+                        <div className="mt-2 flex items-center justify-between">
+                          <span className="text-sm font-bold text-amber-700 dark:text-amber-400">
+                            {formatPrice(todaysSpecial.price)}
+                          </span>
+                          <button
+                            onClick={() => openEditModal(todaysSpecial)}
+                            className="text-xs text-stone-600 dark:text-stone-300 hover:text-amber-600 dark:hover:text-amber-400 font-semibold underline"
+                          >
+                            Edit Special
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="p-6 text-center border-2 border-dashed border-stone-200 dark:border-stone-800 rounded-2xl my-2">
+                      <Clock className="w-8 h-8 text-stone-300 dark:text-stone-600 mx-auto mb-2" />
+                      <p className="text-xs font-bold text-stone-700 dark:text-stone-300">
+                        No Daily Special scheduled for today
+                      </p>
+                      <p className="text-[11px] text-stone-400 mt-1 max-w-xs mx-auto">
+                        Daily specials create urgency and bring customers to your shop today!
+                      </p>
+                      <button
+                        onClick={() => openCreateModal('SPECIAL')}
+                        className="mt-3 px-3.5 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-bold transition-all shadow-xs"
+                      >
+                        + Create Today's Special Dish
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                <div className="pt-3 border-t border-stone-100 dark:border-stone-800 flex items-center justify-between text-xs text-stone-500 dark:text-stone-400">
+                  <span>Total Daily Specials in catalog: {dailySpecials.length}</span>
+                  <button
+                    onClick={() => {
+                      setMenuFilter('SPECIAL');
+                      setTab('shop_menus');
+                    }}
+                    className="font-bold text-amber-700 dark:text-amber-400 hover:underline"
+                  >
+                    Manage Specials →
+                  </button>
+                </div>
               </div>
-              <div className="flex items-center gap-2 mt-2">
-                <span className="text-xs bg-rose-50 text-rose-700 px-2 py-0.5 rounded font-semibold">
-                  {menuItems.filter((m) => m.menuType === 'SPECIAL').length} {t.dailySpecials}
-                </span>
-                <span className="text-xs bg-amber-50 text-amber-800 px-2 py-0.5 rounded font-semibold">
-                  {menuItems.filter((m) => m.menuType === 'WEEKLY').length} {t.weeklyMenus}
-                </span>
+
+              {/* Weekly Rotating Menu Schedule Matrix */}
+              <div className="bg-white dark:bg-stone-900 rounded-3xl border border-stone-200 dark:border-stone-800 p-5 shadow-xs flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <Calendar className="w-4 h-4 text-amber-600" />
+                      <h3 className="text-sm font-bold font-display text-stone-900 dark:text-stone-100">
+                        Weekly Rotating Schedule Matrix
+                      </h3>
+                    </div>
+                    <button
+                      onClick={() => openCreateModal('WEEKLY')}
+                      className="text-xs font-bold text-amber-700 dark:text-amber-400 hover:underline flex items-center gap-1"
+                    >
+                      <Plus className="w-3 h-3" />
+                      <span>Add Dish</span>
+                    </button>
+                  </div>
+
+                  <p className="text-[11px] text-stone-500 dark:text-stone-400 mb-3">
+                    Dishes rotated on fixed days of the week for customer predictability:
+                  </p>
+
+                  <div className="grid grid-cols-7 gap-1.5 text-center">
+                    {DAYS_OF_WEEK.map((day) => {
+                      const dayItems = weeklyItems.filter((m) =>
+                        m.availableDays?.includes(day)
+                      );
+                      const isToday = day === currentDayName;
+                      return (
+                        <div
+                          key={day}
+                          className={`p-2 rounded-xl border flex flex-col items-center justify-between min-h-[90px] transition-colors ${
+                            isToday
+                              ? 'bg-amber-50/80 dark:bg-amber-950/40 border-amber-400 dark:border-amber-600'
+                              : 'bg-stone-50 dark:bg-stone-800/50 border-stone-200 dark:border-stone-700'
+                          }`}
+                        >
+                          <div>
+                            <span
+                              className={`text-[11px] font-bold block ${
+                                isToday
+                                  ? 'text-amber-800 dark:text-amber-300'
+                                  : 'text-stone-700 dark:text-stone-300'
+                              }`}
+                            >
+                              {day}
+                            </span>
+                            {isToday && (
+                              <span className="text-[9px] font-bold text-amber-600 block uppercase">
+                                Today
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="my-1">
+                            {dayItems.length > 0 ? (
+                              <div className="flex flex-col items-center gap-0.5">
+                                <span className="w-6 h-6 rounded-full bg-amber-600 text-white font-bold text-[11px] flex items-center justify-center">
+                                  {dayItems.length}
+                                </span>
+                                <span className="text-[9px] text-stone-500 dark:text-stone-400 truncate max-w-[40px]">
+                                  {dayItems[0].title.split(' ')[0]}
+                                </span>
+                              </div>
+                            ) : (
+                              <span className="text-[10px] text-stone-300 dark:text-stone-600 font-medium">
+                                —
+                              </span>
+                            )}
+                          </div>
+
+                          <span className="text-[9px] text-stone-400">
+                            {dayItems.length} dishes
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="pt-3 border-t border-stone-100 dark:border-stone-800 flex items-center justify-between text-xs text-stone-500 dark:text-stone-400">
+                  <span>Weekly dishes total: {weeklyItems.length}</span>
+                  <button
+                    onClick={() => {
+                      setMenuFilter('WEEKLY');
+                      setTab('shop_menus');
+                    }}
+                    className="font-bold text-amber-700 dark:text-amber-400 hover:underline"
+                  >
+                    View Weekly List →
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Quick Actions & Store Checklist Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* Box 1: Location & Physical Address */}
+              <div className="bg-white dark:bg-stone-900 rounded-2xl border border-stone-200 dark:border-stone-800 p-4 shadow-xs">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-stone-800 dark:text-stone-200">
+                    <MapPin className="w-4 h-4 text-rose-500" />
+                    <span>Store Location</span>
+                  </div>
+                  <span className="text-sm">{getCountryFlag(shop.country || 'Myanmar')}</span>
+                </div>
+                <p className="text-xs text-stone-800 dark:text-stone-200 font-semibold truncate">
+                  {shop.address || 'No street address yet'}
+                </p>
+                <p className="text-[11px] text-stone-500 dark:text-stone-400 mt-0.5">
+                  {shop.city || 'Yangon'}, {shop.region || 'Yangon Region'}, {shop.country || 'Myanmar'}
+                </p>
+                <button
+                  onClick={() => setTab('shop_profile')}
+                  className="mt-3 text-xs font-bold text-amber-700 dark:text-amber-400 hover:underline"
+                >
+                  Edit Address Details →
+                </button>
+              </div>
+
+              {/* Box 2: Direct Ordering Setup */}
+              <div className="bg-white dark:bg-stone-900 rounded-2xl border border-stone-200 dark:border-stone-800 p-4 shadow-xs">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-stone-800 dark:text-stone-200">
+                    <Check className="w-4 h-4 text-emerald-500" />
+                    <span>Ordering Channels</span>
+                  </div>
+                  <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-950/40 px-1.5 py-0.5 rounded">
+                    Direct Contact
+                  </span>
+                </div>
+                <p className="text-xs text-stone-600 dark:text-stone-400 leading-relaxed">
+                  WhatsApp, Viber, and Phone allow customers to order directly with zero commission fee.
+                </p>
+                <button
+                  onClick={() => setTab('shop_profile')}
+                  className="mt-3 text-xs font-bold text-amber-700 dark:text-amber-400 hover:underline"
+                >
+                  Update Contact Numbers →
+                </button>
+              </div>
+
+              {/* Box 3: Master Menu Management */}
+              <div className="bg-white dark:bg-stone-900 rounded-2xl border border-stone-200 dark:border-stone-800 p-4 shadow-xs">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-stone-800 dark:text-stone-200">
+                    <UtensilsCrossed className="w-4 h-4 text-amber-500" />
+                    <span>Regular Master Dishes</span>
+                  </div>
+                  <span className="text-[11px] font-bold text-stone-900 dark:text-stone-100">
+                    {regularItems.length} dishes
+                  </span>
+                </div>
+                <p className="text-xs text-stone-600 dark:text-stone-400 leading-relaxed">
+                  Everyday core dishes always available to customers browsing your menu.
+                </p>
+                <button
+                  onClick={() => openCreateModal('PERMANENT')}
+                  className="mt-3 text-xs font-bold text-amber-700 dark:text-amber-400 hover:underline"
+                >
+                  + Add Regular Dish →
+                </button>
               </div>
             </div>
           </div>
-
-          {/* Quick Cover Preview & Change */}
-          <div className="bg-white rounded-2xl border border-stone-200 p-5 shadow-xs">
-            <h2 className="text-sm font-bold font-display text-stone-900 mb-3">
-              Shop Header Banner Preview
-            </h2>
-            <div className="relative h-44 rounded-xl overflow-hidden bg-stone-100">
-              <img
-                src={shop.coverImage}
-                alt={shop.name}
-                className="w-full h-full object-cover"
-                referrerPolicy="no-referrer"
-              />
-            </div>
-            <div className="mt-3 flex items-center justify-between">
-              <p className="text-xs text-stone-500">
-                To update your cover or avatar image, navigate to Tab 3 ({t.shopNavProfile}).
-              </p>
-              <button
-                onClick={() => setTab('shop_profile')}
-                className="text-xs font-bold text-amber-700 hover:underline"
-              >
-                Change Cover Image →
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* ================= TAB 2: 3-TIER MENU MANAGEMENT ================= */}
       {currentTab === 'shop_menus' && (

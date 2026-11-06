@@ -38,6 +38,7 @@ export interface Shop {
   createdAt: string;
   itemCount?: number;
   followerCount?: number;
+  isFollowed?: boolean;
 }
 
 export interface MenuItem {

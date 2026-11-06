@@ -1,12 +1,13 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User } from '../types';
+import { apiClient } from '../services/apiClient';
 
 interface AuthContextType {
   user: User | null;
   token: string | null;
   shopId: string | null;
   isLoading: boolean;
-  login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  login: (email: string, password?: string) => Promise<{ success: boolean; error?: string }>;
   register: (data: any) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
   switchDemoRole: (role: 'CUSTOMER' | 'SHOP_OWNER' | 'ADMIN') => Promise<void>;
@@ -28,18 +29,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return;
       }
       try {
-        const res = await fetch('/api/auth/me', {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (res.ok) {
-          const data = await res.json();
+        const data = await apiClient.getMe(token);
+        if (data && data.user) {
           setUser(data.user);
           if (data.shopId) {
             setShopId(data.shopId);
             localStorage.setItem('burmeal_shop_id', data.shopId);
           }
         } else {
-          // Token expired
+          // Token expired or invalid
           localStorage.removeItem('burmeal_token');
           localStorage.removeItem('burmeal_shop_id');
           setToken(null);
@@ -56,52 +54,46 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     loadUser();
   }, [token]);
 
-  const login = async (email: string, password: string) => {
+  const login = async (email: string, password?: string) => {
     try {
-      const res = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        return { success: false, error: data.error || 'Login failed' };
+      const res = await apiClient.login(email, password);
+      if (!res.success || !res.user) {
+        return { success: false, error: res.error || 'Login failed' };
       }
 
-      setUser(data.user);
-      setToken(data.token);
-      localStorage.setItem('burmeal_token', data.token);
-      if (data.shopId) {
-        setShopId(data.shopId);
-        localStorage.setItem('burmeal_shop_id', data.shopId);
+      setUser(res.user);
+      if (res.token) {
+        setToken(res.token);
+        localStorage.setItem('burmeal_token', res.token);
+      }
+      if (res.shopId) {
+        setShopId(res.shopId);
+        localStorage.setItem('burmeal_shop_id', res.shopId);
       } else {
         setShopId(null);
         localStorage.removeItem('burmeal_shop_id');
       }
       return { success: true };
     } catch (err: any) {
-      return { success: false, error: 'Network connection error' };
+      return { success: false, error: 'Network error during login' };
     }
   };
 
   const register = async (formData: any) => {
     try {
-      const res = await fetch('/api/auth/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        return { success: false, error: data.error || 'Registration failed' };
+      const res = await apiClient.register(formData);
+      if (!res.success || !res.user) {
+        return { success: false, error: res.error || 'Registration failed' };
       }
 
-      setUser(data.user);
-      setToken(data.token);
-      localStorage.setItem('burmeal_token', data.token);
-      if (data.shopId) {
-        setShopId(data.shopId);
-        localStorage.setItem('burmeal_shop_id', data.shopId);
+      setUser(res.user);
+      if (res.token) {
+        setToken(res.token);
+        localStorage.setItem('burmeal_token', res.token);
+      }
+      if (res.shopId) {
+        setShopId(res.shopId);
+        localStorage.setItem('burmeal_shop_id', res.shopId);
       }
       return { success: true };
     } catch (err: any) {
@@ -110,17 +102,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const logout = async () => {
-    if (token) {
-      await fetch('/api/auth/logout', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
-      }).catch(() => {});
-    }
     setUser(null);
     setToken(null);
     setShopId(null);
     localStorage.removeItem('burmeal_token');
     localStorage.removeItem('burmeal_shop_id');
+    localStorage.removeItem('burmeal_user_data');
   };
 
   const switchDemoRole = async (targetRole: 'CUSTOMER' | 'SHOP_OWNER' | 'ADMIN') => {

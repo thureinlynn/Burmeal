@@ -145,20 +145,13 @@ export const Navbar: React.FC<NavbarProps> = ({
                   {t.shopNavProfile}
                 </button>
                 <button
-                  onClick={() => onSelectTab('shop_settings')}
-                  className={`hover:text-stone-900 dark:hover:text-white transition-colors whitespace-nowrap shrink-0 ${
-                    currentTab === 'shop_settings' ? 'text-amber-700 dark:text-amber-400 font-bold border-b-2 border-amber-600 pb-1' : ''
-                  }`}
-                >
-                  {t.shopNavSettings}
-                </button>
-                <button
                   onClick={() => onSelectTab('settings')}
-                  className={`hover:text-stone-900 dark:hover:text-white transition-colors whitespace-nowrap shrink-0 ${
+                  className={`flex items-center gap-1 hover:text-stone-900 dark:hover:text-white transition-colors whitespace-nowrap shrink-0 ${
                     currentTab === 'settings' ? 'text-amber-700 dark:text-amber-400 font-bold border-b-2 border-amber-600 pb-1' : ''
                   }`}
                 >
-                  {t.navSettings}
+                  <SettingsIcon className="w-3.5 h-3.5" />
+                  <span>{t.navSettings}</span>
                 </button>
                 <button
                   onClick={() => onSelectTab('feed')}
