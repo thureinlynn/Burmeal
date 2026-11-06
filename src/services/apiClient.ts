@@ -85,6 +85,54 @@ const INITIAL_SHOPS: Shop[] = [
     followerCount: 19,
     itemCount: 3,
   },
+  {
+    id: 'shop_04',
+    ownerId: 'usr_owner_04',
+    ownerEmail: 'bangkok@burmeal.com',
+    name: 'Siam Burmese Home Food (Pratunam)',
+    bio: 'Authentic Burmese curries, crispy Nan Gyi Thoke, and homemade Shan tofu served hot in the heart of Bangkok.',
+    coverImage: '/src/assets/images/burmeal_hero_spread_1793906769541.jpg',
+    avatarImage: 'https://api.dicebear.com/7.x/identicon/svg?seed=bangkok',
+    status: 'APPROVED',
+    cuisineType: 'Burmese Bangkok Diaspora Favorites',
+    locationArea: 'Pratunam Market & Phetchaburi 19',
+    address: 'Phetchaburi Soi 19, Pratunam',
+    city: 'Bangkok',
+    region: 'Bangkok Metropolitan',
+    country: 'Thailand',
+    facebookUrl: 'https://facebook.com/siamburmesefood',
+    whatsappPhone: '66812345678',
+    viberPhone: '66812345678',
+    lineId: '@burmesebkk',
+    phoneNumber: '+66 81 234 5678',
+    createdAt: new Date().toISOString(),
+    followerCount: 42,
+    itemCount: 2,
+  },
+  {
+    id: 'shop_05',
+    ownerId: 'usr_owner_05',
+    ownerEmail: 'singapore@burmeal.com',
+    name: 'Peninsula Golden Myanmar Kitchen',
+    bio: 'Iconic Burmese comfort food serving Singapore with fish broth Mohinga, tender braised beef curries, and spicy tea leaf salads.',
+    coverImage: '/src/assets/images/burmeal_mohinga_dish_1793906770254.jpg',
+    avatarImage: 'https://api.dicebear.com/7.x/identicon/svg?seed=singapore',
+    status: 'APPROVED',
+    cuisineType: 'Peninsula Plaza Heritage Cuisine',
+    locationArea: 'City Hall & Peninsula Plaza',
+    address: '111 North Bridge Road, Peninsula Plaza #B1-08',
+    city: 'Singapore',
+    region: 'Singapore Central & Islandwide',
+    country: 'Singapore',
+    facebookUrl: 'https://facebook.com/peninsulagoldenmyanmar',
+    whatsappPhone: '6591234567',
+    viberPhone: '6591234567',
+    lineId: '@peninsulamy',
+    phoneNumber: '+65 9123 4567',
+    createdAt: new Date().toISOString(),
+    followerCount: 56,
+    itemCount: 2,
+  },
 ];
 
 const todayStr = new Date().toISOString().slice(0, 10);
@@ -207,6 +255,65 @@ const INITIAL_MENU_ITEMS: MenuItem[] = [
     isHalal: true,
     createdAt: new Date().toISOString(),
   },
+  {
+    id: 'item_09',
+    shopId: 'shop_04',
+    shopName: 'Siam Burmese Home Food (Pratunam)',
+    title: 'Bangkok Style Nan Gyi Thoke (Chicken Curry Noodle)',
+    description: 'Thick Burmese udon-style round noodles tossed in spicy shallot oil, toasted chickpea flour, and tender Bangkok-curried chicken.',
+    image: '/src/assets/images/burmeal_hero_spread_1793906769541.jpg',
+    price: 6.5,
+    category: 'Noodles & Broth',
+    menuType: 'SPECIAL',
+    isVegetarian: false,
+    isHalal: true,
+    specialDate: todayStr,
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: 'item_10',
+    shopId: 'shop_04',
+    shopName: 'Siam Burmese Home Food (Pratunam)',
+    title: 'Warm Shan Yellow Tofu Salad with Coriander',
+    description: 'Freshly pressed homemade Shan chickpea tofu with roasted garlic oil, sesame, and lime tamarind dressing.',
+    image: '/src/assets/images/burmeal_tea_leaf_salad_1793906770254.jpg',
+    price: 4.8,
+    category: 'Salads & Snacks',
+    menuType: 'PERMANENT',
+    isVegetarian: true,
+    isHalal: true,
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: 'item_11',
+    shopId: 'shop_05',
+    shopName: 'Peninsula Golden Myanmar Kitchen',
+    title: 'Singapore City Hall Special Fish Mohinga',
+    description: 'Award-winning traditional catfish chowder with lemongrass, crispy fritters, and boiled egg over soft thin rice noodles.',
+    image: '/src/assets/images/burmeal_mohinga_dish_1793906770254.jpg',
+    price: 7.2,
+    category: 'Noodles & Broth',
+    menuType: 'SPECIAL',
+    isVegetarian: false,
+    isHalal: true,
+    specialDate: todayStr,
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: 'item_12',
+    shopId: 'shop_05',
+    shopName: 'Peninsula Golden Myanmar Kitchen',
+    title: 'Slow-Cooked Burmese Beef Rendang-Style Curry',
+    description: 'Aromatic tender chuck roast cubes stewed in roasted masala, ginger, garlic, and rich golden oil.',
+    image: '/src/assets/images/burmeal_hero_spread_1793906769541.jpg',
+    price: 9.8,
+    category: 'Rice & Main Dishes',
+    menuType: 'WEEKLY',
+    isVegetarian: false,
+    isHalal: true,
+    availableDays: ['Fri', 'Sat', 'Sun'],
+    createdAt: new Date().toISOString(),
+  },
 ];
 
 const INITIAL_USERS: User[] = [
@@ -318,21 +425,26 @@ function getUserIdFromToken(token?: string | null): string | null {
 }
 
 export const apiClient = {
-  // Get all shops
-  async getShops(token?: string | null): Promise<Shop[]> {
+  // Get all shops (with optional country & region filtering)
+  async getShops(params?: { country?: string; regionId?: string; status?: string } | string | null, tokenParam?: string | null): Promise<Shop[]> {
+    const token = typeof params === 'string' ? params : tokenParam;
+    const filterParams = typeof params === 'object' && params !== null ? params : {};
+
     try {
+      const sp = new URLSearchParams();
+      if (filterParams.country) sp.append('country', filterParams.country);
+      if (filterParams.regionId) sp.append('regionId', filterParams.regionId);
+      if (filterParams.status) sp.append('status', filterParams.status);
+
       const headers: Record<string, string> = {};
       if (token) headers['Authorization'] = `Bearer ${token}`;
-      const res = await fetch('/api/shops', { headers });
+      const url = `/api/shops${sp.toString() ? `?${sp.toString()}` : ''}`;
+      const res = await fetch(url, { headers });
       if (res.ok) {
         const contentType = res.headers.get('content-type') || '';
         if (contentType.includes('application/json')) {
           const data = await res.json();
           if (Array.isArray(data) && data.length > 0) {
-            // Sync to local cache
-            const db = getLocalDb();
-            db.shops = data;
-            saveLocalDb(db);
             return data;
           }
         }
@@ -344,7 +456,29 @@ export const apiClient = {
     // Client persistent fallback
     const db = getLocalDb();
     const userId = getUserIdFromToken(token);
-    return db.shops.map((s) => ({
+    let shops = db.shops;
+
+    // Apply country filter
+    if (filterParams.country) {
+      const targetCountry = filterParams.country.toLowerCase();
+      shops = shops.filter((s) => s.country && s.country.toLowerCase() === targetCountry);
+    }
+
+    // Apply region filter if specific
+    if (filterParams.regionId && !filterParams.regionId.endsWith('-ALL')) {
+      const rId = filterParams.regionId.toLowerCase();
+      if (rId.includes('ygn')) {
+        shops = shops.filter((s) => (s.region && s.region.toLowerCase().includes('yangon')) || (s.city && s.city.toLowerCase().includes('yangon')));
+      } else if (rId.includes('mdy')) {
+        shops = shops.filter((s) => (s.region && s.region.toLowerCase().includes('mandalay')) || (s.city && s.city.toLowerCase().includes('mandalay')));
+      } else if (rId.includes('shn')) {
+        shops = shops.filter((s) => (s.region && s.region.toLowerCase().includes('shan')) || (s.city && s.city.toLowerCase().includes('nyaungshwe')));
+      } else if (rId.includes('bkk')) {
+        shops = shops.filter((s) => (s.region && s.region.toLowerCase().includes('bangkok')) || (s.city && s.city.toLowerCase().includes('bangkok')));
+      }
+    }
+
+    return shops.map((s) => ({
       ...s,
       isFollowed: userId ? db.follows.some((f) => f.customerId === userId && f.shopId === s.id) : false,
       itemCount: db.menuItems.filter((m) => m.shopId === s.id).length,
@@ -408,7 +542,7 @@ export const apiClient = {
     return { success: serverSuccess };
   },
 
-  // Get menu items with query/filters
+  // Get menu items with query/filters, region scoping, and strict FOLLOWED feed logic
   async getMenuItems(
     params: {
       shopId?: string | null;
@@ -418,6 +552,8 @@ export const apiClient = {
       isHalal?: boolean;
       query?: string;
       feedType?: 'FOLLOWED';
+      country?: string;
+      regionId?: string;
     },
     token?: string | null
   ): Promise<{ items: MenuItem[]; feedSource: string; followedCount: number }> {
@@ -430,6 +566,8 @@ export const apiClient = {
       if (params.isHalal) sp.append('isHalal', 'true');
       if (params.query) sp.append('query', params.query);
       if (params.feedType) sp.append('feedType', params.feedType);
+      if (params.country) sp.append('country', params.country);
+      if (params.regionId) sp.append('regionId', params.regionId);
 
       const headers: Record<string, string> = {};
       if (token) headers['Authorization'] = `Bearer ${token}`;
@@ -454,6 +592,16 @@ export const apiClient = {
     if (params.shopId) {
       items = items.filter((i) => i.shopId === params.shopId);
     }
+
+    // Country/Region scoping across shops (unless inspecting a specific shop directly)
+    if (!params.shopId && params.country) {
+      const targetCountry = params.country.toLowerCase();
+      const shopIdsInCountry = db.shops
+        .filter((s) => s.country && s.country.toLowerCase() === targetCountry)
+        .map((s) => s.id);
+      items = items.filter((i) => shopIdsInCountry.includes(i.shopId));
+    }
+
     if (params.menuType && params.menuType !== 'ALL') {
       items = items.filter((i) => i.menuType === params.menuType);
     }
@@ -482,12 +630,9 @@ export const apiClient = {
 
     let feedSource = 'DISCOVER';
     if (params.feedType === 'FOLLOWED') {
-      if (followedShopIds.length > 0) {
-        items = items.filter((i) => followedShopIds.includes(i.shopId));
-        feedSource = 'FOLLOWED';
-      } else {
-        feedSource = 'FALLBACK_TRENDING';
-      }
+      // REQUIREMENT 2: STRICT INCLUSION of ONLY followed shops, STRICT EXCLUSION of non-followed
+      items = items.filter((i) => followedShopIds.includes(i.shopId));
+      feedSource = 'FOLLOWED';
     }
 
     const mapped = items.map((it) => {

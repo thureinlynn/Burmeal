@@ -14,7 +14,10 @@ import {
   Settings as SettingsIcon,
   Sun,
   Moon,
+  MapPin,
+  ChevronDown,
 } from 'lucide-react';
+import { useLocation } from '../context/LocationContext';
 
 interface NavbarProps {
   currentTab: string;
@@ -32,27 +35,42 @@ export const Navbar: React.FC<NavbarProps> = ({
   const { user, logout, switchDemoRole } = useAuth();
   const { lang, setLang, t } = useLanguage();
   const { theme, toggleTheme } = useTheme();
+  const { selectedCountry, selectedRegionName, selectedFlag, openLocationModal } = useLocation();
 
   return (
     <header className="sticky top-0 z-40 bg-white/95 dark:bg-stone-900/95 backdrop-blur border-b border-stone-200 dark:border-stone-800 transition-colors">
       <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between gap-3 h-16">
-          {/* Zone 1: Brand Wordmark */}
-          <button
-            onClick={() => onSelectTab('feed')}
-            className="flex items-center gap-2 text-stone-900 dark:text-stone-100 group focus:outline-none shrink-0"
-          >
-            <div className="w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center group-hover:scale-105 transition-transform shrink-0">
-              <img
-                src="/assets/aistudio/burmeal_logo_icon.png"
-                alt="BurMeal Vector Logo"
-                className="w-full h-full object-contain filter drop-shadow-xs"
-              />
-            </div>
-            <span className="text-lg sm:text-xl font-bold tracking-tight font-display text-stone-900 dark:text-stone-100 whitespace-nowrap shrink-0">
-              {t.brandName}
-            </span>
-          </button>
+        <div className="flex items-center justify-between gap-2 sm:gap-3 h-16">
+          {/* Zone 1: Brand Wordmark + Location Selector */}
+          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+            <button
+              onClick={() => onSelectTab('feed')}
+              className="flex items-center gap-2 text-stone-900 dark:text-stone-100 group focus:outline-none shrink-0"
+            >
+              <div className="w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center group-hover:scale-105 transition-transform shrink-0">
+                <img
+                  src="/assets/aistudio/burmeal_logo_icon.png"
+                  alt="BurMeal Vector Logo"
+                  className="w-full h-full object-contain filter drop-shadow-xs"
+                />
+              </div>
+              <span className="text-lg sm:text-xl font-bold tracking-tight font-display text-stone-900 dark:text-stone-100 whitespace-nowrap shrink-0">
+                {t.brandName}
+              </span>
+            </button>
+
+            {/* Region & Location Selector Button */}
+            <button
+              onClick={openLocationModal}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 hover:bg-amber-100 dark:hover:bg-amber-900/60 border border-amber-200 dark:border-amber-800 text-stone-800 dark:text-stone-200 text-xs font-semibold transition-all shadow-2xs active:scale-95"
+              title="Change your dining country and region"
+            >
+              <span className="text-sm shrink-0">{selectedFlag}</span>
+              <span className="hidden sm:inline max-w-[130px] truncate">{selectedRegionName}</span>
+              <span className="sm:hidden font-bold">{selectedCountry}</span>
+              <ChevronDown className="w-3.5 h-3.5 text-amber-700 dark:text-amber-400 shrink-0" />
+            </button>
+          </div>
 
           {/* Zone 2: Navigation Links (Desktop) */}
           <nav className="hidden md:flex items-center gap-5 text-xs sm:text-sm font-medium text-stone-600 dark:text-stone-300">
