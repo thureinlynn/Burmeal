@@ -380,8 +380,9 @@ function getLocalDb(): DbState {
       return state;
     }
     const parsed = JSON.parse(raw);
-    if (!parsed.shops || parsed.shops.length === 0) {
+    if (!parsed.shops || parsed.shops.length < INITIAL_SHOPS.length) {
       parsed.shops = INITIAL_SHOPS;
+      parsed.menuItems = INITIAL_MENU_ITEMS;
       localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
     }
     return parsed;
@@ -444,7 +445,7 @@ export const apiClient = {
         const contentType = res.headers.get('content-type') || '';
         if (contentType.includes('application/json')) {
           const data = await res.json();
-          if (Array.isArray(data) && data.length > 0) {
+          if (Array.isArray(data)) {
             return data;
           }
         }

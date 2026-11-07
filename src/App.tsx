@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from './context/AuthContext';
 import { useLanguage } from './context/LanguageContext';
+import { useLocation } from './context/LocationContext';
 import { MenuItem, Shop, MenuType } from './types';
 import { apiClient } from './services/apiClient';
 import { Navbar } from './components/Navbar';
@@ -15,6 +16,7 @@ import { AdminPanel } from './components/AdminPanel';
 import { AuthModal } from './components/AuthModal';
 import { ShopCard } from './components/ShopCard';
 import { SettingsView } from './components/SettingsView';
+import { LocationModal } from './components/LocationModal';
 import {
   Sparkles,
   Heart,
@@ -23,13 +25,23 @@ import {
   Store,
   ArrowRight,
   TrendingUp,
+  MapPin,
 } from 'lucide-react';
 
 export default function App() {
   const { user, token, shopId } = useAuth();
   const { t } = useLanguage();
+  const {
+    selectedCountry,
+    selectedRegionId,
+    selectedRegionName,
+    selectedFlag,
+    isLocationModalOpen,
+    openLocationModal,
+    closeLocationModal,
+  } = useLocation();
 
-  // Navigation State: 'feed' | 'following' | 'shops' | 'shop_detail' | 'saved' | 'profile' | 'shop_overview' | 'shop_menus' | 'shop_profile' | 'shop_settings' | 'admin'
+  // Navigation State: 'feed' | 'following' | 'shops' | 'shop_detail' | 'saved' | 'profile' | 'shop_overview' | 'shop_menus' | 'shop_profile' | 'admin' | 'settings'
   const [currentTab, setCurrentTab] = useState<string>('feed');
   const [selectedShopId, setSelectedShopId] = useState<string | null>(null);
   const [selectedItemForDetail, setSelectedItemForDetail] = useState<MenuItem | null>(null);
@@ -42,7 +54,6 @@ export default function App() {
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [shops, setShops] = useState<Shop[]>([]);
   const [savedItems, setSavedItems] = useState<MenuItem[]>([]);
-  const [feedSource, setFeedSource] = useState<'FOLLOWED' | 'FALLBACK_TRENDING' | 'DISCOVER'>('DISCOVER');
   const [followedCount, setFollowedCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -53,20 +64,27 @@ export default function App() {
   const [isHalal, setIsHalal] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState('ALL');
 
-  // Load Shops
+  // Load Shops scoped to user's selected Country & Region
   const loadShops = async () => {
     try {
-      const data = await apiClient.getShops(token);
+      const data = await apiClient.getShops(
+        {
+          country: selectedCountry,
+          regionId: selectedRegionId,
+        },
+        token
+      );
       setShops(data);
     } catch (err) {
       console.error('Failed to load shops', err);
     }
   };
 
-  // Load Menu Items
+  // Load Menu Items scoped to user's selected Country & Region, with strict FOLLOWED feed logic
   const loadMenuItems = async (feedTypeOverride?: 'FOLLOWED') => {
     setIsLoading(true);
     try {
+      const isFollowFeed = currentTab === 'following' || feedTypeOverride === 'FOLLOWED';
       const data = await apiClient.getMenuItems(
         {
           shopId: selectedShopId,
@@ -75,12 +93,13 @@ export default function App() {
           isVegetarian,
           isHalal,
           query: searchQuery.trim(),
-          feedType: currentTab === 'following' || feedTypeOverride === 'FOLLOWED' ? 'FOLLOWED' : undefined,
+          feedType: isFollowFeed ? 'FOLLOWED' : undefined,
+          country: selectedCountry,
+          regionId: selectedRegionId,
         },
         token
       );
       setMenuItems(data.items || []);
-      setFeedSource((data.feedSource as any) || 'DISCOVER');
       setFollowedCount(data.followedCount || 0);
     } catch (err) {
       console.error('Failed to load menu items', err);
@@ -103,9 +122,10 @@ export default function App() {
     }
   };
 
+  // Auto-reload data whenever auth token, country, or region changes
   useEffect(() => {
     loadShops();
-  }, [token]);
+  }, [token, selectedCountry, selectedRegionId]);
 
   useEffect(() => {
     loadMenuItems();
@@ -118,6 +138,8 @@ export default function App() {
     isVegetarian,
     isHalal,
     searchQuery,
+    selectedCountry,
+    selectedRegionId,
   ]);
 
   useEffect(() => {
@@ -277,12 +299,13 @@ export default function App() {
               onCategoryChange={setSelectedCategory}
             />
 
-            {/* Results Header */}
+            {/* Results Header with Current Region Indicator */}
             <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-stone-500">
-                {menuItems.length} {t.dishes} {searchQuery ? `for "${searchQuery}"` : ''}
+              <span className="text-xs font-semibold text-stone-500 dark:text-stone-400 flex items-center gap-1.5">
+                <span>{menuItems.length} {t.dishes} in {selectedRegionName} {selectedFlag}</span>
+                {searchQuery && <span>for "{searchQuery}"</span>}
               </span>
-              {(selectedMenuType !== 'ALL' || isVegetarian || isHalal || searchQuery) && (
+              {(selectedMenuType !== 'ALL' || isVegetarian || isHalal || searchQuery || selectedCategory !== 'ALL') && (
                 <button
                   onClick={() => {
                     setSearchQuery('');
@@ -291,7 +314,7 @@ export default function App() {
                     setIsHalal(false);
                     setSelectedCategory('ALL');
                   }}
-                  className="text-xs font-bold text-amber-700 hover:underline"
+                  className="text-xs font-bold text-amber-700 dark:text-amber-400 hover:underline"
                 >
                   {t.resetFilters}
                 </button>
@@ -300,8 +323,21 @@ export default function App() {
 
             {/* Public Food Items Grid (AT LEAST TWO ITEMS PER ROW IN MOBILE UI!) */}
             {menuItems.length === 0 ? (
-              <div className="bg-white rounded-2xl border border-stone-200 p-12 text-center text-xs text-stone-400">
-                {t.noDishesFound}
+              <div className="bg-white dark:bg-stone-900 rounded-3xl border border-stone-200 dark:border-stone-800 p-12 text-center text-xs text-stone-400 space-y-3">
+                <Store className="w-10 h-10 mx-auto text-stone-300 dark:text-stone-600" />
+                <p className="font-semibold text-stone-700 dark:text-stone-300">
+                  {t.noDishesFound} in {selectedRegionName}
+                </p>
+                <p className="text-[11px] text-stone-400 max-w-sm mx-auto">
+                  Try switching your location region or resetting dietary filters to explore dining spots nearby.
+                </p>
+                <button
+                  onClick={openLocationModal}
+                  className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl shadow-xs transition-transform active:scale-95 inline-flex items-center gap-1.5"
+                >
+                  <MapPin className="w-3.5 h-3.5" />
+                  <span>Change Region</span>
+                </button>
               </div>
             ) : (
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-6">
@@ -322,72 +358,135 @@ export default function App() {
           </div>
         )}
 
-        {/* ================= VIEW 2: TAB 2 (FOLLOWING FEED) ================= */}
+        {/* ================= VIEW 2: TAB 2 (DEDICATED "FOLLOW" TAB - REQUIREMENT 2) ================= */}
         {currentTab === 'following' && !selectedShopId && (
           <div className="space-y-4 sm:space-y-6">
             <div>
-              <h1 className="text-xl sm:text-2xl font-bold font-display text-stone-900 flex items-center gap-2">
+              <h1 className="text-xl sm:text-2xl font-bold font-display text-stone-900 dark:text-stone-100 flex items-center gap-2">
                 <Heart className="w-5 h-5 text-rose-500 fill-current" />
                 <span>{t.navFollowing}</span>
               </h1>
-              <p className="text-xs text-stone-500 mt-0.5">
-                Fresh updates and menus exclusively from food kitchens you follow.
+              <p className="text-xs text-stone-500 dark:text-stone-400 mt-0.5">
+                Fresh updates and active menus exclusively from kitchens you follow.
               </p>
             </div>
 
-            {/* Fallback Banner if user follows none or followed shops have no items */}
-            {feedSource === 'FALLBACK_TRENDING' && (
-              <div className="bg-amber-50 border border-amber-200 rounded-xl p-3.5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs text-amber-900">
-                <div className="flex items-center gap-2">
-                  <TrendingUp className="w-4 h-4 text-amber-700 shrink-0" />
-                  <div>
-                    <strong className="block">{t.trendingFallbackTitle}</strong>
-                    <span className="text-[11px] text-amber-800">{t.trendingFallbackDesc}</span>
-                  </div>
+            {/* REQUIREMENT 2: Strict Inclusion of ONLY Followed Shops, Strict Exclusion of non-followed shops */}
+            {!token ? (
+              <div className="bg-white dark:bg-stone-900 rounded-3xl border border-stone-200 dark:border-stone-800 p-10 sm:p-14 text-center max-w-lg mx-auto shadow-xs">
+                <div className="w-16 h-16 rounded-2xl bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 flex items-center justify-center mx-auto mb-4">
+                  <Heart className="w-8 h-8" />
                 </div>
+                <h2 className="text-lg font-bold font-display text-stone-900 dark:text-stone-100 mb-2">
+                  Sign In to Follow Local Shops
+                </h2>
+                <p className="text-xs text-stone-500 dark:text-stone-400 mb-6 leading-relaxed">
+                  Save your favorite home kitchens and restaurants to curate your personalized culinary feed.
+                </p>
                 <button
-                  onClick={() => setCurrentTab('shops')}
-                  className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-lg shrink-0 text-xs shadow-xs"
+                  onClick={() => {
+                    setAuthDefaultRole('CUSTOMER');
+                    setIsAuthModalOpen(true);
+                  }}
+                  className="px-6 py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl shadow-xs transition-transform active:scale-95"
                 >
-                  Explore More Shops
+                  {t.signIn}
                 </button>
               </div>
-            )}
-
-            {/* Search/Filter Bar */}
-            <FilterBar
-              searchQuery={searchQuery}
-              onSearchChange={setSearchQuery}
-              selectedMenuType={selectedMenuType}
-              onMenuTypeChange={setSelectedMenuType}
-              isVegetarian={isVegetarian}
-              onVegetarianToggle={() => setIsVegetarian(!isVegetarian)}
-              isHalal={isHalal}
-              onHalalToggle={() => setIsHalal(!isHalal)}
-              selectedCategory={selectedCategory}
-              onCategoryChange={setSelectedCategory}
-            />
-
-            {/* Grid (At least 2 items per row in mobile UI) */}
-            {menuItems.length === 0 ? (
-              <div className="bg-white rounded-2xl border border-stone-200 p-12 text-center text-xs text-stone-400">
-                {t.noFollowedShops}
+            ) : followedShopsList.length === 0 ? (
+              /* Requirement 2 Clean Empty State: If zero shops are followed, display a clean empty-state placeholder with "Discover Local Shops" CTA */
+              <div className="bg-white dark:bg-stone-900 rounded-3xl border border-stone-200 dark:border-stone-800 p-10 sm:p-14 text-center max-w-lg mx-auto shadow-xs">
+                <div className="w-16 h-16 rounded-2xl bg-rose-50 dark:bg-rose-950/40 text-rose-500 flex items-center justify-center mx-auto mb-4">
+                  <Heart className="w-8 h-8" />
+                </div>
+                <h2 className="text-lg sm:text-xl font-bold font-display text-stone-900 dark:text-stone-100 mb-2">
+                  {t.noFollowedShops}
+                </h2>
+                <p className="text-xs text-stone-500 dark:text-stone-400 mb-6 leading-relaxed max-w-sm mx-auto">
+                  Follow local artisan shops to view their daily specials, rotating menus, and direct contact numbers here in real time.
+                </p>
+                <button
+                  onClick={() => setCurrentTab('shops')}
+                  className="px-6 py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl shadow-xs transition-transform active:scale-95 inline-flex items-center gap-2"
+                >
+                  <Store className="w-4 h-4" />
+                  <span>Discover Local Shops</span>
+                </button>
               </div>
             ) : (
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-6">
-                {menuItems.map((item) => (
-                  <MenuCard
-                    key={item.id}
-                    item={item}
-                    onToggleSave={handleToggleSave}
-                    onSelectItem={(it) => setSelectedItemForDetail(it)}
-                    onSelectShop={(sId) => {
-                      setSelectedShopId(sId);
-                      setCurrentTab('shop_detail');
-                    }}
-                  />
-                ))}
-              </div>
+              <>
+                {/* Followed Shops Bar */}
+                <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
+                  <span className="text-xs font-semibold text-stone-500 dark:text-stone-400 shrink-0 mr-1">
+                    Followed ({followedShopsList.length}):
+                  </span>
+                  {followedShopsList.map((fShop) => (
+                    <button
+                      key={fShop.id}
+                      onClick={() => {
+                        setSelectedShopId(fShop.id);
+                        setCurrentTab('shop_detail');
+                      }}
+                      className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white dark:bg-stone-850 border border-stone-200 dark:border-stone-750 text-xs font-semibold text-stone-800 dark:text-stone-200 hover:border-amber-500 transition-colors shrink-0 shadow-2xs"
+                    >
+                      <img
+                        src={fShop.avatarImage}
+                        alt={fShop.name}
+                        className="w-4 h-4 rounded-full object-cover"
+                      />
+                      <span>{fShop.name}</span>
+                    </button>
+                  ))}
+                </div>
+
+                {/* Search/Filter Bar */}
+                <FilterBar
+                  searchQuery={searchQuery}
+                  onSearchChange={setSearchQuery}
+                  selectedMenuType={selectedMenuType}
+                  onMenuTypeChange={setSelectedMenuType}
+                  isVegetarian={isVegetarian}
+                  onVegetarianToggle={() => setIsVegetarian(!isVegetarian)}
+                  isHalal={isHalal}
+                  onHalalToggle={() => setIsHalal(!isHalal)}
+                  selectedCategory={selectedCategory}
+                  onCategoryChange={setSelectedCategory}
+                />
+
+                {/* Grid of Dishes STRICTLY from followed shops */}
+                {menuItems.length === 0 ? (
+                  <div className="bg-white dark:bg-stone-900 rounded-3xl border border-stone-200 dark:border-stone-800 p-10 text-center text-xs text-stone-400 space-y-3">
+                    <p className="font-semibold text-stone-700 dark:text-stone-300">
+                      No active dishes currently matching filters from your followed shops.
+                    </p>
+                    <p className="text-[11px] text-stone-400 max-w-sm mx-auto">
+                      Explore more local food kitchens across your region to expand your feed.
+                    </p>
+                    <button
+                      onClick={() => setCurrentTab('shops')}
+                      className="px-5 py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl shadow-xs transition-transform active:scale-95 inline-flex items-center gap-1.5"
+                    >
+                      <Store className="w-3.5 h-3.5" />
+                      <span>Discover More Shops</span>
+                    </button>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-6">
+                    {menuItems.map((item) => (
+                      <MenuCard
+                        key={item.id}
+                        item={item}
+                        onToggleSave={handleToggleSave}
+                        onSelectItem={(it) => setSelectedItemForDetail(it)}
+                        onSelectShop={(sId) => {
+                          setSelectedShopId(sId);
+                          setCurrentTab('shop_detail');
+                        }}
+                      />
+                    ))}
+                  </div>
+                )}
+              </>
             )}
           </div>
         )}
@@ -396,18 +495,18 @@ export default function App() {
         {currentTab === 'saved' && !selectedShopId && (
           <div className="space-y-4 sm:space-y-6">
             <div>
-              <h1 className="text-xl sm:text-2xl font-bold font-display text-stone-900 flex items-center gap-2">
+              <h1 className="text-xl sm:text-2xl font-bold font-display text-stone-900 dark:text-stone-100 flex items-center gap-2">
                 <Bookmark className="w-5 h-5 text-amber-600 fill-current" />
                 <span>{t.navSaved}</span>
               </h1>
-              <p className="text-xs text-stone-500 mt-0.5">
+              <p className="text-xs text-stone-500 dark:text-stone-400 mt-0.5">
                 Dishes you have bookmarked for quick ordering and review.
               </p>
             </div>
 
             {!token ? (
-              <div className="bg-white rounded-2xl border border-stone-200 p-8 text-center max-w-md mx-auto">
-                <p className="text-xs text-stone-600 mb-3">Please sign in to access your saved items across devices.</p>
+              <div className="bg-white dark:bg-stone-900 rounded-3xl border border-stone-200 dark:border-stone-800 p-8 text-center max-w-md mx-auto">
+                <p className="text-xs text-stone-600 dark:text-stone-300 mb-3">Please sign in to access your saved items across devices.</p>
                 <button
                   onClick={() => setIsAuthModalOpen(true)}
                   className="px-4 py-2 bg-amber-600 text-white text-xs font-bold rounded-xl"
@@ -416,7 +515,7 @@ export default function App() {
                 </button>
               </div>
             ) : savedItems.length === 0 ? (
-              <div className="bg-white rounded-2xl border border-stone-200 p-12 text-center text-xs text-stone-400">
+              <div className="bg-white dark:bg-stone-900 rounded-3xl border border-stone-200 dark:border-stone-800 p-12 text-center text-xs text-stone-400">
                 {t.noSavedItems}
               </div>
             ) : (
@@ -454,28 +553,54 @@ export default function App() {
         {/* ================= VIEW 5: ALL SHOPS DISCOVERY ================= */}
         {currentTab === 'shops' && !selectedShopId && (
           <div className="space-y-4 sm:space-y-6">
-            <div>
-              <h1 className="text-xl sm:text-2xl font-bold font-display text-stone-900">
-                {t.navShops}
-              </h1>
-              <p className="text-xs text-stone-500 mt-0.5">
-                Explore approved culinary artisans, read shop stories, and follow your favorites.
-              </p>
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+              <div>
+                <h1 className="text-xl sm:text-2xl font-bold font-display text-stone-900 dark:text-stone-100">
+                  {t.navShops} in {selectedCountry} {selectedFlag}
+                </h1>
+                <p className="text-xs text-stone-500 dark:text-stone-400 mt-0.5">
+                  Explore approved culinary artisans in {selectedRegionName}, read shop stories, and follow your favorites.
+                </p>
+              </div>
+              <button
+                onClick={openLocationModal}
+                className="px-3 py-1.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-xs font-semibold text-amber-800 dark:text-amber-300 hover:bg-amber-100 transition-colors"
+              >
+                Change Region ({selectedRegionName})
+              </button>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-              {shops.map((shop) => (
-                <ShopCard
-                  key={shop.id}
-                  shop={shop}
-                  onFollowToggle={handleToggleFollow}
-                  onSelectShop={(sId) => {
-                    setSelectedShopId(sId);
-                    setCurrentTab('shop_detail');
-                  }}
-                />
-              ))}
-            </div>
+            {shops.length === 0 ? (
+              <div className="bg-white dark:bg-stone-900 rounded-3xl border border-stone-200 dark:border-stone-800 p-12 text-center text-xs text-stone-400 space-y-3">
+                <Store className="w-10 h-10 mx-auto text-stone-300 dark:text-stone-600" />
+                <p className="font-semibold text-stone-700 dark:text-stone-300">
+                  No shops registered yet in {selectedRegionName}
+                </p>
+                <p className="text-[11px] text-stone-400 max-w-sm mx-auto">
+                  Switch your location or register your own shop to be the first kitchen featured in this area.
+                </p>
+                <button
+                  onClick={openLocationModal}
+                  className="px-4 py-2 bg-amber-600 text-white font-bold text-xs rounded-xl shadow-xs"
+                >
+                  Switch Region
+                </button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+                {shops.map((shop) => (
+                  <ShopCard
+                    key={shop.id}
+                    shop={shop}
+                    onFollowToggle={handleToggleFollow}
+                    onSelectShop={(sId) => {
+                      setSelectedShopId(sId);
+                      setCurrentTab('shop_detail');
+                    }}
+                  />
+                ))}
+              </div>
+            )}
           </div>
         )}
 
@@ -494,7 +619,7 @@ export default function App() {
           />
         )}
 
-        {/* ================= VIEW 7: SHOP OWNER DASHBOARD (4-TAB LAYOUT) ================= */}
+        {/* ================= VIEW 7: DEDICATED SHOP OWNER DASHBOARD (4-TAB LAYOUT) ================= */}
         {(currentTab === 'shop_overview' ||
           currentTab === 'shop_menus' ||
           currentTab === 'shop_profile' ||
@@ -578,7 +703,14 @@ export default function App() {
         defaultRole={authDefaultRole}
       />
 
-      {/* Mobile 4-Tab Bottom Navigation Bar (Sticky bottom on mobile) */}
+      {/* Country / Region Onboarding & Selection Modal */}
+      <LocationModal
+        isOpen={isLocationModalOpen}
+        onClose={closeLocationModal}
+        canDismiss={Boolean(selectedCountry)}
+      />
+
+      {/* Mobile Bottom Navigation Bar (Strict 3-Tab layout for Shop Owners, 5-Tab for Customers) */}
       <BottomNav
         currentTab={currentTab}
         onSelectTab={(tab) => {

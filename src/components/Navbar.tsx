@@ -7,7 +7,6 @@ import {
   ShieldAlert,
   Store,
   LogOut,
-  Globe,
   Heart,
   Bookmark,
   User,
@@ -33,7 +32,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   hasFollowedShops,
 }) => {
   const { user, logout, switchDemoRole } = useAuth();
-  const { lang, setLang, t } = useLanguage();
+  const { t } = useLanguage();
   const { theme, toggleTheme } = useTheme();
   const { selectedCountry, selectedRegionName, selectedFlag, openLocationModal } = useLocation();
 
@@ -49,8 +48,8 @@ export const Navbar: React.FC<NavbarProps> = ({
             >
               <div className="w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center group-hover:scale-105 transition-transform shrink-0">
                 <img
-                  src="/assets/aistudio/burmeal_logo_icon.png"
-                  alt="BurMeal Vector Logo"
+                  src="/assets/aistudio/Gemini_Generated_Image_seoyymseoyymseoy_d7564f40.png"
+                  alt="BurMeal Sacred Lacquer Hsun-ok Stupa Logo"
                   className="w-full h-full object-contain filter drop-shadow-xs"
                 />
               </div>
@@ -163,13 +162,12 @@ export const Navbar: React.FC<NavbarProps> = ({
                   {t.shopNavProfile}
                 </button>
                 <button
-                  onClick={() => onSelectTab('settings')}
-                  className={`flex items-center gap-1 hover:text-stone-900 dark:hover:text-white transition-colors whitespace-nowrap shrink-0 ${
-                    currentTab === 'settings' ? 'text-amber-700 dark:text-amber-400 font-bold border-b-2 border-amber-600 pb-1' : ''
+                  onClick={() => onSelectTab('shop_settings')}
+                  className={`hover:text-stone-900 dark:hover:text-white transition-colors whitespace-nowrap shrink-0 ${
+                    currentTab === 'shop_settings' ? 'text-amber-700 dark:text-amber-400 font-bold border-b-2 border-amber-600 pb-1' : ''
                   }`}
                 >
-                  <SettingsIcon className="w-3.5 h-3.5" />
-                  <span>{t.navSettings}</span>
+                  {t.shopNavSettings}
                 </button>
                 <button
                   onClick={() => onSelectTab('feed')}
@@ -208,32 +206,6 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <Moon className="w-4 h-4 text-stone-600" />
               )}
             </button>
-
-            {/* Language Switcher */}
-            <div className="flex items-center bg-stone-100 dark:bg-stone-800 rounded-lg p-0.5 border border-stone-200 dark:border-stone-700 text-xs">
-              <button
-                onClick={() => setLang('en')}
-                className={`px-1.5 sm:px-2 py-1 rounded transition-colors font-medium text-[11px] sm:text-xs ${
-                  lang === 'en'
-                    ? 'bg-white dark:bg-stone-700 font-bold text-stone-900 dark:text-stone-100 shadow-xs'
-                    : 'text-stone-500 dark:text-stone-400 hover:text-stone-800'
-                }`}
-                title="English"
-              >
-                EN
-              </button>
-              <button
-                onClick={() => setLang('my')}
-                className={`px-1.5 sm:px-2 py-1 rounded transition-colors font-medium text-[11px] sm:text-xs ${
-                  lang === 'my'
-                    ? 'bg-white dark:bg-stone-700 font-bold text-stone-900 dark:text-stone-100 shadow-xs'
-                    : 'text-stone-500 dark:text-stone-400 hover:text-stone-800'
-                }`}
-                title="မြန်မာ"
-              >
-                မြန်မာ
-              </button>
-            </div>
 
             {/* Quick Demo Switcher (Desktop only) */}
             <div className="hidden xl:flex items-center bg-stone-100 dark:bg-stone-800 rounded-lg p-0.5 border border-stone-200 dark:border-stone-700 text-xs">
@@ -286,34 +258,21 @@ export const Navbar: React.FC<NavbarProps> = ({
                 </button>
               </div>
             ) : (
-              /* COMBINED SPACE-SAVING LOGIN BUTTON FOR MOBILE UI */
-              <div className="flex items-center">
-                {/* On mobile: Single combined button opening role-select modal */}
-                <div className="sm:hidden">
-                  <button
-                    onClick={() => onOpenAuth('CUSTOMER')}
-                    className="px-2.5 py-1.5 text-[11px] font-bold text-white bg-amber-600 hover:bg-amber-700 rounded-lg shadow-xs transition-colors whitespace-nowrap"
-                  >
-                    {t.loginJointButton}
-                  </button>
-                </div>
-
-                {/* On tablet/desktop: Clean segmented dual buttons */}
-                <div className="hidden sm:flex items-center bg-stone-100 dark:bg-stone-800 p-0.5 rounded-lg border border-stone-200 dark:border-stone-700 text-xs">
-                  <button
-                    onClick={() => onOpenAuth('CUSTOMER')}
-                    className="px-2.5 py-1 text-xs font-medium text-stone-700 dark:text-stone-300 hover:text-stone-900 dark:hover:text-white rounded"
-                  >
-                    {t.customerRole}
-                  </button>
-                  <span className="text-stone-300 dark:text-stone-600">|</span>
-                  <button
-                    onClick={() => onOpenAuth('SHOP_OWNER')}
-                    className="px-2.5 py-1 text-xs font-bold text-amber-700 dark:text-amber-400 hover:text-amber-800 rounded"
-                  >
-                    {t.shopRole}
-                  </button>
-                </div>
+              /* Segmented login buttons for tablet and desktop */
+              <div className="hidden sm:flex items-center bg-stone-100 dark:bg-stone-800 p-0.5 rounded-lg border border-stone-200 dark:border-stone-700 text-xs">
+                <button
+                  onClick={() => onOpenAuth('CUSTOMER')}
+                  className="px-2.5 py-1 text-xs font-medium text-stone-700 dark:text-stone-300 hover:text-stone-900 dark:hover:text-white rounded"
+                >
+                  {t.customerRole}
+                </button>
+                <span className="text-stone-300 dark:text-stone-600">|</span>
+                <button
+                  onClick={() => onOpenAuth('SHOP_OWNER')}
+                  className="px-2.5 py-1 text-xs font-bold text-amber-700 dark:text-amber-400 hover:text-amber-800 rounded"
+                >
+                  {t.shopRole}
+                </button>
               </div>
             )}
           </div>

@@ -36,6 +36,8 @@ export interface Shop {
   lineId?: string;        // e.g. "https://line.me/ti/p/~..." or LINE ID
   phoneNumber?: string;   // e.g. "+95912345678" -> tel:+95912345678
   createdAt: string;
+  isOpen?: boolean;
+  operatingHours?: string;
   itemCount?: number;
   followerCount?: number;
   isFollowed?: boolean;

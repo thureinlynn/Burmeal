@@ -200,6 +200,8 @@ app.get('/api/shops', (req: Request, res: Response) => {
   try {
     const user = getAuthenticatedUser(req);
     const statusFilter = req.query.status as string;
+    const countryFilter = req.query.country as string;
+    const regionIdFilter = req.query.regionId as string;
 
     let query = `
       SELECT s.*, u.email as owner_email,
@@ -213,9 +215,27 @@ app.get('/api/shops', (req: Request, res: Response) => {
     if (statusFilter && user?.role === 'ADMIN') {
       query += ` WHERE s.status = '${statusFilter}'`;
     } else if (user?.role === 'ADMIN') {
-      // Return all for admin
+      query += ` WHERE 1=1`;
     } else {
       query += ` WHERE s.status = 'APPROVED'`;
+    }
+
+    if (countryFilter) {
+      const cleanCountry = countryFilter.replace(/'/g, "''");
+      query += ` AND LOWER(s.country) = LOWER('${cleanCountry}')`;
+    }
+
+    if (regionIdFilter && !regionIdFilter.endsWith('-ALL')) {
+      const rId = regionIdFilter.toLowerCase();
+      if (rId.includes('ygn')) {
+        query += ` AND (LOWER(s.region) LIKE '%yangon%' OR LOWER(s.city) LIKE '%yangon%')`;
+      } else if (rId.includes('mdy')) {
+        query += ` AND (LOWER(s.region) LIKE '%mandalay%' OR LOWER(s.city) LIKE '%mandalay%')`;
+      } else if (rId.includes('shn')) {
+        query += ` AND (LOWER(s.region) LIKE '%shan%' OR LOWER(s.city) LIKE '%nyaungshwe%')`;
+      } else if (rId.includes('bkk')) {
+        query += ` AND (LOWER(s.region) LIKE '%bangkok%' OR LOWER(s.city) LIKE '%bangkok%')`;
+      }
     }
 
     query += ` ORDER BY s.created_at DESC`;
@@ -404,7 +424,7 @@ app.patch('/api/admin/shops/:id/status', (req: Request, res: Response) => {
 app.get('/api/menu-items', (req: Request, res: Response) => {
   try {
     const user = getAuthenticatedUser(req);
-    const { shopId, menuType, category, isVegetarian, isHalal, query, feedType } = req.query;
+    const { shopId, menuType, category, isVegetarian, isHalal, query, feedType, country, regionId } = req.query;
 
     let sql = `
       SELECT m.*, s.name as shop_name, s.status as shop_status,
@@ -421,6 +441,24 @@ app.get('/api/menu-items', (req: Request, res: Response) => {
 
     if (shopId) {
       sql += ` AND m.shop_id = '${shopId}'`;
+    }
+
+    if (!shopId && country) {
+      const cleanCountry = (country as string).replace(/'/g, "''");
+      sql += ` AND LOWER(s.country) = LOWER('${cleanCountry}')`;
+    }
+
+    if (!shopId && regionId && !(regionId as string).endsWith('-ALL')) {
+      const rId = (regionId as string).toLowerCase();
+      if (rId.includes('ygn')) {
+        sql += ` AND (LOWER(s.region) LIKE '%yangon%' OR LOWER(s.city) LIKE '%yangon%')`;
+      } else if (rId.includes('mdy')) {
+        sql += ` AND (LOWER(s.region) LIKE '%mandalay%' OR LOWER(s.city) LIKE '%mandalay%')`;
+      } else if (rId.includes('shn')) {
+        sql += ` AND (LOWER(s.region) LIKE '%shan%' OR LOWER(s.city) LIKE '%nyaungshwe%')`;
+      } else if (rId.includes('bkk')) {
+        sql += ` AND (LOWER(s.region) LIKE '%bangkok%' OR LOWER(s.city) LIKE '%bangkok%')`;
+      }
     }
 
     if (menuType && menuType !== 'ALL') {
@@ -444,35 +482,48 @@ app.get('/api/menu-items', (req: Request, res: Response) => {
       sql += ` AND (m.title LIKE '%${cleanQ}%' OR m.description LIKE '%${cleanQ}%' OR s.name LIKE '%${cleanQ}%' OR m.category LIKE '%${cleanQ}%')`;
     }
 
-    // Followed Feed logic: if feedType === 'FOLLOWED' and user logged in
-    let isFollowedFeed = false;
-    let followedCount = 0;
-    if (feedType === 'FOLLOWED' && user) {
-      const followRows = db.prepare('SELECT shop_id FROM follows WHERE customer_id = ?').all(user.id) as any[];
-      followedCount = followRows.length;
-      if (followRows.length > 0) {
-        const followedShopIds = followRows.map((r) => `'${r.shop_id}'`).join(',');
-        const followedSql = sql + ` AND m.shop_id IN (${followedShopIds}) ORDER BY m.created_at DESC`;
-        const items = db.prepare(followedSql).all() as any[];
-        if (items.length > 0) {
-          isFollowedFeed = true;
-          return res.json({
-            items: formatMenuItems(items, user?.id),
-            feedSource: 'FOLLOWED',
-            followedCount,
-          });
-        }
+    // REQUIREMENT 2: Strict "Follow" Tab Feed Logic
+    // INCLUSION: Display ONLY the shops/pages that the logged-in user actively follows, along with their active menu items.
+    // EXCLUSION: Strictly block and filter out any shop or menu item that the user does NOT follow.
+    if (feedType === 'FOLLOWED') {
+      if (!user) {
+        return res.json({
+          items: [],
+          feedSource: 'FOLLOWED',
+          followedCount: 0,
+        });
       }
+
+      const followRows = db.prepare('SELECT shop_id FROM follows WHERE customer_id = ?').all(user.id) as any[];
+      const followedCount = followRows.length;
+
+      if (followedCount === 0) {
+        return res.json({
+          items: [],
+          feedSource: 'FOLLOWED',
+          followedCount: 0,
+        });
+      }
+
+      const followedShopIds = followRows.map((r) => `'${r.shop_id}'`).join(',');
+      const followedSql = sql + ` AND m.shop_id IN (${followedShopIds}) ORDER BY m.created_at DESC`;
+      const items = db.prepare(followedSql).all() as any[];
+
+      return res.json({
+        items: formatMenuItems(items, user.id),
+        feedSource: 'FOLLOWED',
+        followedCount,
+      });
     }
 
-    // Standard / Fallback Feed: Most popular / recent items
+    // Standard Discover Feed
     sql += ` ORDER BY m.created_at DESC`;
     const items = db.prepare(sql).all() as any[];
 
     return res.json({
       items: formatMenuItems(items, user?.id),
-      feedSource: feedType === 'FOLLOWED' ? 'FALLBACK_TRENDING' : 'DISCOVER',
-      followedCount,
+      feedSource: 'DISCOVER',
+      followedCount: 0,
     });
   } catch (err) {
     console.error('Error fetching menu items:', err);

@@ -109,10 +109,52 @@ export function initDb() {
     if (!columnNames.includes('country')) {
       db.prepare('ALTER TABLE shops ADD COLUMN country TEXT').run();
     }
-    // Backfill any empty seed shops
-    db.prepare(`UPDATE shops SET address = '78th Street, Between 26th & 27th', city = 'Mandalay', region = 'Mandalay Region', country = 'Myanmar' WHERE id = 'shop_01' AND (address IS NULL OR address = '')`).run();
-    db.prepare(`UPDATE shops SET address = 'No. 12, Bogyoke Aung San Road', city = 'Yangon', region = 'Yangon Region', country = 'Myanmar' WHERE id = 'shop_02' AND (address IS NULL OR address = '')`).run();
-    db.prepare(`UPDATE shops SET address = 'Yone Gyi Street, Central Market', city = 'Nyaungshwe', region = 'Shan State', country = 'Myanmar' WHERE id = 'shop_03' AND (address IS NULL OR address = '')`).run();
+    // Backfill international shops for Thailand and Singapore
+    const now = new Date().toISOString();
+    const salt = bcrypt.genSaltSync(10);
+    const passwordHash = bcrypt.hashSync('burmeal123', salt);
+
+    // Ensure owners exist
+    db.prepare(`INSERT OR IGNORE INTO users (id, email, password_hash, name, role, avatar_url, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`).run(
+      'usr_owner_04', 'bangkok@burmeal.com', passwordHash, 'Ma Thida (Bangkok)', 'SHOP_OWNER', 'https://api.dicebear.com/7.x/identicon/svg?seed=bangkok', now
+    );
+    db.prepare(`INSERT OR IGNORE INTO users (id, email, password_hash, name, role, avatar_url, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`).run(
+      'usr_owner_05', 'singapore@burmeal.com', passwordHash, 'Ko Myo (Singapore)', 'SHOP_OWNER', 'https://api.dicebear.com/7.x/identicon/svg?seed=singapore', now
+    );
+
+    // Insert Thailand Shop
+    db.prepare(`INSERT OR IGNORE INTO shops (id, owner_id, name, bio, cover_image, avatar_image, status, cuisine_type, location_area, address, city, region, country, facebook_url, whatsapp_phone, viber_phone, line_id, phone_number, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+      'shop_04', 'usr_owner_04', 'Siam Burmese Home Food (Pratunam)', 'Authentic Burmese curries, crispy Nan Gyi Thoke, and homemade Shan tofu served hot in Bangkok.',
+      '/src/assets/images/burmeal_hero_spread_1793906769541.jpg', 'https://api.dicebear.com/7.x/identicon/svg?seed=bangkok', 'APPROVED',
+      'Burmese Bangkok Diaspora Favorites', 'Pratunam Market & Phetchaburi 19', 'Phetchaburi Soi 19, Pratunam', 'Bangkok', 'Bangkok Metropolitan', 'Thailand',
+      'https://facebook.com/siamburmesefood', '66812345678', '66812345678', '@burmesebkk', '+66 81 234 5678', now
+    );
+
+    // Insert Singapore Shop
+    db.prepare(`INSERT OR IGNORE INTO shops (id, owner_id, name, bio, cover_image, avatar_image, status, cuisine_type, location_area, address, city, region, country, facebook_url, whatsapp_phone, viber_phone, line_id, phone_number, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+      'shop_05', 'usr_owner_05', 'Peninsula Golden Myanmar Kitchen', 'Iconic Burmese comfort food serving Singapore with fish broth Mohinga, tender braised beef curries, and spicy tea leaf salads.',
+      '/src/assets/images/burmeal_mohinga_dish_1793906770254.jpg', 'https://api.dicebear.com/7.x/identicon/svg?seed=singapore', 'APPROVED',
+      'Peninsula Plaza Heritage Cuisine', 'City Hall & Peninsula Plaza', '111 North Bridge Road, Peninsula Plaza #B1-08', 'Singapore', 'Singapore Central & Islandwide', 'Singapore',
+      'https://facebook.com/peninsulagoldenmyanmar', '6591234567', '6591234567', '@peninsulamy', '+65 9123 4567', now
+    );
+
+    // Insert dishes for Thailand and Singapore
+    db.prepare(`INSERT OR IGNORE INTO menu_items (id, shop_id, title, description, image, price, category, menu_type, is_vegetarian, is_halal, special_date, available_days, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+      'item_10', 'shop_04', 'Bangkok Pratunam Shan Khau Swe', 'Silky chicken curry noodle soup with pickled mustard greens and roasted chili oil.',
+      '/src/assets/images/burmeal_ohn_no_khao_swe_1793906770581.jpg', 6.50, 'Noodles & Broth', 'SPECIAL', 0, 1, new Date().toISOString().slice(0, 10), null, now
+    );
+    db.prepare(`INSERT OR IGNORE INTO menu_items (id, shop_id, title, description, image, price, category, menu_type, is_vegetarian, is_halal, special_date, available_days, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+      'item_11', 'shop_04', 'Crispy Golden Shan Tofu Fritters', 'Freshly made yellow chickpea tofu with spicy tamarind dipping sauce.',
+      '/src/assets/images/burmeal_tea_leaf_salad_1793906770254.jpg', 4.80, 'Salads & Snacks', 'PERMANENT', 1, 1, null, null, now
+    );
+    db.prepare(`INSERT OR IGNORE INTO menu_items (id, shop_id, title, description, image, price, category, menu_type, is_vegetarian, is_halal, special_date, available_days, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+      'item_12', 'shop_05', 'Peninsula Plaza Signature Mohinga', 'Traditional lemongrass catfish broth with crispy yellow split-pea fritters.',
+      '/src/assets/images/burmeal_mohinga_dish_1793906770254.jpg', 7.80, 'Noodles & Broth', 'SPECIAL', 0, 1, new Date().toISOString().slice(0, 10), null, now
+    );
+    db.prepare(`INSERT OR IGNORE INTO menu_items (id, shop_id, title, description, image, price, category, menu_type, is_vegetarian, is_halal, special_date, available_days, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+      'item_13', 'shop_05', 'Braised Beef Curry with Steamed Rice', 'Tender slow-cooked spiced beef curry with shallots and fresh cucumber salad.',
+      '/src/assets/images/burmeal_hero_spread_1793906769541.jpg', 9.50, 'Rice & Main Dishes', 'PERMANENT', 0, 1, null, null, now
+    );
   } catch (migErr) {
     console.error('Migration error:', migErr);
   }

@@ -121,26 +121,34 @@ export const SettingsView: React.FC = () => {
         </h2>
         <div className="grid grid-cols-2 gap-3 pt-1">
           <button
-            onClick={() => setLang('en')}
+            onClick={() => {
+              setLang('en');
+              triggerFeedback();
+            }}
             className={`flex items-center justify-center gap-2 py-3 px-4 rounded-xl border text-xs font-bold transition-all ${
               lang === 'en'
-                ? 'bg-amber-50 dark:bg-amber-950/30 border-amber-500 text-amber-900 dark:text-amber-200 shadow-xs'
-                : 'bg-stone-50 dark:bg-stone-800 border-stone-200 dark:border-stone-700 text-stone-600 dark:text-stone-400'
+                ? 'bg-amber-50 dark:bg-amber-950/30 border-amber-500 text-amber-900 dark:text-amber-200 shadow-xs ring-1 ring-amber-500/20'
+                : 'bg-stone-50 dark:bg-stone-800 border-stone-200 dark:border-stone-700 text-stone-600 dark:text-stone-400 hover:border-amber-400'
             }`}
           >
-            <span>🇺🇸</span>
+            <span className="text-sm">🇺🇸</span>
             <span>{t.english}</span>
+            {lang === 'en' && <Check className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 ml-1" />}
           </button>
           <button
-            onClick={() => setLang('my')}
+            onClick={() => {
+              setLang('my');
+              triggerFeedback();
+            }}
             className={`flex items-center justify-center gap-2 py-3 px-4 rounded-xl border text-xs font-bold transition-all ${
               lang === 'my'
-                ? 'bg-amber-50 dark:bg-amber-950/30 border-amber-500 text-amber-900 dark:text-amber-200 shadow-xs'
-                : 'bg-stone-50 dark:bg-stone-800 border-stone-200 dark:border-stone-700 text-stone-600 dark:text-stone-400'
+                ? 'bg-amber-50 dark:bg-amber-950/30 border-amber-500 text-amber-900 dark:text-amber-200 shadow-xs ring-1 ring-amber-500/20'
+                : 'bg-stone-50 dark:bg-stone-800 border-stone-200 dark:border-stone-700 text-stone-600 dark:text-stone-400 hover:border-amber-400'
             }`}
           >
-            <span>🇲🇲</span>
+            <span className="text-sm">🇲🇲</span>
             <span>{t.burmese}</span>
+            {lang === 'my' && <Check className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 ml-1" />}
           </button>
         </div>
       </div>

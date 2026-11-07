@@ -104,11 +104,11 @@ export const BottomNav: React.FC<BottomNavProps> = ({
     );
   }
 
-  // SHOP_OWNER Navigation: 4 clean distinct tabs (Overview, Menus, Shop Info, Settings)
+  // SHOP_OWNER Navigation: Responsive 4-tab mobile layout (Overview, Menus, Shop Info, Settings)
   return (
-    <nav aria-label="Shop Navigation" className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-stone-900/95 backdrop-blur border-t border-stone-200 dark:border-stone-800 px-1 py-1 shadow-lg transition-colors">
+    <nav aria-label="Shop Owner Navigation" className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-stone-900/95 backdrop-blur border-t border-stone-200 dark:border-stone-800 px-1 py-1.5 shadow-lg transition-colors">
       <div className="grid grid-cols-4 items-center">
-        {/* Tab 1: Overview */}
+        {/* Tab 1: Overview & Insights */}
         <button
           onClick={() => onSelectTab('shop_overview')}
           className={`flex flex-col items-center justify-center py-1 transition-colors ${
@@ -118,10 +118,10 @@ export const BottomNav: React.FC<BottomNavProps> = ({
           }`}
         >
           <LayoutDashboard className="w-4 h-4 mb-0.5" />
-          <span className="text-[10px] leading-tight truncate max-w-[65px]">{t.shopNavOverview}</span>
+          <span className="text-[10px] leading-tight font-semibold truncate max-w-[65px]">{t.shopNavOverview}</span>
         </button>
 
-        {/* Tab 2: Menus */}
+        {/* Tab 2: Menu Management */}
         <button
           onClick={() => onSelectTab('shop_menus')}
           className={`flex flex-col items-center justify-center py-1 transition-colors ${
@@ -131,10 +131,10 @@ export const BottomNav: React.FC<BottomNavProps> = ({
           }`}
         >
           <UtensilsCrossed className="w-4 h-4 mb-0.5" />
-          <span className="text-[10px] leading-tight truncate max-w-[65px]">{t.shopNavMenus}</span>
+          <span className="text-[10px] leading-tight font-semibold truncate max-w-[65px]">{t.shopNavMenus}</span>
         </button>
 
-        {/* Tab 3: Shop Info */}
+        {/* Tab 3: Shop Profile Edit */}
         <button
           onClick={() => onSelectTab('shop_profile')}
           className={`flex flex-col items-center justify-center py-1 transition-colors ${
@@ -144,20 +144,20 @@ export const BottomNav: React.FC<BottomNavProps> = ({
           }`}
         >
           <Store className="w-4 h-4 mb-0.5" />
-          <span className="text-[10px] leading-tight truncate max-w-[65px]">{t.shopNavProfile}</span>
+          <span className="text-[10px] leading-tight font-semibold truncate max-w-[65px]">{t.shopNavProfile}</span>
         </button>
 
-        {/* Tab 4: Settings (Unified App & Shop Settings) */}
+        {/* Tab 4: Shop Account / Settings */}
         <button
-          onClick={() => onSelectTab('settings')}
+          onClick={() => onSelectTab('shop_settings')}
           className={`flex flex-col items-center justify-center py-1 transition-colors ${
-            currentTab === 'settings'
+            currentTab === 'shop_settings'
               ? 'text-amber-600 dark:text-amber-400 font-bold'
               : 'text-stone-500 dark:text-stone-400 hover:text-stone-800'
           }`}
         >
           <SettingsIcon className="w-4 h-4 mb-0.5" />
-          <span className="text-[10px] leading-tight truncate max-w-[65px]">{t.navSettings}</span>
+          <span className="text-[10px] leading-tight font-semibold truncate max-w-[65px]">{t.shopNavSettings}</span>
         </button>
       </div>
     </nav>
