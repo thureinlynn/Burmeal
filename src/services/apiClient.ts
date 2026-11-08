@@ -1,6 +1,6 @@
-import { User, Shop, MenuItem, MenuType } from '../types';
+import { User, Shop, MenuItem, MenuType } from '../types/index';
+import { generateAllMockShops, generateAllMockMenuItems, generateMockOwners } from '../utils/mockDataGenerator';
 
-const STORAGE_KEY = 'burmeal_data_v2';
 const TOKEN_KEY = 'burmeal_token';
 const SHOP_ID_KEY = 'burmeal_shop_id';
 
@@ -12,341 +12,19 @@ interface DbState {
   savedItems: { customerId: string; itemId: string }[];
 }
 
-const INITIAL_SHOPS: Shop[] = [
-  {
-    id: 'shop_01',
-    ownerId: 'usr_owner_01',
-    ownerEmail: 'mandalay@burmeal.com',
-    name: 'Mandalay Morning Teahouse',
-    bio: 'Authentic royal Mandalay breakfast, slow-cooked catfish Mohinga, and handcrafted freshly fried crispy split-pea fritters.',
-    coverImage: '/src/assets/images/burmeal_hero_spread_1793906769541.jpg',
-    avatarImage: 'https://api.dicebear.com/7.x/identicon/svg?seed=mandalay',
-    status: 'APPROVED',
-    cuisineType: 'Burmese Breakfast & Street Classics',
-    locationArea: 'Downtown Heritage District',
-    address: '78th Street, Between 26th & 27th',
-    city: 'Mandalay',
-    region: 'Mandalay Region',
-    country: 'Myanmar',
-    facebookUrl: 'https://facebook.com/mandalayteahouse',
-    whatsappPhone: '959777123456',
-    viberPhone: '959777123456',
-    lineId: '@mandalay_tea',
-    phoneNumber: '+95 9 777 123 456',
-    createdAt: new Date().toISOString(),
-    followerCount: 24,
-    itemCount: 4,
-  },
-  {
-    id: 'shop_02',
-    ownerId: 'usr_owner_02',
-    ownerEmail: 'rangoon@burmeal.com',
-    name: 'Golden Rangoon Coconut Kitchen',
-    bio: 'Specialist in traditional Ohn No Khao Swè, rich braised pork belly stews, and herbal seasonal sour soups.',
-    coverImage: '/src/assets/images/burmeal_ohn_no_khao_swe_1793906770581.jpg',
-    avatarImage: 'https://api.dicebear.com/7.x/identicon/svg?seed=rangoon',
-    status: 'APPROVED',
-    cuisineType: 'Yangon Classic Curries & Soups',
-    locationArea: 'Bahan Township',
-    address: 'No. 42 Inya Road',
-    city: 'Yangon',
-    region: 'Yangon Region',
-    country: 'Myanmar',
-    facebookUrl: 'https://facebook.com/goldenrangoonkitchen',
-    whatsappPhone: '959888987654',
-    viberPhone: '959888987654',
-    lineId: '@goldenrangoon',
-    phoneNumber: '+95 9 888 987 654',
-    createdAt: new Date().toISOString(),
-    followerCount: 38,
-    itemCount: 4,
-  },
-  {
-    id: 'shop_03',
-    ownerId: 'usr_owner_03',
-    ownerEmail: 'shan@burmeal.com',
-    name: 'Inle Mountain Tealeaf Corner',
-    bio: 'Highland Shan cuisine featuring fermented tea leaf salad, warm Shan tofu noodle bowls, and savory rice cakes.',
-    coverImage: '/src/assets/images/burmeal_tea_leaf_salad_1793906770254.jpg',
-    avatarImage: 'https://api.dicebear.com/7.x/identicon/svg?seed=inle',
-    status: 'APPROVED',
-    cuisineType: 'Shan Highlands & Vegetarian Delights',
-    locationArea: 'Inle Lake Market Hub',
-    address: 'Yone Gyi Street, Central Market',
-    city: 'Nyaungshwe',
-    region: 'Shan State',
-    country: 'Myanmar',
-    facebookUrl: 'https://facebook.com/inlemountain',
-    whatsappPhone: '959666543210',
-    viberPhone: '959666543210',
-    lineId: '@inle_corner',
-    phoneNumber: '+95 9 666 543 210',
-    createdAt: new Date().toISOString(),
-    followerCount: 19,
-    itemCount: 3,
-  },
-  {
-    id: 'shop_04',
-    ownerId: 'usr_owner_04',
-    ownerEmail: 'bangkok@burmeal.com',
-    name: 'Siam Burmese Home Food (Pratunam)',
-    bio: 'Authentic Burmese curries, crispy Nan Gyi Thoke, and homemade Shan tofu served hot in the heart of Bangkok.',
-    coverImage: '/src/assets/images/burmeal_hero_spread_1793906769541.jpg',
-    avatarImage: 'https://api.dicebear.com/7.x/identicon/svg?seed=bangkok',
-    status: 'APPROVED',
-    cuisineType: 'Burmese Bangkok Diaspora Favorites',
-    locationArea: 'Pratunam Market & Phetchaburi 19',
-    address: 'Phetchaburi Soi 19, Pratunam',
-    city: 'Bangkok',
-    region: 'Bangkok Metropolitan',
-    country: 'Thailand',
-    facebookUrl: 'https://facebook.com/siamburmesefood',
-    whatsappPhone: '66812345678',
-    viberPhone: '66812345678',
-    lineId: '@burmesebkk',
-    phoneNumber: '+66 81 234 5678',
-    createdAt: new Date().toISOString(),
-    followerCount: 42,
-    itemCount: 2,
-  },
-  {
-    id: 'shop_05',
-    ownerId: 'usr_owner_05',
-    ownerEmail: 'singapore@burmeal.com',
-    name: 'Peninsula Golden Myanmar Kitchen',
-    bio: 'Iconic Burmese comfort food serving Singapore with fish broth Mohinga, tender braised beef curries, and spicy tea leaf salads.',
-    coverImage: '/src/assets/images/burmeal_mohinga_dish_1793906770254.jpg',
-    avatarImage: 'https://api.dicebear.com/7.x/identicon/svg?seed=singapore',
-    status: 'APPROVED',
-    cuisineType: 'Peninsula Plaza Heritage Cuisine',
-    locationArea: 'City Hall & Peninsula Plaza',
-    address: '111 North Bridge Road, Peninsula Plaza #B1-08',
-    city: 'Singapore',
-    region: 'Singapore Central & Islandwide',
-    country: 'Singapore',
-    facebookUrl: 'https://facebook.com/peninsulagoldenmyanmar',
-    whatsappPhone: '6591234567',
-    viberPhone: '6591234567',
-    lineId: '@peninsulamy',
-    phoneNumber: '+65 9123 4567',
-    createdAt: new Date().toISOString(),
-    followerCount: 56,
-    itemCount: 2,
-  },
-];
+const BASE_MOCK_SHOPS: Shop[] = generateAllMockShops();
+const INITIAL_SHOPS: Shop[] = BASE_MOCK_SHOPS;
 
-const todayStr = new Date().toISOString().slice(0, 10);
+const BASE_MOCK_MENU_ITEMS: MenuItem[] = generateAllMockMenuItems(BASE_MOCK_SHOPS);
+const INITIAL_MENU_ITEMS: MenuItem[] = BASE_MOCK_MENU_ITEMS;
 
-const INITIAL_MENU_ITEMS: MenuItem[] = [
-  {
-    id: 'item_01',
-    shopId: 'shop_01',
-    shopName: 'Mandalay Morning Teahouse',
-    title: 'Royal Fish Mohinga with Crispy Pe-Kyaw',
-    description: 'Slow-simmered aromatic catfish broth with lemongrass, ginger, tender vermicelli, and golden chickpea crackers.',
-    image: '/src/assets/images/burmeal_mohinga_dish_1793906770254.jpg',
-    price: 5.5,
-    category: 'Noodles & Broth',
-    menuType: 'SPECIAL',
-    isVegetarian: false,
-    isHalal: true,
-    specialDate: todayStr,
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: 'item_02',
-    shopId: 'shop_01',
-    shopName: 'Mandalay Morning Teahouse',
-    title: 'Mandalay Mont-Di Rice Noodle Salad',
-    description: 'Thick hand-pulled round rice noodles tossed in roasted chickpea flour, chili garlic oil, and crushed fish cakes.',
-    image: '/src/assets/images/burmeal_tea_leaf_salad_1793906770254.jpg',
-    price: 6.25,
-    category: 'Noodles & Broth',
-    menuType: 'WEEKLY',
-    isVegetarian: false,
-    isHalal: true,
-    availableDays: ['Mon', 'Wed', 'Fri', 'Sun'],
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: 'item_03',
-    shopId: 'shop_01',
-    shopName: 'Mandalay Morning Teahouse',
-    title: 'Crispy Samosa Thoke (Vegetarian)',
-    description: 'Golden spiced potato samosas crushed into a zesty cabbage broth with fresh mint, shallots, and tamarind drizzle.',
-    image: '/src/assets/images/burmeal_hero_spread_1793906769541.jpg',
-    price: 4.5,
-    category: 'Salads & Snacks',
-    menuType: 'PERMANENT',
-    isVegetarian: true,
-    isHalal: true,
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: 'item_04',
-    shopId: 'shop_01',
-    shopName: 'Mandalay Morning Teahouse',
-    title: 'Steamed Glutinous Rice with Boiled Vatana Peas',
-    description: 'Traditional morning breakfast sticky rice topped with tender salted peas, fried shallot crisps, and sesame oil.',
-    image: '/src/assets/images/burmeal_mohinga_dish_1793906770254.jpg',
-    price: 3.8,
-    category: 'Breakfast Specials',
-    menuType: 'PERMANENT',
-    isVegetarian: true,
-    isHalal: true,
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: 'item_05',
-    shopId: 'shop_02',
-    shopName: 'Golden Rangoon Coconut Kitchen',
-    title: 'Rich Coconut Chicken Noodle (Ohn No Khao Swè)',
-    description: 'Fragrant mild curry stewed chicken in velvety spiced coconut milk served over flat egg noodles with crispy wonton crunch and lime.',
-    image: '/src/assets/images/burmeal_ohn_no_khao_swe_1793906770581.jpg',
-    price: 7.5,
-    category: 'Noodles & Broth',
-    menuType: 'SPECIAL',
-    isVegetarian: false,
-    isHalal: false,
-    specialDate: todayStr,
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: 'item_06',
-    shopId: 'shop_02',
-    shopName: 'Golden Rangoon Coconut Kitchen',
-    title: 'Golden Spiced Butter Rice with Braised Chicken',
-    description: 'Fluffy fragrant rice cooked in pure clarified butter, whole cardamom, cloves, and tender caramelized chicken thigh.',
-    image: '/src/assets/images/burmeal_hero_spread_1793906769541.jpg',
-    price: 8.5,
-    category: 'Rice & Main Dishes',
-    menuType: 'WEEKLY',
-    isVegetarian: false,
-    isHalal: true,
-    availableDays: ['Tue', 'Thu', 'Sat'],
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: 'item_07',
-    shopId: 'shop_02',
-    shopName: 'Golden Rangoon Coconut Kitchen',
-    title: 'Danbauk Festive Biryani (Halal)',
-    description: 'Long-grain basmati infused with saffron, raisins, roasted cashews, and slow-roasted tender spiced lamb.',
-    image: '/src/assets/images/burmeal_ohn_no_khao_swe_1793906770581.jpg',
-    price: 10.5,
-    category: 'Rice & Main Dishes',
-    menuType: 'WEEKLY',
-    isVegetarian: false,
-    isHalal: true,
-    availableDays: ['Fri', 'Sat', 'Sun'],
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: 'item_08',
-    shopId: 'shop_02',
-    shopName: 'Golden Rangoon Coconut Kitchen',
-    title: 'Classic Fermented Green Tea Leaf Salad (Lahpet Thoke)',
-    description: 'Finest organic tea leaves tossed with double-fried crunchy beans, roasted peanuts, sesame, crisp cabbage, and fresh lime.',
-    image: '/src/assets/images/burmeal_tea_leaf_salad_1793906770254.jpg',
-    price: 5.0,
-    category: 'Salads & Snacks',
-    menuType: 'PERMANENT',
-    isVegetarian: true,
-    isHalal: true,
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: 'item_09',
-    shopId: 'shop_04',
-    shopName: 'Siam Burmese Home Food (Pratunam)',
-    title: 'Bangkok Style Nan Gyi Thoke (Chicken Curry Noodle)',
-    description: 'Thick Burmese udon-style round noodles tossed in spicy shallot oil, toasted chickpea flour, and tender Bangkok-curried chicken.',
-    image: '/src/assets/images/burmeal_hero_spread_1793906769541.jpg',
-    price: 6.5,
-    category: 'Noodles & Broth',
-    menuType: 'SPECIAL',
-    isVegetarian: false,
-    isHalal: true,
-    specialDate: todayStr,
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: 'item_10',
-    shopId: 'shop_04',
-    shopName: 'Siam Burmese Home Food (Pratunam)',
-    title: 'Warm Shan Yellow Tofu Salad with Coriander',
-    description: 'Freshly pressed homemade Shan chickpea tofu with roasted garlic oil, sesame, and lime tamarind dressing.',
-    image: '/src/assets/images/burmeal_tea_leaf_salad_1793906770254.jpg',
-    price: 4.8,
-    category: 'Salads & Snacks',
-    menuType: 'PERMANENT',
-    isVegetarian: true,
-    isHalal: true,
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: 'item_11',
-    shopId: 'shop_05',
-    shopName: 'Peninsula Golden Myanmar Kitchen',
-    title: 'Singapore City Hall Special Fish Mohinga',
-    description: 'Award-winning traditional catfish chowder with lemongrass, crispy fritters, and boiled egg over soft thin rice noodles.',
-    image: '/src/assets/images/burmeal_mohinga_dish_1793906770254.jpg',
-    price: 7.2,
-    category: 'Noodles & Broth',
-    menuType: 'SPECIAL',
-    isVegetarian: false,
-    isHalal: true,
-    specialDate: todayStr,
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: 'item_12',
-    shopId: 'shop_05',
-    shopName: 'Peninsula Golden Myanmar Kitchen',
-    title: 'Slow-Cooked Burmese Beef Rendang-Style Curry',
-    description: 'Aromatic tender chuck roast cubes stewed in roasted masala, ginger, garlic, and rich golden oil.',
-    image: '/src/assets/images/burmeal_hero_spread_1793906769541.jpg',
-    price: 9.8,
-    category: 'Rice & Main Dishes',
-    menuType: 'WEEKLY',
-    isVegetarian: false,
-    isHalal: true,
-    availableDays: ['Fri', 'Sat', 'Sun'],
-    createdAt: new Date().toISOString(),
-  },
-];
-
-const INITIAL_USERS: User[] = [
+const BASE_MOCK_USERS: User[] = [
   {
     id: 'usr_admin_01',
     email: 'admin@burmeal.com',
     name: 'BurMeal Curator',
     role: 'ADMIN',
     avatarUrl: 'https://api.dicebear.com/7.x/bottts/svg?seed=admin',
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: 'usr_owner_01',
-    email: 'mandalay@burmeal.com',
-    name: 'Daw Khin Sandar',
-    role: 'SHOP_OWNER',
-    avatarUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Khin',
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: 'usr_owner_02',
-    email: 'rangoon@burmeal.com',
-    name: 'U Than Htike',
-    role: 'SHOP_OWNER',
-    avatarUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Than',
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: 'usr_owner_03',
-    email: 'shan@burmeal.com',
-    name: 'Nang Kham Hla',
-    role: 'SHOP_OWNER',
-    avatarUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Nang',
     createdAt: new Date().toISOString(),
   },
   {
@@ -357,52 +35,203 @@ const INITIAL_USERS: User[] = [
     avatarUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Kyaw',
     createdAt: new Date().toISOString(),
   },
+  ...generateMockOwners(BASE_MOCK_SHOPS),
 ];
+const INITIAL_USERS: User[] = BASE_MOCK_USERS;
 
-function getLocalDb(): DbState {
+interface LocalDelta {
+  customShops: Shop[];
+  updatedShops: Record<string, Partial<Shop>>;
+  customMenuItems: MenuItem[];
+  updatedMenuItems: Record<string, Partial<MenuItem>>;
+  deletedMenuItemIds: string[];
+  follows: { customerId: string; shopId: string }[];
+  savedItems: { customerId: string; itemId: string }[];
+  customUsers: User[];
+}
+
+const DEFAULT_DELTA: LocalDelta = {
+  customShops: [],
+  updatedShops: {},
+  customMenuItems: [],
+  updatedMenuItems: {},
+  deletedMenuItemIds: [],
+  follows: [
+    { customerId: 'usr_cust_01', shopId: 'shop_01' },
+    { customerId: 'usr_cust_01', shopId: 'shop_02' },
+    { customerId: 'usr_cust_01', shopId: 'shop_04' },
+  ],
+  savedItems: [
+    { customerId: 'usr_cust_01', itemId: 'item_shop_01_1' },
+    { customerId: 'usr_cust_01', itemId: 'item_shop_02_1' },
+  ],
+  customUsers: [],
+};
+
+function getLocalDelta(): LocalDelta {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) {
-      const state: DbState = {
-        users: INITIAL_USERS,
-        shops: INITIAL_SHOPS,
-        menuItems: INITIAL_MENU_ITEMS,
-        follows: [
-          { customerId: 'usr_cust_01', shopId: 'shop_01' },
-          { customerId: 'usr_cust_01', shopId: 'shop_02' },
-        ],
-        savedItems: [
-          { customerId: 'usr_cust_01', itemId: 'item_01' },
-          { customerId: 'usr_cust_01', itemId: 'item_05' },
-        ],
-      };
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-      return state;
-    }
+    const raw = localStorage.getItem('burmeal_delta_v3');
+    if (!raw) return DEFAULT_DELTA;
     const parsed = JSON.parse(raw);
-    if (!parsed.shops || parsed.shops.length < INITIAL_SHOPS.length) {
-      parsed.shops = INITIAL_SHOPS;
-      parsed.menuItems = INITIAL_MENU_ITEMS;
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
-    }
-    return parsed;
-  } catch (err) {
     return {
-      users: INITIAL_USERS,
-      shops: INITIAL_SHOPS,
-      menuItems: INITIAL_MENU_ITEMS,
-      follows: [],
-      savedItems: [],
+      customShops: parsed.customShops || [],
+      updatedShops: parsed.updatedShops || {},
+      customMenuItems: parsed.customMenuItems || [],
+      updatedMenuItems: parsed.updatedMenuItems || {},
+      deletedMenuItemIds: parsed.deletedMenuItemIds || [],
+      follows: parsed.follows || DEFAULT_DELTA.follows,
+      savedItems: parsed.savedItems || DEFAULT_DELTA.savedItems,
+      customUsers: parsed.customUsers || [],
     };
+  } catch {
+    return DEFAULT_DELTA;
   }
 }
 
-function saveLocalDb(state: DbState) {
+function saveLocalDelta(delta: LocalDelta) {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    localStorage.setItem('burmeal_delta_v3', JSON.stringify(delta));
   } catch (e) {
-    console.warn('Failed to save state to localStorage', e);
+    console.warn('Failed to save delta to localStorage', e);
   }
+}
+
+let cachedState: DbState | null = null;
+
+function getLocalDb(): DbState {
+  if (cachedState) return cachedState;
+  const delta = getLocalDelta();
+
+  const shops = BASE_MOCK_SHOPS.map((s) => {
+    return delta.updatedShops[s.id] ? { ...s, ...delta.updatedShops[s.id] } : s;
+  }).concat(delta.customShops || []);
+
+  const deletedIds = new Set(delta.deletedMenuItemIds || []);
+  const menuItems = BASE_MOCK_MENU_ITEMS.filter((m) => !deletedIds.has(m.id))
+    .map((m) => (delta.updatedMenuItems[m.id] ? { ...m, ...delta.updatedMenuItems[m.id] } : m))
+    .concat(delta.customMenuItems || []);
+
+  const users = [...BASE_MOCK_USERS, ...(delta.customUsers || [])];
+
+  cachedState = {
+    users,
+    shops,
+    menuItems,
+    follows: delta.follows || DEFAULT_DELTA.follows,
+    savedItems: delta.savedItems || DEFAULT_DELTA.savedItems,
+  };
+  return cachedState;
+}
+
+function saveLocalDb(state: DbState) {
+  cachedState = state;
+  const baseShopMap = new Map(BASE_MOCK_SHOPS.map((s) => [s.id, s]));
+  const updatedShops: Record<string, Partial<Shop>> = {};
+  const customShops: Shop[] = [];
+
+  for (const s of state.shops) {
+    const base = baseShopMap.get(s.id);
+    if (!base) {
+      customShops.push(s);
+    } else {
+      if (
+        s.name !== base.name ||
+        s.bio !== base.bio ||
+        s.coverImage !== base.coverImage ||
+        s.avatarImage !== base.avatarImage ||
+        s.address !== base.address ||
+        s.phoneNumber !== base.phoneNumber ||
+        s.facebookUrl !== base.facebookUrl ||
+        s.whatsappPhone !== base.whatsappPhone ||
+        s.status !== base.status
+      ) {
+        updatedShops[s.id] = s;
+      }
+    }
+  }
+
+  const baseItemMap = new Map(BASE_MOCK_MENU_ITEMS.map((m) => [m.id, m]));
+  const updatedMenuItems: Record<string, Partial<MenuItem>> = {};
+  const customMenuItems: MenuItem[] = [];
+  const currentItemIds = new Set(state.menuItems.map((m) => m.id));
+  const deletedMenuItemIds: string[] = [];
+
+  for (const base of BASE_MOCK_MENU_ITEMS) {
+    if (!currentItemIds.has(base.id)) {
+      deletedMenuItemIds.push(base.id);
+    }
+  }
+
+  for (const m of state.menuItems) {
+    const base = baseItemMap.get(m.id);
+    if (!base) {
+      customMenuItems.push(m);
+    } else {
+      if (m.title !== base.title || m.price !== base.price || m.category !== base.category || m.menuType !== base.menuType) {
+        updatedMenuItems[m.id] = m;
+      }
+    }
+  }
+
+  const baseUserIds = new Set(BASE_MOCK_USERS.map((u) => u.id));
+  const customUsers = state.users.filter((u) => !baseUserIds.has(u.id));
+
+  saveLocalDelta({
+    customShops,
+    updatedShops,
+    customMenuItems,
+    updatedMenuItems,
+    deletedMenuItemIds,
+    follows: state.follows,
+    savedItems: state.savedItems,
+    customUsers,
+  });
+}
+
+const REGION_TO_COUNTRY: Record<string, string> = {
+  'MM-YGN': 'Myanmar',
+  'MM-MDY': 'Myanmar',
+  'MM-SHN': 'Myanmar',
+  'MM-BGO': 'Myanmar',
+  'MM-AYY': 'Myanmar',
+  'MM-ALL': 'Myanmar',
+  'TH-BKK': 'Thailand',
+  'TH-CNX': 'Thailand',
+  'TH-MSOT': 'Thailand',
+  'TH-ALL': 'Thailand',
+  'SG-ALL': 'Singapore',
+  'MY-ALL': 'Malaysia',
+  'JP-ALL': 'Japan',
+  'US-ALL': 'United States',
+  'GB-ALL': 'United Kingdom',
+  'KR-ALL': 'South Korea',
+  'AU-ALL': 'Australia',
+};
+
+function matchesRegionFilter(s: Shop, regionId?: string, country?: string): boolean {
+  let effectiveCountry = country;
+  if (!effectiveCountry && regionId && REGION_TO_COUNTRY[regionId.toUpperCase()]) {
+    effectiveCountry = REGION_TO_COUNTRY[regionId.toUpperCase()];
+  }
+
+  if (effectiveCountry) {
+    if (!s.country || s.country.toLowerCase() !== effectiveCountry.toLowerCase()) {
+      return false;
+    }
+  }
+
+  if (regionId && !regionId.endsWith('-ALL')) {
+    const r = regionId.toUpperCase();
+    if (r === 'MM-YGN') return (s.region?.toLowerCase().includes('yangon') || s.city?.toLowerCase().includes('yangon')) ?? false;
+    if (r === 'MM-MDY') return (s.region?.toLowerCase().includes('mandalay') || s.city?.toLowerCase().includes('mandalay')) ?? false;
+    if (r === 'MM-SHN') return (s.region?.toLowerCase().includes('shan') || s.city?.toLowerCase().includes('taunggyi') || s.city?.toLowerCase().includes('nyaungshwe')) ?? false;
+    if (r === 'MM-BGO') return (s.region?.toLowerCase().includes('bago') || s.city?.toLowerCase().includes('bago')) ?? false;
+    if (r === 'MM-AYY') return (s.region?.toLowerCase().includes('ayeyarwady') || s.city?.toLowerCase().includes('pathein')) ?? false;
+    if (r === 'TH-BKK') return (s.region?.toLowerCase().includes('bangkok') || s.city?.toLowerCase().includes('bangkok')) ?? false;
+    if (r === 'TH-CNX') return (s.region?.toLowerCase().includes('chiang mai') || s.city?.toLowerCase().includes('chiang mai')) ?? false;
+    if (r === 'TH-MSOT') return (s.region?.toLowerCase().includes('mae sot') || s.city?.toLowerCase().includes('mae sot')) ?? false;
+  }
+  return true;
 }
 
 // Helper to determine active user id from token
@@ -459,25 +288,8 @@ export const apiClient = {
     const userId = getUserIdFromToken(token);
     let shops = db.shops;
 
-    // Apply country filter
-    if (filterParams.country) {
-      const targetCountry = filterParams.country.toLowerCase();
-      shops = shops.filter((s) => s.country && s.country.toLowerCase() === targetCountry);
-    }
-
-    // Apply region filter if specific
-    if (filterParams.regionId && !filterParams.regionId.endsWith('-ALL')) {
-      const rId = filterParams.regionId.toLowerCase();
-      if (rId.includes('ygn')) {
-        shops = shops.filter((s) => (s.region && s.region.toLowerCase().includes('yangon')) || (s.city && s.city.toLowerCase().includes('yangon')));
-      } else if (rId.includes('mdy')) {
-        shops = shops.filter((s) => (s.region && s.region.toLowerCase().includes('mandalay')) || (s.city && s.city.toLowerCase().includes('mandalay')));
-      } else if (rId.includes('shn')) {
-        shops = shops.filter((s) => (s.region && s.region.toLowerCase().includes('shan')) || (s.city && s.city.toLowerCase().includes('nyaungshwe')));
-      } else if (rId.includes('bkk')) {
-        shops = shops.filter((s) => (s.region && s.region.toLowerCase().includes('bangkok')) || (s.city && s.city.toLowerCase().includes('bangkok')));
-      }
-    }
+    // Apply region and country filtering
+    shops = shops.filter((s) => matchesRegionFilter(s, filterParams.regionId, filterParams.country));
 
     return shops.map((s) => ({
       ...s,
@@ -595,12 +407,11 @@ export const apiClient = {
     }
 
     // Country/Region scoping across shops (unless inspecting a specific shop directly)
-    if (!params.shopId && params.country) {
-      const targetCountry = params.country.toLowerCase();
-      const shopIdsInCountry = db.shops
-        .filter((s) => s.country && s.country.toLowerCase() === targetCountry)
-        .map((s) => s.id);
-      items = items.filter((i) => shopIdsInCountry.includes(i.shopId));
+    if (!params.shopId && (params.country || params.regionId)) {
+      const allowedShopIds = new Set(
+        db.shops.filter((s) => matchesRegionFilter(s, params.regionId, params.country)).map((s) => s.id)
+      );
+      items = items.filter((i) => allowedShopIds.has(i.shopId));
     }
 
     if (params.menuType && params.menuType !== 'ALL') {
@@ -702,7 +513,7 @@ export const apiClient = {
       menuType: data.menuType || 'SPECIAL',
       isVegetarian: Boolean(data.isVegetarian),
       isHalal: Boolean(data.isHalal),
-      specialDate: data.specialDate || (data.menuType === 'SPECIAL' ? todayStr : undefined),
+      specialDate: data.specialDate || (data.menuType === 'SPECIAL' ? new Date().toISOString().slice(0, 10) : undefined),
       availableDays: data.availableDays || (data.menuType === 'WEEKLY' ? ['Mon', 'Wed', 'Fri'] : undefined),
       createdAt: new Date().toISOString(),
       isSaved: false,

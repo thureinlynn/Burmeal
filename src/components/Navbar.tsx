@@ -58,17 +58,19 @@ export const Navbar: React.FC<NavbarProps> = ({
               </span>
             </button>
 
-            {/* Region & Location Selector Button */}
-            <button
-              onClick={openLocationModal}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 hover:bg-amber-100 dark:hover:bg-amber-900/60 border border-amber-200 dark:border-amber-800 text-stone-800 dark:text-stone-200 text-xs font-semibold transition-all shadow-2xs active:scale-95"
-              title="Change your dining country and region"
-            >
-              <span className="text-sm shrink-0">{selectedFlag}</span>
-              <span className="hidden sm:inline max-w-[130px] truncate">{selectedRegionName}</span>
-              <span className="sm:hidden font-bold">{selectedCountry}</span>
-              <ChevronDown className="w-3.5 h-3.5 text-amber-700 dark:text-amber-400 shrink-0" />
-            </button>
+            {/* Region & Location Selector Button - Only for Customers/Public, Hidden for Shop Owners */}
+            {user?.role !== 'SHOP_OWNER' && (
+              <button
+                onClick={openLocationModal}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 hover:bg-amber-100 dark:hover:bg-amber-900/60 border border-amber-200 dark:border-amber-800 text-stone-800 dark:text-stone-200 text-xs font-semibold transition-all shadow-2xs active:scale-95"
+                title="Change your dining country and region"
+              >
+                <span className="text-sm shrink-0">{selectedFlag}</span>
+                <span className="hidden sm:inline max-w-[130px] truncate">{selectedRegionName}</span>
+                <span className="sm:hidden font-bold">{selectedCountry}</span>
+                <ChevronDown className="w-3.5 h-3.5 text-amber-700 dark:text-amber-400 shrink-0" />
+              </button>
+            )}
           </div>
 
           {/* Zone 2: Navigation Links (Desktop) */}

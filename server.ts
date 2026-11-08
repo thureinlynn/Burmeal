@@ -195,6 +195,52 @@ app.post('/api/auth/logout', (req: Request, res: Response) => {
   return res.json({ success: true });
 });
 
+const REGION_TO_COUNTRY: Record<string, string> = {
+  'MM-YGN': 'Myanmar',
+  'MM-MDY': 'Myanmar',
+  'MM-SHN': 'Myanmar',
+  'MM-BGO': 'Myanmar',
+  'MM-AYY': 'Myanmar',
+  'MM-ALL': 'Myanmar',
+  'TH-BKK': 'Thailand',
+  'TH-CNX': 'Thailand',
+  'TH-MSOT': 'Thailand',
+  'TH-ALL': 'Thailand',
+  'SG-ALL': 'Singapore',
+  'MY-ALL': 'Malaysia',
+  'JP-ALL': 'Japan',
+  'US-ALL': 'United States',
+  'GB-ALL': 'United Kingdom',
+  'KR-ALL': 'South Korea',
+  'AU-ALL': 'Australia',
+};
+
+function buildRegionSqlClause(regionId?: string, country?: string): string {
+  let effectiveCountry = country;
+  if (!effectiveCountry && regionId && REGION_TO_COUNTRY[regionId.toUpperCase()]) {
+    effectiveCountry = REGION_TO_COUNTRY[regionId.toUpperCase()];
+  }
+
+  let clause = '';
+  if (effectiveCountry) {
+    const cleanCountry = effectiveCountry.replace(/'/g, "''");
+    clause += ` AND LOWER(s.country) = LOWER('${cleanCountry}')`;
+  }
+
+  if (regionId && !regionId.endsWith('-ALL')) {
+    const r = regionId.toUpperCase();
+    if (r === 'MM-YGN') clause += ` AND (LOWER(s.region) LIKE '%yangon%' OR LOWER(s.city) LIKE '%yangon%')`;
+    else if (r === 'MM-MDY') clause += ` AND (LOWER(s.region) LIKE '%mandalay%' OR LOWER(s.city) LIKE '%mandalay%')`;
+    else if (r === 'MM-SHN') clause += ` AND (LOWER(s.region) LIKE '%shan%' OR LOWER(s.city) LIKE '%taunggyi%' OR LOWER(s.city) LIKE '%nyaungshwe%')`;
+    else if (r === 'MM-BGO') clause += ` AND (LOWER(s.region) LIKE '%bago%' OR LOWER(s.city) LIKE '%bago%')`;
+    else if (r === 'MM-AYY') clause += ` AND (LOWER(s.region) LIKE '%ayeyarwady%' OR LOWER(s.city) LIKE '%pathein%')`;
+    else if (r === 'TH-BKK') clause += ` AND (LOWER(s.region) LIKE '%bangkok%' OR LOWER(s.city) LIKE '%bangkok%')`;
+    else if (r === 'TH-CNX') clause += ` AND (LOWER(s.region) LIKE '%chiang mai%' OR LOWER(s.city) LIKE '%chiang mai%')`;
+    else if (r === 'TH-MSOT') clause += ` AND (LOWER(s.region) LIKE '%mae sot%' OR LOWER(s.city) LIKE '%mae sot%')`;
+  }
+  return clause;
+}
+
 // 5. Shops: List Approved Shops (with follow stats)
 app.get('/api/shops', (req: Request, res: Response) => {
   try {
@@ -220,24 +266,7 @@ app.get('/api/shops', (req: Request, res: Response) => {
       query += ` WHERE s.status = 'APPROVED'`;
     }
 
-    if (countryFilter) {
-      const cleanCountry = countryFilter.replace(/'/g, "''");
-      query += ` AND LOWER(s.country) = LOWER('${cleanCountry}')`;
-    }
-
-    if (regionIdFilter && !regionIdFilter.endsWith('-ALL')) {
-      const rId = regionIdFilter.toLowerCase();
-      if (rId.includes('ygn')) {
-        query += ` AND (LOWER(s.region) LIKE '%yangon%' OR LOWER(s.city) LIKE '%yangon%')`;
-      } else if (rId.includes('mdy')) {
-        query += ` AND (LOWER(s.region) LIKE '%mandalay%' OR LOWER(s.city) LIKE '%mandalay%')`;
-      } else if (rId.includes('shn')) {
-        query += ` AND (LOWER(s.region) LIKE '%shan%' OR LOWER(s.city) LIKE '%nyaungshwe%')`;
-      } else if (rId.includes('bkk')) {
-        query += ` AND (LOWER(s.region) LIKE '%bangkok%' OR LOWER(s.city) LIKE '%bangkok%')`;
-      }
-    }
-
+    query += buildRegionSqlClause(regionIdFilter, countryFilter);
     query += ` ORDER BY s.created_at DESC`;
 
     const shops = db.prepare(query).all() as any[];
@@ -443,22 +472,8 @@ app.get('/api/menu-items', (req: Request, res: Response) => {
       sql += ` AND m.shop_id = '${shopId}'`;
     }
 
-    if (!shopId && country) {
-      const cleanCountry = (country as string).replace(/'/g, "''");
-      sql += ` AND LOWER(s.country) = LOWER('${cleanCountry}')`;
-    }
-
-    if (!shopId && regionId && !(regionId as string).endsWith('-ALL')) {
-      const rId = (regionId as string).toLowerCase();
-      if (rId.includes('ygn')) {
-        sql += ` AND (LOWER(s.region) LIKE '%yangon%' OR LOWER(s.city) LIKE '%yangon%')`;
-      } else if (rId.includes('mdy')) {
-        sql += ` AND (LOWER(s.region) LIKE '%mandalay%' OR LOWER(s.city) LIKE '%mandalay%')`;
-      } else if (rId.includes('shn')) {
-        sql += ` AND (LOWER(s.region) LIKE '%shan%' OR LOWER(s.city) LIKE '%nyaungshwe%')`;
-      } else if (rId.includes('bkk')) {
-        sql += ` AND (LOWER(s.region) LIKE '%bangkok%' OR LOWER(s.city) LIKE '%bangkok%')`;
-      }
+    if (!shopId) {
+      sql += buildRegionSqlClause(regionId as string | undefined, country as string | undefined);
     }
 
     if (menuType && menuType !== 'ALL') {

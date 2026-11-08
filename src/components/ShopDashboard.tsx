@@ -99,6 +99,9 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
     }
   }, [activeSubTab]);
 
+  // Tab 1 Weekly Matrix interactive filter day
+  const [selectedMatrixDay, setSelectedMatrixDay] = useState<string | null>(null);
+
   // Tab 1 Quick Cover Image Uploader state
   const [quickCoverUrl, setQuickCoverUrl] = useState(shop.coverImage);
   const [isUpdatingCover, setIsUpdatingCover] = useState(false);
@@ -493,50 +496,50 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
           </div>
 
           {/* 4 Dedicated Tabs Navigation Selector (Desktop) */}
-          <div className="hidden md:flex items-center gap-1.5 bg-stone-100 dark:bg-stone-800 p-1 rounded-xl border border-stone-200 dark:border-stone-700">
+          <div className="hidden md:flex items-center gap-1 bg-stone-100 dark:bg-stone-800 p-1 rounded-xl border border-stone-200 dark:border-stone-700">
             <button
+              type="button"
               onClick={() => setTab('shop_overview')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
+              className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-colors cursor-pointer ${
                 currentTab === 'shop_overview'
                   ? 'bg-white dark:bg-stone-700 text-stone-900 dark:text-white shadow-xs'
-                  : 'text-stone-600 dark:text-stone-300 hover:text-stone-900'
+                  : 'text-stone-500 dark:text-stone-400 hover:text-stone-900 dark:hover:text-white'
               }`}
             >
-              <LayoutDashboard className="w-3.5 h-3.5" />
-              <span>{t.shopNavOverview}</span>
+              <span>Overview</span>
             </button>
             <button
+              type="button"
               onClick={() => setTab('shop_menus')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
+              className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-colors cursor-pointer ${
                 currentTab === 'shop_menus'
                   ? 'bg-white dark:bg-stone-700 text-stone-900 dark:text-white shadow-xs'
-                  : 'text-stone-600 dark:text-stone-300 hover:text-stone-900'
+                  : 'text-stone-500 dark:text-stone-400 hover:text-stone-900 dark:hover:text-white'
               }`}
             >
-              <UtensilsCrossed className="w-3.5 h-3.5" />
-              <span>{t.shopNavMenus}</span>
+              <span>Menus</span>
             </button>
             <button
+              type="button"
               onClick={() => setTab('shop_profile')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
+              className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-colors cursor-pointer ${
                 currentTab === 'shop_profile'
                   ? 'bg-white dark:bg-stone-700 text-stone-900 dark:text-white shadow-xs'
-                  : 'text-stone-600 dark:text-stone-300 hover:text-stone-900'
+                  : 'text-stone-500 dark:text-stone-400 hover:text-stone-900 dark:hover:text-white'
               }`}
             >
-              <Store className="w-3.5 h-3.5" />
-              <span>{t.shopNavProfile}</span>
+              <span>Shop Info</span>
             </button>
             <button
+              type="button"
               onClick={() => setTab('shop_settings')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
+              className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-colors cursor-pointer ${
                 currentTab === 'shop_settings'
                   ? 'bg-white dark:bg-stone-700 text-stone-900 dark:text-white shadow-xs'
-                  : 'text-stone-600 dark:text-stone-300 hover:text-stone-900'
+                  : 'text-stone-500 dark:text-stone-400 hover:text-stone-900 dark:hover:text-white'
               }`}
             >
-              <SettingsIcon className="w-3.5 h-3.5" />
-              <span>{t.shopNavSettings}</span>
+              <span>Settings</span>
             </button>
           </div>
         </div>
@@ -554,6 +557,16 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
 
         const todaysSpecial = dailySpecials.find((m) => m.specialDate === todayStr) || dailySpecials[0];
 
+        const activeChannelsList = [
+          whatsappPhone || shop.whatsappPhone,
+          viberPhone || shop.viberPhone,
+          lineId || shop.lineId,
+          facebookUrl || shop.facebookUrl,
+          phoneNumber || shop.phoneNumber,
+        ].filter(Boolean);
+        const activeChannelsCount = activeChannelsList.length > 0 ? activeChannelsList.length : 5;
+        const todayDateBadge = `${todayStr} (${currentDayName})`;
+
         // Sales Metrics according to period
         const revenueAmount =
           salesPeriod === 'DAILY' ? '$185.00' : salesPeriod === 'WEEKLY' ? '$1,420.00' : '$5,840.00';
@@ -564,125 +577,502 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
 
         return (
           <div className="space-y-6">
-            {/* Real-Time Key Performance Metrics & Sales Volume */}
-            <div className="bg-white dark:bg-stone-900 rounded-3xl border border-stone-200 dark:border-stone-800 p-5 sm:p-6 shadow-xs transition-colors">
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-5">
-                <div>
-                  <h2 className="text-lg font-bold font-display text-stone-900 dark:text-stone-100 flex items-center gap-2">
-                    <TrendingUp className="w-5 h-5 text-amber-600" />
-                    <span>Real-Time Sales & Revenue Insights</span>
-                  </h2>
-                  <p className="text-xs text-stone-500 dark:text-stone-400 mt-0.5">
-                    Live performance metrics across customer dining and takeout orders.
-                  </p>
+            {/* 1. Warm Orange Welcome Banner with Verified Storefront Badge & Watermark */}
+            <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-[#EA580C] via-[#E05306] to-[#C2410C] p-6 sm:p-8 text-white shadow-sm">
+              <div className="relative z-10 max-w-3xl">
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/20 backdrop-blur-xs text-white text-xs font-semibold border border-white/20">
+                  <ShieldCheck className="w-3.5 h-3.5" />
+                  <span>Verified Storefront</span>
                 </div>
 
-                {/* Daily, Weekly, Monthly view toggles */}
-                <div className="flex items-center bg-stone-100 dark:bg-stone-800 p-1 rounded-xl border border-stone-200 dark:border-stone-700 text-xs font-semibold">
+                <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold tracking-tight text-white mt-3.5 font-display">
+                  Welcome to {shop.name}
+                </h1>
+
+                <p className="text-white/95 text-xs sm:text-sm mt-2 leading-relaxed max-w-2xl font-medium">
+                  Manage your multi-tier culinary offerings (Daily Specials, Weekly Rotating Menus, and Regular Master Dishes) and connect with hungry customers across your city.
+                </p>
+
+                <div className="flex flex-wrap items-center gap-3 mt-6">
                   <button
-                    onClick={() => setSalesPeriod('DAILY')}
-                    className={`px-3 py-1.5 rounded-lg transition-all ${
-                      salesPeriod === 'DAILY'
-                        ? 'bg-amber-600 text-white shadow-xs font-bold'
-                        : 'text-stone-600 dark:text-stone-300 hover:text-stone-900'
-                    }`}
+                    type="button"
+                    onClick={() => openCreateModal('SPECIAL')}
+                    className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-white text-stone-900 font-bold text-xs sm:text-sm hover:bg-stone-50 transition-colors shadow-xs active:scale-98 cursor-pointer"
                   >
-                    Daily
+                    <Plus className="w-4 h-4 text-stone-900" />
+                    <span>+ Add Today's Special</span>
                   </button>
+
                   <button
-                    onClick={() => setSalesPeriod('WEEKLY')}
-                    className={`px-3 py-1.5 rounded-lg transition-all ${
-                      salesPeriod === 'WEEKLY'
-                        ? 'bg-amber-600 text-white shadow-xs font-bold'
-                        : 'text-stone-600 dark:text-stone-300 hover:text-stone-900'
-                    }`}
+                    type="button"
+                    onClick={() => openCreateModal('WEEKLY')}
+                    className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-white/20 hover:bg-white/30 text-white font-semibold text-xs sm:text-sm transition-colors backdrop-blur-xs border border-white/20 active:scale-98 cursor-pointer"
                   >
-                    Weekly
+                    <Plus className="w-4 h-4 text-white" />
+                    <span>+ Add Weekly Dish</span>
                   </button>
+
                   <button
-                    onClick={() => setSalesPeriod('MONTHLY')}
-                    className={`px-3 py-1.5 rounded-lg transition-all ${
-                      salesPeriod === 'MONTHLY'
-                        ? 'bg-amber-600 text-white shadow-xs font-bold'
-                        : 'text-stone-600 dark:text-stone-300 hover:text-stone-900'
-                    }`}
+                    type="button"
+                    onClick={() => onVisitShop && onVisitShop(shop.id)}
+                    className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-white/20 hover:bg-white/30 text-white font-semibold text-xs sm:text-sm transition-colors backdrop-blur-xs border border-white/20 active:scale-98 cursor-pointer"
                   >
-                    Monthly
+                    <Eye className="w-4 h-4 text-white" />
+                    <span>View Public Storefront</span>
                   </button>
                 </div>
               </div>
 
-              {/* 5 Metric KPI Cards */}
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
-                {/* Metric 1: Total Revenue */}
-                <div className="p-4 rounded-2xl bg-gradient-to-br from-amber-500/10 via-amber-500/5 to-transparent border border-amber-200/80 dark:border-amber-900/50">
-                  <div className="flex items-center justify-between text-stone-500 dark:text-stone-400 mb-1.5">
-                    <span className="text-[11px] font-bold uppercase tracking-wider">Total Revenue</span>
-                    <DollarSign className="w-4 h-4 text-amber-600" />
-                  </div>
-                  <p className="text-xl sm:text-2xl font-extrabold font-display text-stone-900 dark:text-stone-100 tabular-nums">
-                    {revenueAmount}
-                  </p>
-                  <span className="inline-block mt-1 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
-                    {growthPercentage}
+              {/* Watermark Storefront Icon */}
+              <div className="absolute right-3 sm:right-6 -bottom-6 text-white/10 pointer-events-none select-none">
+                <Store className="w-44 h-44 sm:w-56 sm:h-56 -rotate-6 transform" strokeWidth={1.5} />
+              </div>
+            </div>
+
+            {/* 2. Top 4 Metric Cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
+              {/* Card 1: ACTIVE DISHES */}
+              <div className="bg-white dark:bg-stone-850 rounded-2xl p-5 border border-stone-200 dark:border-stone-800 shadow-xs flex flex-col justify-between">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold tracking-wider uppercase text-stone-500 dark:text-stone-400">
+                    ACTIVE DISHES
                   </span>
+                  <div className="w-8 h-8 rounded-lg bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 flex items-center justify-center">
+                    <UtensilsCrossed className="w-4 h-4" />
+                  </div>
+                </div>
+                <div className="mt-3">
+                  <div className="text-3xl font-extrabold text-stone-900 dark:text-white font-display">
+                    {menuItems.length}
+                  </div>
+                  <div className="text-xs text-stone-500 dark:text-stone-400 mt-2 flex items-center gap-1.5 flex-wrap">
+                    <span className="text-rose-600 font-semibold">{dailySpecials.length} daily</span>
+                    <span>·</span>
+                    <span className="text-amber-600 font-semibold">{weeklyItems.length} weekly</span>
+                    <span>·</span>
+                    <span className="text-stone-600 dark:text-stone-300 font-semibold">{regularItems.length} reg</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Card 2: SHOP FOLLOWERS */}
+              <div className="bg-white dark:bg-stone-850 rounded-2xl p-5 border border-stone-200 dark:border-stone-800 shadow-xs flex flex-col justify-between">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold tracking-wider uppercase text-stone-500 dark:text-stone-400">
+                    SHOP FOLLOWERS
+                  </span>
+                  <div className="w-8 h-8 rounded-lg bg-rose-50 dark:bg-rose-950/40 text-rose-500 dark:text-rose-400 flex items-center justify-center">
+                    <Heart className="w-4 h-4" />
+                  </div>
+                </div>
+                <div className="mt-3">
+                  <div className="text-3xl font-extrabold text-stone-900 dark:text-white font-display">
+                    {shop.followerCount ?? 1}
+                  </div>
+                  <p className="text-xs text-stone-500 dark:text-stone-400 mt-2 leading-relaxed">
+                    Engaged customers receiving updates in their Following feed
+                  </p>
+                </div>
+              </div>
+
+              {/* Card 3: ORDERING CHANNELS */}
+              <div className="bg-white dark:bg-stone-850 rounded-2xl p-5 border border-stone-200 dark:border-stone-800 shadow-xs flex flex-col justify-between">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold tracking-wider uppercase text-stone-500 dark:text-stone-400">
+                    ORDERING CHANNELS
+                  </span>
+                  <div className="w-8 h-8 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+                    <Globe className="w-4 h-4" />
+                  </div>
+                </div>
+                <div className="mt-3">
+                  <div className="text-3xl font-extrabold text-stone-900 dark:text-white font-display flex items-baseline">
+                    <span>{activeChannelsCount}</span>
+                    <span className="text-xs font-normal text-stone-500 dark:text-stone-400 ml-1.5">
+                      / 5 Active
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300">
+                      WA
+                    </span>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-purple-100 dark:bg-purple-950/50 text-purple-700 dark:text-purple-300">
+                      Viber
+                    </span>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-green-100 dark:bg-green-950/50 text-green-700 dark:text-green-300">
+                      LINE
+                    </span>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-blue-100 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300">
+                      FB
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Card 4: STORE HEALTH */}
+              <div className="bg-white dark:bg-stone-850 rounded-2xl p-5 border border-stone-200 dark:border-stone-800 shadow-xs flex flex-col justify-between">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold tracking-wider uppercase text-stone-500 dark:text-stone-400">
+                    STORE HEALTH
+                  </span>
+                  <div className="w-8 h-8 rounded-lg bg-sky-50 dark:bg-sky-950/40 text-sky-600 dark:text-sky-400 flex items-center justify-center">
+                    <ShieldCheck className="w-4 h-4" />
+                  </div>
+                </div>
+                <div className="mt-3">
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-3xl font-extrabold text-stone-900 dark:text-white font-display">100%</span>
+                    <span className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">Excellent</span>
+                  </div>
+                  <div className="h-1.5 w-full bg-stone-100 dark:bg-stone-800 rounded-full overflow-hidden mt-3">
+                    <div className="h-full bg-emerald-500 rounded-full w-full" />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* 3. Middle Row: Today's Active Daily Special & Weekly Rotating Schedule Matrix */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+              {/* Left: Today's Active Daily Special */}
+              <div className="lg:col-span-5 bg-white dark:bg-stone-850 rounded-2xl p-5 sm:p-6 border border-stone-200 dark:border-stone-800 shadow-xs flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className="inline-block w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse shrink-0" />
+                      <h3 className="font-bold text-sm sm:text-base text-stone-900 dark:text-white font-display">
+                        Today's Active Daily Special
+                      </h3>
+                    </div>
+                    <span className="text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-rose-50 dark:bg-rose-950/50 text-rose-600 dark:text-rose-400 border border-rose-100 dark:border-rose-900/40">
+                      {todayDateBadge}
+                    </span>
+                  </div>
+
+                  {todaysSpecial ? (
+                    <div className="mt-4 p-3.5 rounded-xl bg-stone-50 dark:bg-stone-900/60 border border-stone-200 dark:border-stone-800 flex items-start gap-3.5">
+                      <img
+                        src={todaysSpecial.image}
+                        alt={todaysSpecial.title}
+                        className="w-20 h-20 rounded-lg object-cover shrink-0 border border-stone-200 dark:border-stone-700 bg-stone-100"
+                        onError={(e) => {
+                          (e.currentTarget as HTMLImageElement).src = '/src/assets/images/burmeal_mohinga_dish_1793906770254.jpg';
+                        }}
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-rose-600 text-white uppercase tracking-wider">
+                            DAILY SPECIAL
+                          </span>
+                          <span className="text-xs text-stone-500 dark:text-stone-400 font-medium truncate">
+                            {todaysSpecial.category}
+                          </span>
+                        </div>
+                        <h4 className="font-bold text-sm sm:text-base text-stone-900 dark:text-white mt-1 truncate">
+                          {todaysSpecial.title}
+                        </h4>
+                        <p className="text-xs text-stone-500 dark:text-stone-400 mt-1 line-clamp-2 leading-relaxed">
+                          {todaysSpecial.description}
+                        </p>
+                        <div className="mt-2.5 flex items-center justify-between">
+                          <span className="font-extrabold text-base text-amber-600 dark:text-amber-500 font-display">
+                            {formatPrice(todaysSpecial.price)}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => openEditModal(todaysSpecial)}
+                            className="text-xs font-semibold text-stone-700 dark:text-stone-300 hover:text-amber-600 dark:hover:text-amber-400 underline cursor-pointer"
+                          >
+                            Edit Special
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="mt-4 p-6 rounded-xl bg-stone-50 dark:bg-stone-900/40 border border-dashed border-stone-300 dark:border-stone-700 text-center">
+                      <p className="text-xs text-stone-500 dark:text-stone-400">
+                        No daily special designated for today.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => openCreateModal('SPECIAL')}
+                        className="mt-3 text-xs font-semibold text-amber-600 hover:text-amber-700 inline-flex items-center gap-1 cursor-pointer"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>Add Today's Special</span>
+                      </button>
+                    </div>
+                  )}
                 </div>
 
-                {/* Metric 2: Sales Volume */}
-                <div className="p-4 rounded-2xl bg-stone-50 dark:bg-stone-850 border border-stone-200 dark:border-stone-800">
-                  <div className="flex items-center justify-between text-stone-500 dark:text-stone-400 mb-1.5">
-                    <span className="text-[11px] font-bold uppercase tracking-wider">Sales Volume</span>
-                    <ShoppingBag className="w-4 h-4 text-rose-500" />
-                  </div>
-                  <p className="text-xl sm:text-2xl font-extrabold font-display text-stone-900 dark:text-stone-100 tabular-nums">
-                    {ordersCount} <span className="text-xs font-normal text-stone-400">orders</span>
-                  </p>
-                  <span className="inline-block mt-1 text-[10px] font-medium text-stone-500 dark:text-stone-400">
-                    Active fulfillment
+                <div className="mt-5 pt-3.5 border-t border-stone-100 dark:border-stone-800 flex items-center justify-between text-xs">
+                  <span className="text-stone-500 dark:text-stone-400">
+                    Total Daily Specials in catalog: {dailySpecials.length}
                   </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMenuFilter('SPECIAL');
+                      setTab('shop_menus');
+                    }}
+                    className="font-semibold text-amber-600 dark:text-amber-500 hover:text-amber-700 dark:hover:text-amber-400 inline-flex items-center gap-1 cursor-pointer"
+                  >
+                    <span>Manage Specials</span>
+                    <span>→</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Right: Weekly Rotating Schedule Matrix */}
+              <div className="lg:col-span-7 bg-white dark:bg-stone-850 rounded-2xl p-5 sm:p-6 border border-stone-200 dark:border-stone-800 shadow-xs flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <Calendar className="w-4 h-4 text-amber-600" />
+                      <h3 className="font-bold text-sm sm:text-base text-stone-900 dark:text-white font-display">
+                        Weekly Rotating Schedule Matrix
+                      </h3>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => openCreateModal('WEEKLY')}
+                      className="text-xs font-semibold text-amber-600 hover:text-amber-700 dark:text-amber-500 dark:hover:text-amber-400 inline-flex items-center gap-1 cursor-pointer"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Add Dish</span>
+                    </button>
+                  </div>
+
+                  <p className="text-xs text-stone-500 dark:text-stone-400 mt-1">
+                    Dishes rotated on fixed days of the week for customer predictability:
+                  </p>
+
+                  {/* 7 Day Cards Row */}
+                  <div className="grid grid-cols-7 gap-1.5 sm:gap-2 mt-4">
+                    {DAYS_OF_WEEK.map((day) => {
+                      const isToday = day === currentDayName;
+                      const isSelected = selectedMatrixDay === day;
+                      const dayItems = weeklyItems.filter((item) =>
+                        item.availableDays && item.availableDays.includes(day)
+                      );
+                      const hasItems = dayItems.length > 0;
+                      const previewDish = dayItems[0];
+
+                      return (
+                        <button
+                          key={day}
+                          type="button"
+                          onClick={() => setSelectedMatrixDay(isSelected ? null : day)}
+                          className={`flex flex-col items-center justify-between p-2 sm:p-2.5 rounded-xl border text-center transition-all cursor-pointer min-h-[96px] ${
+                            isSelected
+                              ? 'border-amber-500 bg-amber-500/10 dark:bg-amber-500/20 ring-2 ring-amber-500/30'
+                              : isToday
+                              ? 'border-amber-400 bg-amber-50/60 dark:bg-amber-950/20 dark:border-amber-500/50'
+                              : 'border-stone-200 dark:border-stone-750 bg-stone-50/60 dark:bg-stone-900/40 hover:bg-stone-100 dark:hover:bg-stone-800'
+                          }`}
+                        >
+                          <div>
+                            <span className={`text-[11px] font-bold block ${isToday ? 'text-amber-700 dark:text-amber-400' : 'text-stone-700 dark:text-stone-300'}`}>
+                              {day}
+                            </span>
+                            {isToday && (
+                              <span className="text-[9px] font-bold text-amber-600 dark:text-amber-400 block tracking-tight">
+                                TODAY
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="my-1.5 flex flex-col items-center">
+                            {hasItems ? (
+                              <>
+                                <div className="w-6 h-6 rounded-full bg-amber-600 text-white text-[11px] font-bold flex items-center justify-center shadow-xs">
+                                  {dayItems.length}
+                                </div>
+                                <span className="text-[10px] text-stone-600 dark:text-stone-300 truncate max-w-[42px] sm:max-w-[56px] block mt-1 font-medium">
+                                  {previewDish.title.slice(0, 7)}...
+                                </span>
+                              </>
+                            ) : (
+                              <span className="text-stone-400 dark:text-stone-600 text-sm font-semibold my-1">
+                                —
+                              </span>
+                            )}
+                          </div>
+
+                          <span className="text-[9px] text-stone-400 dark:text-stone-500 font-medium">
+                            {dayItems.length} dishes
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Filtered dishes highlight when a day is selected */}
+                  {selectedMatrixDay && (
+                    <div className="mt-3.5 p-3 rounded-xl bg-amber-50/80 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/60">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="font-bold text-amber-900 dark:text-amber-200">
+                          Dishes Scheduled for {selectedMatrixDay}:
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedMatrixDay(null)}
+                          className="text-[11px] text-amber-700 dark:text-amber-300 underline font-semibold hover:text-amber-900 cursor-pointer"
+                        >
+                          Clear filter
+                        </button>
+                      </div>
+                      <div className="mt-2 space-y-1.5 max-h-36 overflow-y-auto">
+                        {weeklyItems
+                          .filter((item) => item.availableDays && item.availableDays.includes(selectedMatrixDay))
+                          .map((item) => (
+                            <div
+                              key={item.id}
+                              className="flex items-center justify-between text-xs bg-white dark:bg-stone-850 p-2 rounded-lg border border-amber-100 dark:border-amber-900/40"
+                            >
+                              <div className="flex items-center gap-2 truncate">
+                                <img
+                                  src={item.image}
+                                  alt={item.title}
+                                  className="w-7 h-7 rounded object-cover shrink-0"
+                                  onError={(e) => {
+                                    (e.currentTarget as HTMLImageElement).src = '/src/assets/images/burmeal_mohinga_dish_1793906770254.jpg';
+                                  }}
+                                />
+                                <span className="font-semibold text-stone-900 dark:text-white truncate">
+                                  {item.title}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-2 shrink-0">
+                                <span className="font-bold text-amber-600">
+                                  {formatPrice(item.price)}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => openEditModal(item)}
+                                  className="text-stone-500 hover:text-amber-600 p-1 cursor-pointer"
+                                  title="Edit dish"
+                                >
+                                  <Edit2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        {weeklyItems.filter((item) => item.availableDays && item.availableDays.includes(selectedMatrixDay)).length === 0 && (
+                          <p className="text-xs text-stone-500 italic py-1">
+                            No dishes set for this day yet. Click "+ Add Dish" above to assign one.
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
-                {/* Metric 3: Followers */}
-                <div className="p-4 rounded-2xl bg-stone-50 dark:bg-stone-850 border border-stone-200 dark:border-stone-800">
-                  <div className="flex items-center justify-between text-stone-500 dark:text-stone-400 mb-1.5">
-                    <span className="text-[11px] font-bold uppercase tracking-wider">Followers</span>
-                    <Heart className="w-4 h-4 text-rose-500 fill-current" />
-                  </div>
-                  <p className="text-xl sm:text-2xl font-extrabold font-display text-stone-900 dark:text-stone-100 tabular-nums">
-                    {shop.followerCount || 24}
-                  </p>
-                  <span className="inline-block mt-1 text-[10px] font-medium text-stone-500 dark:text-stone-400">
-                    Feed subscribers
+                <div className="mt-5 pt-3.5 border-t border-stone-100 dark:border-stone-800 flex items-center justify-between text-xs">
+                  <span className="text-stone-500 dark:text-stone-400">
+                    Weekly dishes total: {weeklyItems.length}
                   </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMenuFilter('WEEKLY');
+                      setTab('shop_menus');
+                    }}
+                    className="font-semibold text-amber-600 dark:text-amber-500 hover:text-amber-700 dark:hover:text-amber-400 inline-flex items-center gap-1 cursor-pointer"
+                  >
+                    <span>View Weekly List</span>
+                    <span>→</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* 4. Bottom Row: 3 Operational Info Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+              {/* Card 1: Store Location */}
+              <div className="bg-white dark:bg-stone-850 rounded-2xl p-5 border border-stone-200 dark:border-stone-800 shadow-xs flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <MapPin className="w-4 h-4 text-rose-500" />
+                      <h4 className="font-bold text-sm text-stone-900 dark:text-white">Store Location</h4>
+                    </div>
+                    <span className="text-base">{getCountryFlag(country || shop.country)}</span>
+                  </div>
+
+                  <div className="mt-3">
+                    <p className="font-semibold text-xs text-stone-900 dark:text-stone-100">
+                      {address || shop.address || '78th Street, Between 26th & 27th'}
+                    </p>
+                    <p className="text-[11px] text-stone-500 dark:text-stone-400 mt-1">
+                      {city || shop.city || 'Mandalay'}, {region || shop.region || 'Mandalay Region'}, {country || shop.country || 'Myanmar'}
+                    </p>
+                  </div>
                 </div>
 
-                {/* Metric 4: Saved Item Counts */}
-                <div className="p-4 rounded-2xl bg-stone-50 dark:bg-stone-850 border border-stone-200 dark:border-stone-800">
-                  <div className="flex items-center justify-between text-stone-500 dark:text-stone-400 mb-1.5">
-                    <span className="text-[11px] font-bold uppercase tracking-wider">Saved Items</span>
-                    <Bookmark className="w-4 h-4 text-amber-600" />
+                <button
+                  type="button"
+                  onClick={() => setTab('shop_profile')}
+                  className="mt-4 pt-3 border-t border-stone-100 dark:border-stone-800 text-xs font-semibold text-amber-600 hover:text-amber-700 dark:text-amber-500 dark:hover:text-amber-400 inline-flex items-center gap-1 cursor-pointer"
+                >
+                  <span>Edit Address Details</span>
+                  <span>→</span>
+                </button>
+              </div>
+
+              {/* Card 2: Ordering Channels */}
+              <div className="bg-white dark:bg-stone-850 rounded-2xl p-5 border border-stone-200 dark:border-stone-800 shadow-xs flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Check className="w-4 h-4 text-emerald-600" />
+                      <h4 className="font-bold text-sm text-stone-900 dark:text-white">Ordering Channels</h4>
+                    </div>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300">
+                      Direct Contact
+                    </span>
                   </div>
-                  <p className="text-xl sm:text-2xl font-extrabold font-display text-stone-900 dark:text-stone-100 tabular-nums">
-                    {menuItems.reduce((acc, m) => acc + (m.isSaved ? 1 : 0), 0) + 18}
+
+                  <p className="mt-3 text-xs text-stone-600 dark:text-stone-300 leading-relaxed">
+                    WhatsApp, Viber, and Phone allow customers to order directly with zero commission fee.
                   </p>
-                  <span className="inline-block mt-1 text-[10px] font-medium text-stone-500 dark:text-stone-400">
-                    Customer bookmarks
-                  </span>
                 </div>
 
-                {/* Metric 5: Average Ticket */}
-                <div className="p-4 rounded-2xl bg-stone-50 dark:bg-stone-850 border border-stone-200 dark:border-stone-800 col-span-2 md:col-span-1">
-                  <div className="flex items-center justify-between text-stone-500 dark:text-stone-400 mb-1.5">
-                    <span className="text-[11px] font-bold uppercase tracking-wider">Avg Ticket</span>
-                    <PackageCheck className="w-4 h-4 text-indigo-500" />
+                <button
+                  type="button"
+                  onClick={() => setTab('shop_profile')}
+                  className="mt-4 pt-3 border-t border-stone-100 dark:border-stone-800 text-xs font-semibold text-amber-600 hover:text-amber-700 dark:text-amber-500 dark:hover:text-amber-400 inline-flex items-center gap-1 cursor-pointer"
+                >
+                  <span>Update Contact Numbers</span>
+                  <span>→</span>
+                </button>
+              </div>
+
+              {/* Card 3: Regular Master Dishes */}
+              <div className="bg-white dark:bg-stone-850 rounded-2xl p-5 border border-stone-200 dark:border-stone-800 shadow-xs flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <UtensilsCrossed className="w-4 h-4 text-amber-600" />
+                      <h4 className="font-bold text-sm text-stone-900 dark:text-white">Regular Master Dishes</h4>
+                    </div>
+                    <span className="text-xs font-bold text-stone-500 dark:text-stone-400">
+                      {regularItems.length} dishes
+                    </span>
                   </div>
-                  <p className="text-xl sm:text-2xl font-extrabold font-display text-stone-900 dark:text-stone-100 tabular-nums">
-                    {avgTicket}
+
+                  <p className="mt-3 text-xs text-stone-600 dark:text-stone-300 leading-relaxed">
+                    Everyday core dishes always available to customers browsing your menu.
                   </p>
-                  <span className="inline-block mt-1 text-[10px] font-medium text-stone-500 dark:text-stone-400">
-                    Per customer order
-                  </span>
                 </div>
+
+                <button
+                  type="button"
+                  onClick={() => openCreateModal('PERMANENT')}
+                  className="mt-4 pt-3 border-t border-stone-100 dark:border-stone-800 text-xs font-semibold text-amber-600 hover:text-amber-700 dark:text-amber-500 dark:hover:text-amber-400 inline-flex items-center gap-1 cursor-pointer"
+                >
+                  <span>+ Add Regular Dish</span>
+                  <span>→</span>
+                </button>
               </div>
             </div>
 
@@ -783,330 +1173,6 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
                     )}
                   </div>
                 ))}
-              </div>
-            </div>
-
-            {/* Split Row: Top Selling Dishes & Today's Special Spotlight */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Top-Selling Items List */}
-              <div className="bg-white dark:bg-stone-900 rounded-3xl border border-stone-200 dark:border-stone-800 p-5 shadow-xs transition-colors">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-base font-bold font-display text-stone-900 dark:text-stone-100 flex items-center gap-2">
-                    <UtensilsCrossed className="w-4 h-4 text-amber-600" />
-                    <span>Top-Selling Menu Items</span>
-                  </h3>
-                  <button
-                    onClick={() => setTab('shop_menus')}
-                    className="text-xs font-bold text-amber-700 dark:text-amber-400 hover:underline"
-                  >
-                    View All Dishes →
-                  </button>
-                </div>
-
-                <div className="space-y-2.5">
-                  {topSellingItems.map((item, idx) => (
-                    <div
-                      key={item.name}
-                      className="p-3 rounded-xl bg-stone-50 dark:bg-stone-850 border border-stone-200 dark:border-stone-750 flex items-center justify-between"
-                    >
-                      <div className="flex items-center gap-3">
-                        <span className="w-6 h-6 rounded-full bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 font-bold text-xs flex items-center justify-center">
-                          #{idx + 1}
-                        </span>
-                        <div>
-                          <p className="font-bold text-xs sm:text-sm text-stone-900 dark:text-stone-100">
-                            {item.name}
-                          </p>
-                          <p className="text-[11px] text-stone-500 dark:text-stone-400">
-                            {item.category} · {item.orders} orders
-                          </p>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <p className="font-bold text-xs sm:text-sm text-stone-900 dark:text-stone-100 tabular-nums">
-                          ${item.revenue.toFixed(2)}
-                        </p>
-                        <span className="text-[11px] text-amber-600 dark:text-amber-400 font-semibold">
-                          ★ {item.rating}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Today's Special Spotlight & Quick Action */}
-              <div className="bg-white dark:bg-stone-900 rounded-3xl border border-stone-200 dark:border-stone-800 p-5 shadow-xs flex flex-col justify-between transition-colors">
-                <div>
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                      <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse"></span>
-                      <h3 className="text-sm font-bold font-display text-stone-900 dark:text-stone-100">
-                        Today's Active Daily Special
-                      </h3>
-                    </div>
-                    <span className="text-[11px] font-semibold px-2 py-0.5 bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 rounded-md">
-                      {todayStr} ({currentDayName})
-                    </span>
-                  </div>
-
-                  {todaysSpecial ? (
-                    <div className="flex gap-4 p-3 bg-stone-50 dark:bg-stone-800/60 rounded-2xl border border-stone-200 dark:border-stone-700 mt-2">
-                      <img
-                        src={todaysSpecial.image}
-                        alt={todaysSpecial.title}
-                        className="w-20 h-20 sm:w-24 sm:h-24 rounded-xl object-cover shrink-0 border border-stone-200 dark:border-stone-700"
-                        referrerPolicy="no-referrer"
-                      />
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <span className="text-[10px] font-bold bg-rose-600 text-white px-2 py-0.5 rounded">
-                            DAILY SPECIAL
-                          </span>
-                          <span className="text-[10px] text-stone-500 dark:text-stone-400">
-                            {todaysSpecial.category}
-                          </span>
-                        </div>
-                        <h4 className="font-bold text-sm sm:text-base text-stone-900 dark:text-stone-100 truncate mt-1">
-                          {todaysSpecial.title}
-                        </h4>
-                        <p className="text-xs text-stone-500 dark:text-stone-400 line-clamp-1 mt-0.5">
-                          {todaysSpecial.description}
-                        </p>
-                        <div className="mt-2 flex items-center justify-between">
-                          <span className="text-sm font-bold text-amber-700 dark:text-amber-400">
-                            {formatPrice(todaysSpecial.price)}
-                          </span>
-                          <button
-                            onClick={() => openEditModal(todaysSpecial)}
-                            className="text-xs text-stone-600 dark:text-stone-300 hover:text-amber-600 dark:hover:text-amber-400 font-semibold underline"
-                          >
-                            Edit Special
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="p-6 text-center border-2 border-dashed border-stone-200 dark:border-stone-800 rounded-2xl my-2">
-                      <Clock className="w-8 h-8 text-stone-300 dark:text-stone-600 mx-auto mb-2" />
-                      <p className="text-xs font-bold text-stone-700 dark:text-stone-300">
-                        No Daily Special scheduled for today
-                      </p>
-                      <button
-                        onClick={() => openCreateModal('SPECIAL')}
-                        className="mt-3 px-3.5 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-bold transition-all shadow-xs"
-                      >
-                        + Create Today's Special Dish
-                      </button>
-                    </div>
-                  )}
-                </div>
-
-                <div className="pt-3 border-t border-stone-100 dark:border-stone-800 flex items-center justify-between text-xs text-stone-500 dark:text-stone-400">
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => openCreateModal('SPECIAL')}
-                      className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-bold transition-all shadow-2xs"
-                    >
-                      + Add Special
-                    </button>
-                    <button
-                      onClick={() => openCreateModal('WEEKLY')}
-                      className="px-3 py-1.5 bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-200 hover:bg-stone-200 rounded-lg text-xs font-bold transition-all"
-                    >
-                      + Add Weekly
-                    </button>
-                  </div>
-                  {onVisitShop && (
-                    <button
-                      onClick={() => onVisitShop(shop.id)}
-                      className="font-bold text-amber-700 dark:text-amber-400 hover:underline flex items-center gap-1"
-                    >
-                      <Eye className="w-3.5 h-3.5" />
-                      <span>View Public Storefront</span>
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Tab 1: Shop Cover Image Uploader/Changer & Basic Shop Settings */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Cover Image Changer / Uploader */}
-              <div className="bg-white dark:bg-stone-900 rounded-3xl border border-stone-200 dark:border-stone-800 p-5 sm:p-6 shadow-xs space-y-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <ImageIcon className="w-5 h-5 text-amber-600" />
-                    <h3 className="text-base font-bold font-display text-stone-900 dark:text-stone-100">
-                      Shop Cover Banner Changer
-                    </h3>
-                  </div>
-                  <span className="text-[11px] text-stone-400">Public store header</span>
-                </div>
-
-                {coverUpdateSuccess && (
-                  <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 text-xs rounded-xl flex items-center gap-2">
-                    <Check className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-                    <span>Shop cover banner updated successfully!</span>
-                  </div>
-                )}
-
-                {/* Banner Preview */}
-                <div className="relative h-28 sm:h-36 rounded-2xl overflow-hidden border border-stone-200 dark:border-stone-700 bg-stone-100 dark:bg-stone-800">
-                  <img
-                    src={quickCoverUrl || shop.coverImage}
-                    alt="Shop Cover Banner Preview"
-                    className="w-full h-full object-cover"
-                    referrerPolicy="no-referrer"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent flex items-end p-3.5">
-                    <div className="flex items-center gap-2.5 text-white">
-                      <img
-                        src={shop.avatarImage}
-                        alt={shop.name}
-                        className="w-8 h-8 rounded-lg object-cover border border-white/60 shadow-xs"
-                      />
-                      <div>
-                        <p className="text-xs font-bold leading-tight drop-shadow-xs">{shop.name}</p>
-                        <p className="text-[10px] text-white/80">{shop.cuisineType}</p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Input & Update Button */}
-                <div className="space-y-2">
-                  <label className="block text-xs font-semibold text-stone-700 dark:text-stone-300">
-                    Cover Banner Image URL
-                  </label>
-                  <div className="flex gap-2">
-                    <input
-                      type="url"
-                      value={quickCoverUrl}
-                      onChange={(e) => setQuickCoverUrl(e.target.value)}
-                      placeholder="https://example.com/cover.jpg"
-                      className="flex-1 text-xs px-3 py-2 bg-stone-50 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-xl focus:outline-none focus:border-amber-600 text-stone-900 dark:text-stone-100"
-                    />
-                    <button
-                      type="button"
-                      onClick={handleQuickCoverUpdate}
-                      disabled={isUpdatingCover || !quickCoverUrl.trim()}
-                      className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl shadow-xs transition-colors shrink-0 disabled:opacity-50"
-                    >
-                      {isUpdatingCover ? 'Saving...' : 'Update Cover'}
-                    </button>
-                  </div>
-                </div>
-
-                {/* Quick Presets */}
-                <div>
-                  <span className="text-[11px] font-semibold text-stone-500 dark:text-stone-400 block mb-1.5">
-                    Preset Authentic Culinary Themes:
-                  </span>
-                  <div className="grid grid-cols-2 gap-1.5 text-[11px]">
-                    <button
-                      type="button"
-                      onClick={() => setQuickCoverUrl('https://images.unsplash.com/photo-1540420773420-3366772f4999?w=1200&auto=format&fit=crop&q=80')}
-                      className="px-2.5 py-1.5 rounded-lg border border-stone-200 dark:border-stone-700 bg-stone-50 dark:bg-stone-800/80 hover:border-amber-500 text-left text-stone-700 dark:text-stone-300 truncate"
-                    >
-                      🍲 Tea House & Soup
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setQuickCoverUrl('https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=1200&auto=format&fit=crop&q=80')}
-                      className="px-2.5 py-1.5 rounded-lg border border-stone-200 dark:border-stone-700 bg-stone-50 dark:bg-stone-800/80 hover:border-amber-500 text-left text-stone-700 dark:text-stone-300 truncate"
-                    >
-                      🥗 Artisanal Shan Kitchen
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setQuickCoverUrl('https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=1200&auto=format&fit=crop&q=80')}
-                      className="px-2.5 py-1.5 rounded-lg border border-stone-200 dark:border-stone-700 bg-stone-50 dark:bg-stone-800/80 hover:border-amber-500 text-left text-stone-700 dark:text-stone-300 truncate"
-                    >
-                      🍜 Burmese Noodle Stall
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setQuickCoverUrl('https://images.unsplash.com/photo-1563245372-f21724e3856d?w=1200&auto=format&fit=crop&q=80')}
-                      className="px-2.5 py-1.5 rounded-lg border border-stone-200 dark:border-stone-700 bg-stone-50 dark:bg-stone-800/80 hover:border-amber-500 text-left text-stone-700 dark:text-stone-300 truncate"
-                    >
-                      🛕 Golden Pagoda Dining
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              {/* Basic Shop Settings */}
-              <div className="bg-white dark:bg-stone-900 rounded-3xl border border-stone-200 dark:border-stone-800 p-5 sm:p-6 shadow-xs space-y-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Store className="w-5 h-5 text-amber-600" />
-                    <h3 className="text-base font-bold font-display text-stone-900 dark:text-stone-100">
-                      Basic Shop Settings
-                    </h3>
-                  </div>
-                  <span className="text-[11px] text-stone-400">Quick Operations</span>
-                </div>
-
-                <div className="space-y-3 text-xs">
-                  {/* Shop Open / Closed Live Switch */}
-                  <div className="flex items-center justify-between p-3.5 rounded-2xl bg-stone-50 dark:bg-stone-850 border border-stone-200 dark:border-stone-800">
-                    <div className="flex items-center gap-2.5">
-                      <span className={`w-3 h-3 rounded-full ${isOpen ? 'bg-emerald-500 animate-pulse' : 'bg-stone-400'}`} />
-                      <div>
-                        <p className="font-bold text-stone-900 dark:text-stone-100">
-                          {isOpen ? 'Store Is Open For Orders' : 'Store Is Currently Closed'}
-                        </p>
-                        <p className="text-[11px] text-stone-500 dark:text-stone-400">
-                          {isOpen ? 'Customers can view active menus and place orders' : 'Direct order links are paused'}
-                        </p>
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={handleToggleStoreOpen}
-                      disabled={isTogglingOpen}
-                      className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out ${
-                        isOpen ? 'bg-emerald-600' : 'bg-stone-300 dark:bg-stone-700'
-                      }`}
-                    >
-                      <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-xs transition duration-200 ease-in-out ${isOpen ? 'translate-x-5' : 'translate-x-0'}`} />
-                    </button>
-                  </div>
-
-                  {/* Operating Hours Quick Info */}
-                  <div className="p-3.5 rounded-2xl bg-stone-50 dark:bg-stone-850 border border-stone-200 dark:border-stone-800 flex items-center justify-between">
-                    <div className="flex items-center gap-2.5">
-                      <Clock className="w-4 h-4 text-amber-600 shrink-0" />
-                      <div>
-                        <p className="font-bold text-stone-900 dark:text-stone-100">Daily Operating Hours</p>
-                        <p className="text-[11px] text-stone-500 dark:text-stone-400">{operatingHours}</p>
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => setTab('shop_profile')}
-                      className="text-amber-700 dark:text-amber-400 font-bold hover:underline shrink-0 text-xs"
-                    >
-                      Edit in Profile →
-                    </button>
-                  </div>
-
-                  {/* Scoping Location Quick Info */}
-                  <div className="p-3.5 rounded-2xl bg-stone-50 dark:bg-stone-850 border border-stone-200 dark:border-stone-800 flex items-center justify-between">
-                    <div className="flex items-center gap-2.5">
-                      <MapPin className="w-4 h-4 text-amber-600 shrink-0" />
-                      <div>
-                        <p className="font-bold text-stone-900 dark:text-stone-100">Regional Visibility</p>
-                        <p className="text-[11px] text-stone-500 dark:text-stone-400">
-                          {getCountryFlag(country)} {country} · {city || locationArea}
-                        </p>
-                      </div>
-                    </div>
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300">
-                      Scoped
-                    </span>
-                  </div>
-                </div>
               </div>
             </div>
           </div>
