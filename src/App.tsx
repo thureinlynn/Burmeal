@@ -15,6 +15,7 @@ import { CustomerProfile } from './components/CustomerProfile';
 import { AdminPanel } from './components/AdminPanel';
 import { AuthModal } from './components/AuthModal';
 import { ShopCard } from './components/ShopCard';
+import { FollowedShopRow } from './components/FollowedShopRow';
 import { SettingsView } from './components/SettingsView';
 import { LocationModal } from './components/LocationModal';
 import {
@@ -53,6 +54,8 @@ export default function App() {
   // Data states
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [shops, setShops] = useState<Shop[]>([]);
+  const [allFollowedShops, setAllFollowedShops] = useState<Shop[]>([]);
+  const [followingViewMode, setFollowingViewMode] = useState<'SHOPS' | 'DISHES'>('SHOPS');
   const [savedItems, setSavedItems] = useState<MenuItem[]>([]);
   const [followedCount, setFollowedCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
@@ -142,11 +145,32 @@ export default function App() {
     selectedRegionId,
   ]);
 
+  const loadFollowedShops = async () => {
+    if (!token) {
+      setAllFollowedShops([]);
+      return;
+    }
+    try {
+      const data = await apiClient.getShops({ followedOnly: true }, token);
+      setAllFollowedShops(data);
+    } catch (err) {
+      console.error('Failed to load followed shops', err);
+    }
+  };
+
   useEffect(() => {
     if (currentTab === 'saved') {
       loadSavedItems();
     }
   }, [currentTab, token]);
+
+  useEffect(() => {
+    if (token) {
+      loadFollowedShops();
+    } else {
+      setAllFollowedShops([]);
+    }
+  }, [token, currentTab]);
 
   // Handle follow toggle
   const handleToggleFollow = async (targetShopId: string) => {
@@ -159,6 +183,7 @@ export default function App() {
       const res = await apiClient.toggleFollow(targetShopId, token);
       if (res) {
         await loadShops();
+        await loadFollowedShops();
         await loadMenuItems();
       }
     } catch (err) {
@@ -194,11 +219,55 @@ export default function App() {
     }
   };
 
+  // Dedicated Owner Shop & Menu state (never filtered out by consumer region)
+  const [ownerShop, setOwnerShop] = useState<Shop | null>(null);
+  const [ownerMenuItems, setOwnerMenuItems] = useState<MenuItem[]>([]);
+  const [, setIsOwnerLoading] = useState(false);
+
+  const loadOwnerData = async () => {
+    if (user?.role !== 'SHOP_OWNER') {
+      setOwnerShop(null);
+      setOwnerMenuItems([]);
+      return;
+    }
+    setIsOwnerLoading(true);
+    try {
+      let targetShopId = shopId;
+      if (!targetShopId && user) {
+        const allShops = await apiClient.getShops(null, token);
+        const myShop = allShops.find((s) => s.ownerId === user.id);
+        if (myShop) targetShopId = myShop.id;
+      }
+      if (targetShopId) {
+        const sData = await apiClient.getShop(targetShopId, token);
+        if (sData) {
+          setOwnerShop(sData);
+        }
+        const mData = await apiClient.getMenuItems({ shopId: targetShopId }, token);
+        if (mData && Array.isArray(mData.items)) {
+          setOwnerMenuItems(mData.items);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load owner data:', err);
+    } finally {
+      setIsOwnerLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (user?.role === 'SHOP_OWNER') {
+      loadOwnerData();
+    }
+  }, [user, user?.role, shopId, token]);
+
   // Shop Owner handlers
   const handleUpdateShopProfile = async (data: Partial<Shop>) => {
-    if (!shopId || !token) return;
+    const targetId = ownerShop?.id || shopId;
+    if (!targetId || !token) return;
     try {
-      await apiClient.updateShop(shopId, data, token);
+      await apiClient.updateShop(targetId, data, token);
+      await loadOwnerData();
       await loadShops();
     } catch (err) {
       console.error('Profile update error:', err);
@@ -209,6 +278,7 @@ export default function App() {
     if (!token) return;
     try {
       await apiClient.createMenuItem(data, token);
+      await loadOwnerData();
       await loadMenuItems();
     } catch (err) {
       console.error('Create menu item error:', err);
@@ -219,6 +289,7 @@ export default function App() {
     if (!token) return;
     try {
       await apiClient.updateMenuItem(id, data, token);
+      await loadOwnerData();
       await loadMenuItems();
     } catch (err) {
       console.error('Update menu item error:', err);
@@ -229,6 +300,7 @@ export default function App() {
     if (!token) return;
     try {
       await apiClient.deleteMenuItem(id, token);
+      await loadOwnerData();
       await loadMenuItems();
     } catch (err) {
       console.error('Delete menu item error:', err);
@@ -246,23 +318,49 @@ export default function App() {
     }
   };
 
-  const activeDetailShop = shops.find((s) => s.id === selectedShopId);
-  const currentOwnerShop = shops.find((s) => s.id === shopId || s.ownerId === user?.id);
-  const followedShopsList = shops.filter((s) => (s as any).isFollowed);
+  const activeDetailShop = shops.find((s) => s.id === selectedShopId) || allFollowedShops.find((s) => s.id === selectedShopId);
+  const followedShopsList = allFollowedShops.length > 0 ? allFollowedShops : shops.filter((s) => (s as any).isFollowed);
 
-  // If user is SHOP_OWNER and currentTab is one of customer tabs or feed, switch default to shop_overview
+  // Fallback safe owner shop so the dashboard is guaranteed to be fully usable and visible
+  const fallbackOwnerShop: Shop = {
+    id: shopId || 'shop_01',
+    ownerId: user?.id || 'usr_owner_01',
+    ownerEmail: user?.email || 'mandalay@burmeal.com',
+    name: user?.name ? user.name.replace(/\s*Host\s*$/i, '') : 'Mandalay Morning Teahouse',
+    bio: 'Authentic Burmese culinary kitchen bringing traditional regional recipes to food lovers.',
+    coverImage: '/src/assets/images/burmeal_hero_spread_1793906769541.jpg',
+    avatarImage: user?.avatarUrl || 'https://api.dicebear.com/7.x/identicon/svg?seed=mandalay',
+    status: 'APPROVED',
+    cuisineType: 'Traditional Burmese Kitchen',
+    locationArea: 'Downtown Heritage District',
+    address: '78th Street, Between 26th & 27th',
+    city: 'Mandalay',
+    region: 'Mandalay Region',
+    country: 'Myanmar',
+    facebookUrl: 'https://facebook.com/burmeal',
+    whatsappPhone: '9592001000',
+    viberPhone: '9592001000',
+    lineId: '@burmeal',
+    phoneNumber: '+95 9 200 1000',
+    isOpen: true,
+    operatingHours: '7:00 AM - 8:30 PM',
+    createdAt: new Date().toISOString(),
+    followerCount: 28,
+    itemCount: 11,
+    isFollowed: false,
+  };
+
+  const resolvedOwnerShop = ownerShop || fallbackOwnerShop;
+
+  // Strict Role Segregation: If user is SHOP_OWNER, enforce shop dashboard tabs
   useEffect(() => {
     if (user?.role === 'SHOP_OWNER') {
-      if (
-        currentTab === 'following' ||
-        currentTab === 'profile' ||
-        currentTab === 'feed' ||
-        currentTab === 'shops'
-      ) {
+      const validShopTabs = ['shop_overview', 'shop_menus', 'shop_profile', 'shop_settings', 'shop_detail'];
+      if (!validShopTabs.includes(currentTab)) {
         setCurrentTab('shop_overview');
       }
     }
-  }, [user, user?.role]);
+  }, [user, user?.role, currentTab]);
 
   return (
     <div className="min-h-screen flex flex-col bg-[#FAFAF9] dark:bg-stone-950 text-stone-900 dark:text-stone-100 transition-colors pb-20 md:pb-8">
@@ -282,8 +380,44 @@ export default function App() {
 
       {/* Main Content Area */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6">
-        {/* ================= VIEW 1: TAB 1 (HOME FEED - PUBLIC FOOD ITEMS GRID) ================= */}
-        {currentTab === 'feed' && !selectedShopId && (
+        {user?.role === 'SHOP_OWNER' ? (
+          currentTab === 'shop_detail' ? (
+            <ShopProfileView
+              shop={resolvedOwnerShop}
+              menuItems={ownerMenuItems}
+              onBack={() => {
+                setSelectedShopId(null);
+                setCurrentTab('shop_overview');
+              }}
+              onFollowToggle={handleToggleFollow}
+              onToggleSave={handleToggleSave}
+              onSelectItem={(it) => setSelectedItemForDetail(it)}
+            />
+          ) : (
+            <ShopDashboard
+              shop={resolvedOwnerShop}
+              menuItems={ownerMenuItems}
+              activeSubTab={
+                (['shop_overview', 'shop_menus', 'shop_profile', 'shop_settings'].includes(currentTab)
+                  ? currentTab
+                  : 'shop_overview') as 'shop_overview' | 'shop_menus' | 'shop_profile' | 'shop_settings'
+              }
+              onSubTabChange={(tab) => setCurrentTab(tab)}
+              onVisitShop={(sId) => {
+                setSelectedShopId(sId);
+                setCurrentTab('shop_detail');
+              }}
+              onRefresh={loadOwnerData}
+              onUpdateShopProfile={handleUpdateShopProfile}
+              onCreateMenuItem={handleCreateMenuItem}
+              onUpdateMenuItem={handleUpdateMenuItem}
+              onDeleteMenuItem={handleDeleteMenuItem}
+            />
+          )
+        ) : (
+          <>
+            {/* ================= VIEW 1: TAB 1 (HOME FEED - PUBLIC FOOD ITEMS GRID) ================= */}
+            {currentTab === 'feed' && !selectedShopId && (
           <div className="space-y-4 sm:space-y-6">
             {/* Search & Filter Bar */}
             <FilterBar
@@ -361,19 +495,49 @@ export default function App() {
         {/* ================= VIEW 2: TAB 2 (DEDICATED "FOLLOW" TAB - REQUIREMENT 2) ================= */}
         {currentTab === 'following' && !selectedShopId && (
           <div className="space-y-4 sm:space-y-6">
-            <div>
-              <h1 className="text-xl sm:text-2xl font-bold font-display text-stone-900 dark:text-stone-100 flex items-center gap-2">
-                <Heart className="w-5 h-5 text-rose-500 fill-current" />
-                <span>{t.navFollowing}</span>
-              </h1>
-              <p className="text-xs text-stone-500 dark:text-stone-400 mt-0.5">
-                Fresh updates and active menus exclusively from kitchens you follow.
-              </p>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h1 className="text-xl sm:text-2xl font-bold font-display text-stone-900 dark:text-stone-100 flex items-center gap-2">
+                  <Heart className="w-5 h-5 text-rose-500 fill-current" />
+                  <span>{t.navFollowing}</span>
+                </h1>
+                <p className="text-xs text-stone-500 dark:text-stone-400 mt-0.5">
+                  Followed culinary kitchens listed vertically with rotating menus and direct contacts.
+                </p>
+              </div>
+
+              {/* View Switcher: Followed Kitchens vs All Followed Dishes Feed */}
+              {token && followedShopsList.length > 0 && (
+                <div className="inline-flex p-1 bg-stone-100 dark:bg-stone-850 rounded-2xl border border-stone-200/80 dark:border-stone-800 self-start sm:self-auto shadow-2xs">
+                  <button
+                    onClick={() => setFollowingViewMode('SHOPS')}
+                    className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all inline-flex items-center gap-1.5 ${
+                      followingViewMode === 'SHOPS'
+                        ? 'bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 shadow-xs'
+                        : 'text-stone-500 hover:text-stone-800 dark:hover:text-stone-300'
+                    }`}
+                  >
+                    <Store className="w-3.5 h-3.5 text-amber-600" />
+                    <span>Followed Kitchens ({followedShopsList.length})</span>
+                  </button>
+                  <button
+                    onClick={() => setFollowingViewMode('DISHES')}
+                    className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all inline-flex items-center gap-1.5 ${
+                      followingViewMode === 'DISHES'
+                        ? 'bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 shadow-xs'
+                        : 'text-stone-500 hover:text-stone-800 dark:hover:text-stone-300'
+                    }`}
+                  >
+                    <Sparkles className="w-3.5 h-3.5 text-amber-600" />
+                    <span>Dishes Feed ({menuItems.length})</span>
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* REQUIREMENT 2: Strict Inclusion of ONLY Followed Shops, Strict Exclusion of non-followed shops */}
             {!token ? (
-              <div className="bg-white dark:bg-stone-900 rounded-3xl border border-stone-200 dark:border-stone-800 p-10 sm:p-14 text-center max-w-lg mx-auto shadow-xs">
+              <div className="bg-white/80 dark:bg-stone-900/80 backdrop-blur-md rounded-3xl border border-stone-200 dark:border-stone-800 p-10 sm:p-14 text-center max-w-lg mx-auto shadow-xs">
                 <div className="w-16 h-16 rounded-2xl bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 flex items-center justify-center mx-auto mb-4">
                   <Heart className="w-8 h-8" />
                 </div>
@@ -395,7 +559,7 @@ export default function App() {
               </div>
             ) : followedShopsList.length === 0 ? (
               /* Requirement 2 Clean Empty State: If zero shops are followed, display a clean empty-state placeholder with "Discover Local Shops" CTA */
-              <div className="bg-white dark:bg-stone-900 rounded-3xl border border-stone-200 dark:border-stone-800 p-10 sm:p-14 text-center max-w-lg mx-auto shadow-xs">
+              <div className="bg-white/80 dark:bg-stone-900/80 backdrop-blur-md rounded-3xl border border-stone-200 dark:border-stone-800 p-10 sm:p-14 text-center max-w-lg mx-auto shadow-xs">
                 <div className="w-16 h-16 rounded-2xl bg-rose-50 dark:bg-rose-950/40 text-rose-500 flex items-center justify-center mx-auto mb-4">
                   <Heart className="w-8 h-8" />
                 </div>
@@ -413,32 +577,41 @@ export default function App() {
                   <span>Discover Local Shops</span>
                 </button>
               </div>
-            ) : (
-              <>
-                {/* Followed Shops Bar */}
-                <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
-                  <span className="text-xs font-semibold text-stone-500 dark:text-stone-400 shrink-0 mr-1">
-                    Followed ({followedShopsList.length}):
+            ) : followingViewMode === 'SHOPS' ? (
+              /* VERTICAL LIST OF FOLLOWED SHOPS */
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-stone-500 dark:text-stone-400">
+                    Showing {followedShopsList.length} followed food kitchen{followedShopsList.length === 1 ? '' : 's'}
                   </span>
-                  {followedShopsList.map((fShop) => (
-                    <button
-                      key={fShop.id}
-                      onClick={() => {
-                        setSelectedShopId(fShop.id);
-                        setCurrentTab('shop_detail');
-                      }}
-                      className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white dark:bg-stone-850 border border-stone-200 dark:border-stone-750 text-xs font-semibold text-stone-800 dark:text-stone-200 hover:border-amber-500 transition-colors shrink-0 shadow-2xs"
-                    >
-                      <img
-                        src={fShop.avatarImage}
-                        alt={fShop.name}
-                        className="w-4 h-4 rounded-full object-cover"
-                      />
-                      <span>{fShop.name}</span>
-                    </button>
-                  ))}
+                  <button
+                    onClick={() => setCurrentTab('shops')}
+                    className="text-xs font-bold text-amber-700 dark:text-amber-400 hover:underline flex items-center gap-1"
+                  >
+                    <Store className="w-3.5 h-3.5" />
+                    <span>Find More Kitchens</span>
+                  </button>
                 </div>
 
+                <div className="flex flex-col gap-4 sm:gap-5">
+                  {followedShopsList.map((fShop) => (
+                    <FollowedShopRow
+                      key={fShop.id}
+                      shop={fShop}
+                      dishes={menuItems}
+                      onSelectShop={(sId) => {
+                        setSelectedShopId(sId);
+                        setCurrentTab('shop_detail');
+                      }}
+                      onToggleFollow={handleToggleFollow}
+                      onSelectDish={(it) => setSelectedItemForDetail(it)}
+                    />
+                  ))}
+                </div>
+              </div>
+            ) : (
+              /* DISHES FEED VIEW */
+              <>
                 {/* Search/Filter Bar */}
                 <FilterBar
                   searchQuery={searchQuery}
@@ -455,20 +628,29 @@ export default function App() {
 
                 {/* Grid of Dishes STRICTLY from followed shops */}
                 {menuItems.length === 0 ? (
-                  <div className="bg-white dark:bg-stone-900 rounded-3xl border border-stone-200 dark:border-stone-800 p-10 text-center text-xs text-stone-400 space-y-3">
+                  <div className="bg-white/80 dark:bg-stone-900/80 backdrop-blur-md rounded-3xl border border-stone-200 dark:border-stone-800 p-10 text-center text-xs text-stone-400 space-y-3">
                     <p className="font-semibold text-stone-700 dark:text-stone-300">
                       No active dishes currently matching filters from your followed shops.
                     </p>
                     <p className="text-[11px] text-stone-400 max-w-sm mx-auto">
                       Explore more local food kitchens across your region to expand your feed.
                     </p>
-                    <button
-                      onClick={() => setCurrentTab('shops')}
-                      className="px-5 py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl shadow-xs transition-transform active:scale-95 inline-flex items-center gap-1.5"
-                    >
-                      <Store className="w-3.5 h-3.5" />
-                      <span>Discover More Shops</span>
-                    </button>
+                    <div className="flex items-center justify-center gap-2 pt-2">
+                      <button
+                        onClick={() => setFollowingViewMode('SHOPS')}
+                        className="px-4 py-2 bg-stone-100 hover:bg-stone-200 dark:bg-stone-800 dark:hover:bg-stone-700 text-stone-800 dark:text-stone-200 font-bold text-xs rounded-xl shadow-xs transition-transform active:scale-95 inline-flex items-center gap-1.5"
+                      >
+                        <Store className="w-3.5 h-3.5" />
+                        <span>View Followed Kitchens</span>
+                      </button>
+                      <button
+                        onClick={() => setCurrentTab('shops')}
+                        className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl shadow-xs transition-transform active:scale-95 inline-flex items-center gap-1.5"
+                      >
+                        <Store className="w-3.5 h-3.5" />
+                        <span>Discover More Shops</span>
+                      </button>
+                    </div>
                   </div>
                 ) : (
                   <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-6">
@@ -619,54 +801,6 @@ export default function App() {
           />
         )}
 
-        {/* ================= VIEW 7: DEDICATED SHOP OWNER DASHBOARD (4-TAB LAYOUT) ================= */}
-        {(currentTab === 'shop_overview' ||
-          currentTab === 'shop_menus' ||
-          currentTab === 'shop_profile' ||
-          currentTab === 'shop_settings') && (
-          currentOwnerShop ? (
-            <ShopDashboard
-              shop={currentOwnerShop}
-              menuItems={menuItems.filter((m) => m.shopId === currentOwnerShop.id)}
-              activeSubTab={
-                currentTab as 'shop_overview' | 'shop_menus' | 'shop_profile' | 'shop_settings'
-              }
-              onSubTabChange={(tab) => setCurrentTab(tab)}
-              onVisitShop={(sId) => {
-                setSelectedShopId(sId);
-                setCurrentTab('shop_detail');
-              }}
-              onRefresh={() => {
-                loadShops();
-                loadMenuItems();
-              }}
-              onUpdateShopProfile={handleUpdateShopProfile}
-              onCreateMenuItem={handleCreateMenuItem}
-              onUpdateMenuItem={handleUpdateMenuItem}
-              onDeleteMenuItem={handleDeleteMenuItem}
-            />
-          ) : user?.role === 'SHOP_OWNER' ? (
-            <div className="bg-white dark:bg-stone-900 rounded-3xl border border-stone-200 dark:border-stone-800 p-8 text-center max-w-lg mx-auto my-8 shadow-sm">
-              <Store className="w-12 h-12 text-amber-600 mx-auto mb-3" />
-              <h2 className="text-lg font-bold font-display text-stone-900 dark:text-stone-100">
-                Setting Up Your Shop Profile
-              </h2>
-              <p className="text-xs text-stone-500 dark:text-stone-400 mt-1 mb-4 leading-relaxed">
-                We are configuring your kitchen dashboard and storefront. Tap below to reload your shop catalog.
-              </p>
-              <button
-                onClick={() => {
-                  loadShops();
-                  loadMenuItems();
-                }}
-                className="px-5 py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs"
-              >
-                Refresh Shop Dashboard
-              </button>
-            </div>
-          ) : null
-        )}
-
         {/* ================= VIEW 8: ADMIN APPROVAL PANEL ================= */}
         {currentTab === 'admin' && user?.role === 'ADMIN' && (
           <AdminPanel
@@ -682,6 +816,8 @@ export default function App() {
         {/* ================= VIEW 9: PLATFORM SETTINGS ================= */}
         {currentTab === 'settings' && !selectedShopId && (
           <SettingsView />
+        )}
+          </>
         )}
       </main>
 

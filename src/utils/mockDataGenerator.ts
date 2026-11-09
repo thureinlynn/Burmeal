@@ -517,6 +517,29 @@ export const REGION_SPECS: RegionShopSpec[] = [
       { name: 'Hawthorn Glenferrie Road Noodle Bar', bio: 'University precinct student favorite with cheap and hearty Shan noodles and iced faluda.', cuisineType: 'University Precinct Diner', locationArea: 'Hawthorn, Melbourne', address: '680 Glenferrie Rd, Hawthorn VIC', avatarSeed: 'au_hawthorn' },
     ],
   },
+
+  // 16. European Union (Major EU Diaspora Hubs: Germany, France, Netherlands, Spain)
+  {
+    regionId: 'EU-ALL',
+    regionName: 'European Union (Berlin, Paris, Amsterdam)',
+    countryName: 'European Union',
+    city: 'Berlin',
+    phonePrefix: '+49 30',
+    currencySymbol: '€',
+    shops: [
+      { name: 'Berlin Mitte Myanmar Kitchen', bio: 'Artisanal Burmese dishes, fresh yellow Shan tofu, and organic tea leaf salads in Berlin Mitte.', cuisineType: 'Continental Diaspora Bistro', locationArea: 'Mitte, Berlin', address: 'Torstraße 88, Berlin, Germany', avatarSeed: 'eu_berlin' },
+      { name: 'Paris Belleville Rangoon Delights', bio: 'Cosmopolitan Paris bistro preparing fragrant coconut chicken noodles, samosa thoke, and sweet faluda.', cuisineType: 'Parisian Burmese Bistro', locationArea: 'Belleville, Paris', address: 'Rue de Belleville 45, Paris, France', avatarSeed: 'eu_paris' },
+      { name: 'Amsterdam Jordaan Mohinga House', bio: 'Canalside favorite serving warm bowls of lemongrass catfish soup and crispy yellow split-pea fritters.', cuisineType: 'Canalside Comfort Food', locationArea: 'Jordaan, Amsterdam', address: 'Prinsengracht 210, Amsterdam, Netherlands', avatarSeed: 'eu_amsterdam' },
+      { name: 'Munich Bavarian Pagoda Dining', bio: 'Bavarian-Burmese friendly dining room pairing slow-braised spiced beef with fresh salads and beers.', cuisineType: 'Alpine Burmese Dining', locationArea: 'Schwabing, Munich', address: 'Leopoldstraße 54, Munich, Germany', avatarSeed: 'eu_munich' },
+      { name: 'Frankfurt Financial District Noodle Bar', bio: 'Fast lunch sets of Shan rice noodles, tea leaf salads, and iced green tea for bankers.', cuisineType: 'CBD Healthy Lunch', locationArea: 'Frankfurt Central', address: 'Taunusanlage 8, Frankfurt, Germany', avatarSeed: 'eu_frankfurt' },
+      { name: 'Lyon Presqu’île Burmese Flavors', bio: 'Gastronomy capital dining featuring artisanal kyay oh and crispy gourd fritters.', cuisineType: 'Culinary Heritage Dining', locationArea: 'Presqu’île, Lyon', address: 'Rue Mercière 18, Lyon, France', avatarSeed: 'eu_lyon' },
+      { name: 'Rotterdam Markthal Myanmar Corner', bio: 'Vibrant modern food hall stall serving spicy Danbauk biryani and cold drinks.', cuisineType: 'Modern Food Hall', locationArea: 'Markthal, Rotterdam', address: 'Verlengde Nieuwstraat, Rotterdam', avatarSeed: 'eu_rotterdam' },
+      { name: 'Madrid Malasaña Burmese Cantina', bio: 'Sunny terrace dining with spicy tamarind fish, crunchy peanuts, and fresh mint salads.', cuisineType: 'Mediterranean Burmese Lounge', locationArea: 'Malasaña, Madrid', address: 'Calle de Manuela Malasaña 14, Madrid', avatarSeed: 'eu_madrid' },
+      { name: 'Barcelona Eixample Tea Lounge', bio: 'Catalan-Burmese cafe serving fermented tea leaf salad, coconut soup, and avocado shakes.', cuisineType: 'Cosmopolitan Cafe', locationArea: 'Eixample, Barcelona', address: 'Carrer de València 240, Barcelona', avatarSeed: 'eu_barcelona' },
+      { name: 'Stockholm Södermalm Organic Shan Food', bio: 'Nordic organic ingredients blended with highland Shan tofu and roasted chili oil.', cuisineType: 'Nordic-Shan Organic', locationArea: 'Södermalm, Stockholm', address: 'Götgatan 78, Stockholm, Sweden', avatarSeed: 'eu_stockholm' },
+      { name: 'Brussels EU Quarter Myanmar Cuisine', bio: 'European capital favorite for warm bowls of Ohn No Khao Swè and chicken curry.', cuisineType: 'Diplomatic District Dining', locationArea: 'European Quarter, Brussels', address: 'Rue de la Loi 150, Brussels, Belgium', avatarSeed: 'eu_brussels' },
+    ],
+  },
 ];
 
 // Curated Master Dish Pool (50 Authentic Burmese Recipes)
@@ -1062,7 +1085,8 @@ export function generateAllMockShops(): Shop[] {
   const now = new Date().toISOString();
 
   REGION_SPECS.forEach((spec, rIdx) => {
-    spec.shops.forEach((s, sIdx) => {
+    // Halve shops per region (~11 shops per region across all 15 regions = 165 shops)
+    spec.shops.slice(0, 11).forEach((s, sIdx) => {
       let shopId = `shop_r${rIdx + 1}_${sIdx + 1}`;
       let ownerId = `usr_owner_r${rIdx + 1}_${sIdx + 1}`;
       let ownerEmail = `owner_${spec.regionId.toLowerCase()}_${sIdx + 1}@burmeal.com`;
@@ -1117,7 +1141,7 @@ export function generateAllMockShops(): Shop[] {
         operatingHours: '7:00 AM - 8:30 PM',
         createdAt: now,
         followerCount: 15 + ((rIdx * 7 + sIdx * 3) % 45),
-        itemCount: 22,
+        itemCount: 11,
         isFollowed: false,
       });
     });
@@ -1127,8 +1151,9 @@ export function generateAllMockShops(): Shop[] {
 }
 
 /**
- * Procedurally generates >20 menu items for EACH shop.
- * For 315+ shops, generates 22 items per shop = ~6,930 items.
+ * Procedurally generates 11 menu items for EACH shop (halved from ~22).
+ * Across 165 shops = 1,815 items.
+ * Distribution: 1 Special, 3 Weekly, 7 Permanent.
  */
 export function generateAllMockMenuItems(shops: Shop[]): MenuItem[] {
   const allItems: MenuItem[] = [];
@@ -1137,23 +1162,23 @@ export function generateAllMockMenuItems(shops: Shop[]): MenuItem[] {
   const totalPool = MASTER_DISH_POOL.length; // 50 items
 
   shops.forEach((shop, sIdx) => {
-    // Select 22 items for this shop starting at an offset based on shop index
-    const shopItemsCount = 22;
+    // 11 items per shop
+    const shopItemsCount = 11;
 
     for (let i = 0; i < shopItemsCount; i++) {
       const dishIdx = (sIdx * 3 + i) % totalPool;
       const baseDish = MASTER_DISH_POOL[dishIdx];
       const itemId = `item_${shop.id}_${i + 1}`;
 
-      // Distribute menu types: 2 Specials, 5 Weekly, 15 Permanent
+      // Distribute menu types: 1 Special, 3 Weekly, 7 Permanent
       let mType: MenuType = 'PERMANENT';
       let specialDate: string | undefined = undefined;
       let availableDays: string[] | undefined = undefined;
 
-      if (i === 0 || i === 1) {
+      if (i === 0) {
         mType = 'SPECIAL';
         specialDate = todayStr;
-      } else if (i >= 2 && i <= 6) {
+      } else if (i >= 1 && i <= 3) {
         mType = 'WEEKLY';
         const daySets = [
           ['Mon', 'Wed', 'Fri'],

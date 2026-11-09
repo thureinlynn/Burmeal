@@ -195,48 +195,66 @@ app.post('/api/auth/logout', (req: Request, res: Response) => {
   return res.json({ success: true });
 });
 
-const REGION_TO_COUNTRY: Record<string, string> = {
-  'MM-YGN': 'Myanmar',
-  'MM-MDY': 'Myanmar',
-  'MM-SHN': 'Myanmar',
-  'MM-BGO': 'Myanmar',
-  'MM-AYY': 'Myanmar',
-  'MM-ALL': 'Myanmar',
-  'TH-BKK': 'Thailand',
-  'TH-CNX': 'Thailand',
-  'TH-MSOT': 'Thailand',
-  'TH-ALL': 'Thailand',
-  'SG-ALL': 'Singapore',
-  'MY-ALL': 'Malaysia',
-  'JP-ALL': 'Japan',
-  'US-ALL': 'United States',
-  'GB-ALL': 'United Kingdom',
-  'KR-ALL': 'South Korea',
-  'AU-ALL': 'Australia',
+const REGION_PREFIX_TO_COUNTRY: Record<string, string> = {
+  'MM': 'Myanmar',
+  'TH': 'Thailand',
+  'SG': 'Singapore',
+  'MY': 'Malaysia',
+  'JP': 'Japan',
+  'US': 'United States',
+  'EU': 'European Union',
+  'GB': 'United Kingdom',
+  'KR': 'South Korea',
+  'AU': 'Australia',
 };
+
+function getCountryFromRegionId(regionId?: string): string | undefined {
+  if (!regionId) return undefined;
+  const prefix = regionId.split('-')[0]?.toUpperCase();
+  return REGION_PREFIX_TO_COUNTRY[prefix];
+}
 
 function buildRegionSqlClause(regionId?: string, country?: string): string {
   let effectiveCountry = country;
-  if (!effectiveCountry && regionId && REGION_TO_COUNTRY[regionId.toUpperCase()]) {
-    effectiveCountry = REGION_TO_COUNTRY[regionId.toUpperCase()];
+  if (!effectiveCountry && regionId) {
+    effectiveCountry = getCountryFromRegionId(regionId);
   }
 
   let clause = '';
   if (effectiveCountry) {
-    const cleanCountry = effectiveCountry.replace(/'/g, "''");
-    clause += ` AND LOWER(s.country) = LOWER('${cleanCountry}')`;
+    if (effectiveCountry.toLowerCase() === 'european union') {
+      clause += ` AND (LOWER(s.country) IN ('european union', 'germany', 'france', 'netherlands', 'italy', 'spain', 'sweden', 'belgium', 'europe'))`;
+    } else {
+      const cleanCountry = effectiveCountry.replace(/'/g, "''");
+      clause += ` AND LOWER(s.country) = LOWER('${cleanCountry}')`;
+    }
   }
 
   if (regionId && !regionId.endsWith('-ALL')) {
     const r = regionId.toUpperCase();
     if (r === 'MM-YGN') clause += ` AND (LOWER(s.region) LIKE '%yangon%' OR LOWER(s.city) LIKE '%yangon%')`;
     else if (r === 'MM-MDY') clause += ` AND (LOWER(s.region) LIKE '%mandalay%' OR LOWER(s.city) LIKE '%mandalay%')`;
-    else if (r === 'MM-SHN') clause += ` AND (LOWER(s.region) LIKE '%shan%' OR LOWER(s.city) LIKE '%taunggyi%' OR LOWER(s.city) LIKE '%nyaungshwe%')`;
+    else if (r === 'MM-SHN') clause += ` AND (LOWER(s.region) LIKE '%shan%' OR LOWER(s.city) LIKE '%taunggyi%' OR LOWER(s.city) LIKE '%nyaungshwe%' OR LOWER(s.location_area) LIKE '%inle%')`;
     else if (r === 'MM-BGO') clause += ` AND (LOWER(s.region) LIKE '%bago%' OR LOWER(s.city) LIKE '%bago%')`;
     else if (r === 'MM-AYY') clause += ` AND (LOWER(s.region) LIKE '%ayeyarwady%' OR LOWER(s.city) LIKE '%pathein%')`;
+    else if (r === 'MM-MON') clause += ` AND (LOWER(s.region) LIKE '%mon%' OR LOWER(s.city) LIKE '%mawlamyine%')`;
+    else if (r === 'MM-KRN') clause += ` AND (LOWER(s.region) LIKE '%kayin%' OR LOWER(s.city) LIKE '%hpa-an%')`;
     else if (r === 'TH-BKK') clause += ` AND (LOWER(s.region) LIKE '%bangkok%' OR LOWER(s.city) LIKE '%bangkok%')`;
     else if (r === 'TH-CNX') clause += ` AND (LOWER(s.region) LIKE '%chiang mai%' OR LOWER(s.city) LIKE '%chiang mai%')`;
     else if (r === 'TH-MSOT') clause += ` AND (LOWER(s.region) LIKE '%mae sot%' OR LOWER(s.city) LIKE '%mae sot%')`;
+    else if (r === 'US-SF') clause += ` AND (LOWER(s.city) LIKE '%san francisco%' OR LOWER(s.city) LIKE '%oakland%' OR LOWER(s.city) LIKE '%fremont%' OR LOWER(s.city) LIKE '%berkeley%' OR LOWER(s.city) LIKE '%san jose%')`;
+    else if (r === 'US-LA') clause += ` AND (LOWER(s.city) LIKE '%los angeles%' OR LOWER(s.location_area) LIKE '%alhambra%' OR LOWER(s.location_area) LIKE '%silver lake%')`;
+    else if (r === 'US-NYC') clause += ` AND (LOWER(s.city) LIKE '%new york%' OR LOWER(s.location_area) LIKE '%queens%' OR LOWER(s.location_area) LIKE '%elmhurst%' OR LOWER(s.location_area) LIKE '%brooklyn%')`;
+    else if (r === 'EU-DE') clause += ` AND (LOWER(s.country) = 'germany' OR LOWER(s.city) LIKE '%berlin%' OR LOWER(s.city) LIKE '%munich%')`;
+    else if (r === 'EU-FR') clause += ` AND (LOWER(s.country) = 'france' OR LOWER(s.city) LIKE '%paris%')`;
+    else if (r === 'EU-NL') clause += ` AND (LOWER(s.country) = 'netherlands' OR LOWER(s.city) LIKE '%amsterdam%')`;
+    else if (r === 'GB-LDN') clause += ` AND (LOWER(s.city) LIKE '%london%' OR LOWER(s.location_area) LIKE '%soho%' OR LOWER(s.location_area) LIKE '%camden%')`;
+    else if (r === 'GB-MAN') clause += ` AND (LOWER(s.city) LIKE '%manchester%')`;
+    else if (r === 'JP-TYO') clause += ` AND (LOWER(s.city) LIKE '%tokyo%' OR LOWER(s.location_area) LIKE '%takadanobaba%' OR LOWER(s.location_area) LIKE '%shinjuku%')`;
+    else if (r === 'AU-SYD') clause += ` AND (LOWER(s.city) LIKE '%sydney%' OR LOWER(s.location_area) LIKE '%cabramatta%')`;
+    else if (r === 'AU-MEL') clause += ` AND (LOWER(s.city) LIKE '%melbourne%' OR LOWER(s.location_area) LIKE '%richmond%')`;
+    else if (r === 'KR-SEL') clause += ` AND (LOWER(s.city) LIKE '%seoul%' OR LOWER(s.location_area) LIKE '%itaewon%' OR LOWER(s.location_area) LIKE '%hongdae%')`;
+    else if (r === 'KR-INC') clause += ` AND (LOWER(s.city) LIKE '%incheon%' OR LOWER(s.location_area) LIKE '%bupyeong%')`;
   }
   return clause;
 }
@@ -266,7 +284,13 @@ app.get('/api/shops', (req: Request, res: Response) => {
       query += ` WHERE s.status = 'APPROVED'`;
     }
 
-    query += buildRegionSqlClause(regionIdFilter, countryFilter);
+    const followedOnlyFilter = req.query.followedOnly === 'true';
+
+    if (followedOnlyFilter && user) {
+      query += ` AND s.id IN (SELECT shop_id FROM follows WHERE customer_id = '${user.id}')`;
+    } else {
+      query += buildRegionSqlClause(regionIdFilter, countryFilter);
+    }
     query += ` ORDER BY s.created_at DESC`;
 
     const shops = db.prepare(query).all() as any[];
@@ -463,8 +487,8 @@ app.get('/api/menu-items', (req: Request, res: Response) => {
       WHERE 1=1
     `;
 
-    // Only approved shops visible unless admin or viewing specific own shop
-    if (user?.role !== 'ADMIN') {
+    // Only approved shops visible in public feeds unless admin or viewing specific shop directly
+    if (user?.role !== 'ADMIN' && !shopId) {
       sql += ` AND s.status = 'APPROVED'`;
     }
 
@@ -472,7 +496,7 @@ app.get('/api/menu-items', (req: Request, res: Response) => {
       sql += ` AND m.shop_id = '${shopId}'`;
     }
 
-    if (!shopId) {
+    if (!shopId && feedType !== 'FOLLOWED') {
       sql += buildRegionSqlClause(regionId as string | undefined, country as string | undefined);
     }
 

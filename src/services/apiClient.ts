@@ -188,48 +188,99 @@ function saveLocalDb(state: DbState) {
   });
 }
 
-const REGION_TO_COUNTRY: Record<string, string> = {
-  'MM-YGN': 'Myanmar',
-  'MM-MDY': 'Myanmar',
-  'MM-SHN': 'Myanmar',
-  'MM-BGO': 'Myanmar',
-  'MM-AYY': 'Myanmar',
-  'MM-ALL': 'Myanmar',
-  'TH-BKK': 'Thailand',
-  'TH-CNX': 'Thailand',
-  'TH-MSOT': 'Thailand',
-  'TH-ALL': 'Thailand',
-  'SG-ALL': 'Singapore',
-  'MY-ALL': 'Malaysia',
-  'JP-ALL': 'Japan',
-  'US-ALL': 'United States',
-  'GB-ALL': 'United Kingdom',
-  'KR-ALL': 'South Korea',
-  'AU-ALL': 'Australia',
+const REGION_PREFIX_TO_COUNTRY: Record<string, string> = {
+  'MM': 'Myanmar',
+  'TH': 'Thailand',
+  'SG': 'Singapore',
+  'MY': 'Malaysia',
+  'JP': 'Japan',
+  'US': 'United States',
+  'EU': 'European Union',
+  'GB': 'United Kingdom',
+  'KR': 'South Korea',
+  'AU': 'Australia',
 };
+
+function getCountryFromRegionId(regionId?: string): string | undefined {
+  if (!regionId) return undefined;
+  const prefix = regionId.split('-')[0]?.toUpperCase();
+  return REGION_PREFIX_TO_COUNTRY[prefix];
+}
 
 function matchesRegionFilter(s: Shop, regionId?: string, country?: string): boolean {
   let effectiveCountry = country;
-  if (!effectiveCountry && regionId && REGION_TO_COUNTRY[regionId.toUpperCase()]) {
-    effectiveCountry = REGION_TO_COUNTRY[regionId.toUpperCase()];
+  if (!effectiveCountry && regionId) {
+    effectiveCountry = getCountryFromRegionId(regionId);
   }
 
   if (effectiveCountry) {
-    if (!s.country || s.country.toLowerCase() !== effectiveCountry.toLowerCase()) {
+    if (!s.country) return false;
+    const sc = s.country.toLowerCase();
+    const ec = effectiveCountry.toLowerCase();
+    if (ec === 'european union') {
+      const euCountries = ['germany', 'france', 'netherlands', 'italy', 'spain', 'sweden', 'belgium', 'european union', 'europe'];
+      if (!euCountries.includes(sc)) return false;
+    } else if (sc !== ec) {
       return false;
     }
   }
 
   if (regionId && !regionId.endsWith('-ALL')) {
     const r = regionId.toUpperCase();
-    if (r === 'MM-YGN') return (s.region?.toLowerCase().includes('yangon') || s.city?.toLowerCase().includes('yangon')) ?? false;
-    if (r === 'MM-MDY') return (s.region?.toLowerCase().includes('mandalay') || s.city?.toLowerCase().includes('mandalay')) ?? false;
-    if (r === 'MM-SHN') return (s.region?.toLowerCase().includes('shan') || s.city?.toLowerCase().includes('taunggyi') || s.city?.toLowerCase().includes('nyaungshwe')) ?? false;
-    if (r === 'MM-BGO') return (s.region?.toLowerCase().includes('bago') || s.city?.toLowerCase().includes('bago')) ?? false;
-    if (r === 'MM-AYY') return (s.region?.toLowerCase().includes('ayeyarwady') || s.city?.toLowerCase().includes('pathein')) ?? false;
-    if (r === 'TH-BKK') return (s.region?.toLowerCase().includes('bangkok') || s.city?.toLowerCase().includes('bangkok')) ?? false;
-    if (r === 'TH-CNX') return (s.region?.toLowerCase().includes('chiang mai') || s.city?.toLowerCase().includes('chiang mai')) ?? false;
-    if (r === 'TH-MSOT') return (s.region?.toLowerCase().includes('mae sot') || s.city?.toLowerCase().includes('mae sot')) ?? false;
+    const text = `${s.name} ${s.region || ''} ${s.city || ''} ${s.locationArea || ''} ${s.address || ''}`.toLowerCase();
+
+    // Myanmar
+    if (r === 'MM-YGN') return text.includes('yangon');
+    if (r === 'MM-MDY') return text.includes('mandalay');
+    if (r === 'MM-SHN') return text.includes('shan') || text.includes('taunggyi') || text.includes('inle') || text.includes('nyaungshwe');
+    if (r === 'MM-BGO') return text.includes('bago') || text.includes('pyay');
+    if (r === 'MM-AYY') return text.includes('ayeyarwady') || text.includes('pathein');
+    if (r === 'MM-MON') return text.includes('mon') || text.includes('mawlamyine');
+    if (r === 'MM-KRN') return text.includes('kayin') || text.includes('hpa-an') || text.includes('karen');
+
+    // Thailand
+    if (r === 'TH-BKK') return text.includes('bangkok') || text.includes('pratunam') || text.includes('silom');
+    if (r === 'TH-CNX') return text.includes('chiang mai') || text.includes('nimman');
+    if (r === 'TH-MSOT') return text.includes('mae sot') || text.includes('border');
+
+    // United States
+    if (r === 'US-SF') return text.includes('san francisco') || text.includes('oakland') || text.includes('fremont') || text.includes('berkeley') || text.includes('san jose') || text.includes('bay area');
+    if (r === 'US-LA') return text.includes('los angeles') || text.includes('alhambra') || text.includes('silver lake') || text.includes('socal');
+    if (r === 'US-NYC') return text.includes('new york') || text.includes('queens') || text.includes('elmhurst') || text.includes('manhattan') || text.includes('brooklyn');
+    if (r === 'US-TX') return text.includes('texas') || text.includes('houston') || text.includes('dallas');
+    if (r === 'US-DC') return text.includes('washington') || text.includes('virginia');
+    if (r === 'US-FW') return text.includes('indiana') || text.includes('fort wayne');
+
+    // European Union
+    if (r === 'EU-DE') return text.includes('germany') || text.includes('berlin') || text.includes('munich') || text.includes('frankfurt');
+    if (r === 'EU-FR') return text.includes('france') || text.includes('paris') || text.includes('lyon');
+    if (r === 'EU-NL') return text.includes('netherlands') || text.includes('amsterdam') || text.includes('rotterdam');
+    if (r === 'EU-IT') return text.includes('italy') || text.includes('rome') || text.includes('milan');
+    if (r === 'EU-ES') return text.includes('spain') || text.includes('madrid') || text.includes('barcelona');
+
+    // United Kingdom
+    if (r === 'GB-LDN') return text.includes('london') || text.includes('soho') || text.includes('shoreditch') || text.includes('camden') || text.includes('brixton');
+    if (r === 'GB-MAN') return text.includes('manchester');
+    if (r === 'GB-BIR') return text.includes('birmingham');
+    if (r === 'GB-EDI') return text.includes('edinburgh') || text.includes('scotland');
+
+    // Japan
+    if (r === 'JP-TYO') return text.includes('tokyo') || text.includes('takadanobaba') || text.includes('shinjuku') || text.includes('ikebukuro') || text.includes('shibuya');
+    if (r === 'JP-YOK') return text.includes('yokohama') || text.includes('kanagawa');
+    if (r === 'JP-OSA') return text.includes('osaka');
+
+    // Australia
+    if (r === 'AU-SYD') return text.includes('sydney') || text.includes('cabramatta') || text.includes('marrickville') || text.includes('parramatta');
+    if (r === 'AU-MEL') return text.includes('melbourne') || text.includes('richmond') || text.includes('fitzroy') || text.includes('footscray');
+
+    // South Korea
+    if (r === 'KR-SEL') return text.includes('seoul') || text.includes('itaewon') || text.includes('hongdae') || text.includes('gangnam');
+    if (r === 'KR-INC') return text.includes('incheon') || text.includes('bupyeong');
+    if (r === 'KR-ANS') return text.includes('ansan');
+    if (r === 'KR-BUS') return text.includes('busan');
+
+    // Fall back to true if it matches country
+    return true;
   }
   return true;
 }
@@ -256,7 +307,7 @@ function getUserIdFromToken(token?: string | null): string | null {
 
 export const apiClient = {
   // Get all shops (with optional country & region filtering)
-  async getShops(params?: { country?: string; regionId?: string; status?: string } | string | null, tokenParam?: string | null): Promise<Shop[]> {
+  async getShops(params?: { country?: string; regionId?: string; status?: string; followedOnly?: boolean } | string | null, tokenParam?: string | null): Promise<Shop[]> {
     const token = typeof params === 'string' ? params : tokenParam;
     const filterParams = typeof params === 'object' && params !== null ? params : {};
 
@@ -265,6 +316,7 @@ export const apiClient = {
       if (filterParams.country) sp.append('country', filterParams.country);
       if (filterParams.regionId) sp.append('regionId', filterParams.regionId);
       if (filterParams.status) sp.append('status', filterParams.status);
+      if (filterParams.followedOnly) sp.append('followedOnly', 'true');
 
       const headers: Record<string, string> = {};
       if (token) headers['Authorization'] = `Bearer ${token}`;
@@ -288,8 +340,14 @@ export const apiClient = {
     const userId = getUserIdFromToken(token);
     let shops = db.shops;
 
-    // Apply region and country filtering
-    shops = shops.filter((s) => matchesRegionFilter(s, filterParams.regionId, filterParams.country));
+    // Apply followedOnly or region/country filtering
+    if (filterParams.followedOnly) {
+      if (!userId) return [];
+      const followedIds = db.follows.filter((f) => f.customerId === userId).map((f) => f.shopId);
+      shops = shops.filter((s) => followedIds.includes(s.id));
+    } else {
+      shops = shops.filter((s) => matchesRegionFilter(s, filterParams.regionId, filterParams.country));
+    }
 
     return shops.map((s) => ({
       ...s,

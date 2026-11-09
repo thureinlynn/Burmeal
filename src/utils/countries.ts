@@ -12,6 +12,7 @@ export const COUNTRIES: CountryOption[] = [
   { code: 'MY', name: 'Malaysia', flag: '🇲🇾' },
   { code: 'JP', name: 'Japan', flag: '🇯🇵' },
   { code: 'US', name: 'United States', flag: '🇺🇸' },
+  { code: 'EU', name: 'European Union', flag: '🇪🇺' },
   { code: 'GB', name: 'United Kingdom', flag: '🇬🇧' },
   { code: 'KR', name: 'South Korea', flag: '🇰🇷' },
   { code: 'AU', name: 'Australia', flag: '🇦🇺' },

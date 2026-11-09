@@ -165,11 +165,17 @@ export function initDb() {
 
 function seedInitialData() {
   const shopCount = db.prepare('SELECT COUNT(*) as count FROM shops').get() as { count: number };
-  if (shopCount.count >= 300) {
-    return; // Already seeded with multi-region dataset
+  if (shopCount.count === 176) {
+    return; // Already seeded with 16 regions * 11 shops = 176 shops (including European Union)
   }
 
-  console.log('Seeding SQLite database with comprehensive multi-region prototype data (>20 shops per region, >20 items per shop)...');
+  if (shopCount.count > 0 && shopCount.count !== 176) {
+    console.log('Reseeding SQLite database with updated international & EU dataset (176 shops, 1,936 items)...');
+    db.prepare('DELETE FROM menu_items').run();
+    db.prepare('DELETE FROM shops').run();
+  }
+
+  console.log('Seeding SQLite database with balanced prototype data (11 shops per region, 11 items per shop, 16 regions)...');
 
   const salt = bcrypt.genSaltSync(10);
   const passwordHash = bcrypt.hashSync('burmeal123', salt);

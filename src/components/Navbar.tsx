@@ -37,13 +37,17 @@ export const Navbar: React.FC<NavbarProps> = ({
   const { selectedCountry, selectedRegionName, selectedFlag, openLocationModal } = useLocation();
 
   return (
-    <header className="sticky top-0 z-40 bg-white/95 dark:bg-stone-900/95 backdrop-blur border-b border-stone-200 dark:border-stone-800 transition-colors">
-      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
+    <header className="sticky top-0 z-40 bg-white/65 dark:bg-stone-950/65 backdrop-blur-2xl backdrop-saturate-200 border-b border-white/50 dark:border-white/10 shadow-[0_8px_32px_0_rgba(0,0,0,0.04)] dark:shadow-[0_8px_32px_0_rgba(0,0,0,0.45)] transition-all">
+      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 relative">
+        {/* Liquid Glass Prismatic Specular Top Sheen */}
+        <div className="absolute inset-x-0 -top-px h-[1.5px] bg-gradient-to-r from-transparent via-white/90 dark:via-white/25 to-transparent pointer-events-none" />
+        <div className="absolute inset-x-8 -bottom-px h-px bg-gradient-to-r from-transparent via-amber-500/20 dark:via-amber-400/10 to-transparent pointer-events-none" />
+
         <div className="flex items-center justify-between gap-2 sm:gap-3 h-16">
           {/* Zone 1: Brand Wordmark + Location Selector */}
           <div className="flex items-center gap-2 sm:gap-3 shrink-0">
             <button
-              onClick={() => onSelectTab('feed')}
+              onClick={() => onSelectTab(user?.role === 'SHOP_OWNER' ? 'shop_overview' : 'feed')}
               className="flex items-center gap-2 text-stone-900 dark:text-stone-100 group focus:outline-none shrink-0"
             >
               <div className="w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center group-hover:scale-105 transition-transform shrink-0">
@@ -62,7 +66,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             {user?.role !== 'SHOP_OWNER' && (
               <button
                 onClick={openLocationModal}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 hover:bg-amber-100 dark:hover:bg-amber-900/60 border border-amber-200 dark:border-amber-800 text-stone-800 dark:text-stone-200 text-xs font-semibold transition-all shadow-2xs active:scale-95"
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-white/60 dark:bg-stone-800/60 backdrop-blur-md hover:bg-white/80 dark:hover:bg-stone-800/80 border border-white/60 dark:border-stone-700/60 text-stone-800 dark:text-stone-200 text-xs font-semibold transition-all shadow-2xs active:scale-95 hover:border-amber-400/50"
                 title="Change your dining country and region"
               >
                 <span className="text-sm shrink-0">{selectedFlag}</span>
@@ -171,12 +175,6 @@ export const Navbar: React.FC<NavbarProps> = ({
                 >
                   {t.shopNavSettings}
                 </button>
-                <button
-                  onClick={() => onSelectTab('feed')}
-                  className="text-stone-400 dark:text-stone-500 hover:text-stone-700 dark:hover:text-stone-300 text-xs ml-2"
-                >
-                  (Public Feed)
-                </button>
               </>
             )}
 
@@ -210,27 +208,27 @@ export const Navbar: React.FC<NavbarProps> = ({
             </button>
 
             {/* Quick Demo Switcher (Desktop only) */}
-            <div className="hidden xl:flex items-center bg-stone-100 dark:bg-stone-800 rounded-lg p-0.5 border border-stone-200 dark:border-stone-700 text-xs">
+            <div className="hidden xl:flex items-center bg-white/45 dark:bg-stone-850/50 backdrop-blur-md rounded-xl p-0.5 border border-white/60 dark:border-white/10 shadow-2xs text-xs">
               <button
                 onClick={() => switchDemoRole('CUSTOMER')}
-                className={`px-2 py-1 rounded transition-colors ${
-                  user?.role === 'CUSTOMER' ? 'bg-white dark:bg-stone-700 font-bold text-stone-900 dark:text-stone-100 shadow-xs' : 'text-stone-500'
+                className={`px-2 py-1 rounded-lg transition-all ${
+                  user?.role === 'CUSTOMER' ? 'bg-white dark:bg-stone-700 font-bold text-stone-900 dark:text-stone-100 shadow-xs' : 'text-stone-500 hover:text-stone-800 dark:hover:text-stone-200'
                 }`}
               >
                 {t.customerRole}
               </button>
               <button
                 onClick={() => switchDemoRole('SHOP_OWNER')}
-                className={`px-2 py-1 rounded transition-colors ${
-                  user?.role === 'SHOP_OWNER' ? 'bg-white dark:bg-stone-700 font-bold text-stone-900 dark:text-stone-100 shadow-xs' : 'text-stone-500'
+                className={`px-2 py-1 rounded-lg transition-all ${
+                  user?.role === 'SHOP_OWNER' ? 'bg-white dark:bg-stone-700 font-bold text-stone-900 dark:text-stone-100 shadow-xs' : 'text-stone-500 hover:text-stone-800 dark:hover:text-stone-200'
                 }`}
               >
                 {t.shopRole}
               </button>
               <button
                 onClick={() => switchDemoRole('ADMIN')}
-                className={`px-2 py-1 rounded transition-colors ${
-                  user?.role === 'ADMIN' ? 'bg-white dark:bg-stone-700 font-bold text-stone-900 dark:text-stone-100 shadow-xs' : 'text-stone-500'
+                className={`px-2 py-1 rounded-lg transition-all ${
+                  user?.role === 'ADMIN' ? 'bg-white dark:bg-stone-700 font-bold text-stone-900 dark:text-stone-100 shadow-xs' : 'text-stone-500 hover:text-stone-800 dark:hover:text-stone-200'
                 }`}
               >
                 {t.adminRole}
@@ -240,7 +238,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             {/* User Account / Combined Login Button for Mobile & Desktop */}
             {user ? (
               <div className="flex items-center gap-1.5">
-                <div className="flex items-center gap-1.5 px-2 py-1 bg-stone-50 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-lg">
+                <div className="flex items-center gap-1.5 px-2 py-1 bg-white/50 dark:bg-stone-850/60 backdrop-blur-md border border-white/60 dark:border-white/10 rounded-xl shadow-2xs">
                   <img
                     src={user.avatarUrl || 'https://api.dicebear.com/7.x/avataaars/svg?seed=user'}
                     alt={user.name}
@@ -254,14 +252,14 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <button
                   onClick={() => logout()}
                   title={t.signOut}
-                  className="p-1.5 sm:p-2 text-stone-500 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100 hover:bg-stone-100 dark:hover:bg-stone-800 rounded-lg transition-colors"
+                  className="p-1.5 sm:p-2 text-stone-500 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100 hover:bg-white/60 dark:hover:bg-stone-800/60 rounded-xl transition-colors"
                 >
                   <LogOut className="w-4 h-4" />
                 </button>
               </div>
             ) : (
               /* Segmented login buttons for tablet and desktop */
-              <div className="hidden sm:flex items-center bg-stone-100 dark:bg-stone-800 p-0.5 rounded-lg border border-stone-200 dark:border-stone-700 text-xs">
+              <div className="hidden sm:flex items-center bg-white/45 dark:bg-stone-850/50 backdrop-blur-md p-0.5 rounded-xl border border-white/60 dark:border-white/10 shadow-2xs text-xs">
                 <button
                   onClick={() => onOpenAuth('CUSTOMER')}
                   className="px-2.5 py-1 text-xs font-medium text-stone-700 dark:text-stone-300 hover:text-stone-900 dark:hover:text-white rounded"
