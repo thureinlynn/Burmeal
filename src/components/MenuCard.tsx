@@ -2,6 +2,7 @@ import React from 'react';
 import { MenuItem } from '../types';
 import { formatPrice } from '../utils/filter';
 import { useLanguage } from '../context/LanguageContext';
+import { useLocation } from '../context/LocationContext';
 import { Bookmark, Leaf, ShieldCheck, Store, ArrowRight, Calendar, Clock } from 'lucide-react';
 
 interface MenuCardProps {
@@ -18,6 +19,7 @@ export const MenuCard: React.FC<MenuCardProps> = ({
   onSelectShop,
 }) => {
   const { t } = useLanguage();
+  const { selectedCountry } = useLocation();
 
   return (
     <div
@@ -94,7 +96,7 @@ export const MenuCard: React.FC<MenuCardProps> = ({
           </span>
 
           <span className="bg-stone-900/85 backdrop-blur text-white font-bold text-[11px] sm:text-xs px-1.5 py-0.5 rounded tabular-nums">
-            {formatPrice(item.price)}
+            {formatPrice(item.price, selectedCountry)}
           </span>
         </div>
       </div>

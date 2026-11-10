@@ -4,7 +4,7 @@ import { formatPrice } from '../utils/filter';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
-import { COUNTRIES, getCountryFlag } from '../utils/countries';
+import { COUNTRIES, getCountryFlag, getCurrencyForCountry } from '../utils/countries';
 import {
   LayoutDashboard,
   UtensilsCrossed,
@@ -54,17 +54,6 @@ interface ShopDashboardProps {
 
 const DAYS_OF_WEEK = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
-type OrderStatus = 'PENDING' | 'PREPARING' | 'READY' | 'COMPLETED';
-
-interface OrderItem {
-  id: string;
-  customerName: string;
-  itemsSummary: string;
-  total: number;
-  time: string;
-  type: 'Pickup' | 'Delivery' | 'Dine-in';
-  status: OrderStatus;
-}
 
 export const ShopDashboard: React.FC<ShopDashboardProps> = ({
   shop,
@@ -174,100 +163,6 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
   // Sales Insights view toggle: Daily, Weekly, Monthly
   const [salesPeriod, setSalesPeriod] = useState<'DAILY' | 'WEEKLY' | 'MONTHLY'>('DAILY');
 
-  // Interactive Live Orders Pipeline
-  const [activeOrderFilter, setActiveOrderFilter] = useState<'ALL' | OrderStatus>('ALL');
-  const [orders, setOrders] = useState<OrderItem[]>([
-    {
-      id: 'ORD-308',
-      customerName: 'Kyaw Swar',
-      itemsSummary: '2x Royal Fish Mohinga, 1x Tea Leaf Salad',
-      total: 19.50,
-      time: '12:35 PM',
-      type: 'Pickup',
-      status: 'PENDING',
-    },
-    {
-      id: 'ORD-307',
-      customerName: 'Ma May Thant',
-      itemsSummary: '1x Ohn No Khao Swè, 1x Burmese Milk Tea',
-      total: 9.50,
-      time: '12:28 PM',
-      type: 'Delivery',
-      status: 'PENDING',
-    },
-    {
-      id: 'ORD-306',
-      customerName: 'David Lee',
-      itemsSummary: '1x Shan Warm Tofu Noodles, 2x Split-Pea Fritters',
-      total: 11.50,
-      time: '12:15 PM',
-      type: 'Dine-in',
-      status: 'PREPARING',
-    },
-    {
-      id: 'ORD-305',
-      customerName: 'Ko Aung Myo',
-      itemsSummary: '2x Mandalay Nan Gyi Thoke',
-      total: 16.00,
-      time: '12:04 PM',
-      type: 'Pickup',
-      status: 'PREPARING',
-    },
-    {
-      id: 'ORD-304',
-      customerName: 'Su Su Hlaing',
-      itemsSummary: '1x Royal Fish Mohinga',
-      total: 6.50,
-      time: '11:50 AM',
-      type: 'Pickup',
-      status: 'READY',
-    },
-    {
-      id: 'ORD-303',
-      customerName: 'U Tin Win',
-      itemsSummary: '3x Crispy Split-pea Fritters, 2x Sweet Tea',
-      total: 12.00,
-      time: '11:32 AM',
-      type: 'Dine-in',
-      status: 'READY',
-    },
-    {
-      id: 'ORD-302',
-      customerName: 'Htet Htet',
-      itemsSummary: '1x Ohn No Khao Swè, 1x Fermented Tea Leaf Salad',
-      total: 13.50,
-      time: '11:15 AM',
-      type: 'Delivery',
-      status: 'COMPLETED',
-    },
-    {
-      id: 'ORD-301',
-      customerName: 'Zayar Min',
-      itemsSummary: '2x Royal Fish Mohinga',
-      total: 13.00,
-      time: '10:45 AM',
-      type: 'Pickup',
-      status: 'COMPLETED',
-    },
-  ]);
-
-  const advanceOrderStatus = (orderId: string) => {
-    setOrders((prev) =>
-      prev.map((o) => {
-        if (o.id !== orderId) return o;
-        if (o.status === 'PENDING') return { ...o, status: 'PREPARING' };
-        if (o.status === 'PREPARING') return { ...o, status: 'READY' };
-        if (o.status === 'READY') return { ...o, status: 'COMPLETED' };
-        return o;
-      })
-    );
-  };
-
-  const filteredOrders = orders.filter((o) => {
-    if (activeOrderFilter === 'ALL') return true;
-    return o.status === activeOrderFilter;
-  });
-
   // Top selling mock metrics
   const topSellingItems = [
     { name: 'Royal Fish Mohinga', orders: 84, revenue: 546.00, rating: 4.9, category: 'Noodles & Broth' },
@@ -336,12 +231,15 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
     }
   }, [shop]);
 
+  const shopCountry = country || shop.country || 'Myanmar';
+  const shopCurrency = getCurrencyForCountry(shopCountry);
+
   const openCreateModal = (presetType: MenuType = 'SPECIAL') => {
     setEditingItem(null);
     setTitle('');
     setDescription('');
     setImage('/src/assets/images/burmeal_mohinga_dish_1793906770254.jpg');
-    setPrice('');
+    setPrice(shopCurrency.placeholder);
     setCategory('Noodles & Broth');
     setMenuType(presetType);
     setIsVegetarian(false);
@@ -356,7 +254,15 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
     setTitle(item.title);
     setDescription(item.description);
     setImage(item.image);
-    setPrice(item.price.toString());
+    const initialPrice =
+      shopCurrency.code === 'MMK' && item.price < 50
+        ? (item.price * 1000).toString()
+        : shopCurrency.code === 'JPY' && item.price < 50
+        ? Math.round(item.price * 130).toString()
+        : shopCurrency.code === 'KRW' && item.price < 50
+        ? Math.round(item.price * 1300).toString()
+        : item.price.toString();
+    setPrice(initialPrice);
     setCategory(item.category);
     setMenuType(item.menuType);
     setIsVegetarian(item.isVegetarian);
@@ -775,7 +681,7 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
                         </p>
                         <div className="mt-2.5 flex items-center justify-between">
                           <span className="font-extrabold text-base text-amber-600 dark:text-amber-500 font-display">
-                            {formatPrice(todaysSpecial.price)}
+                            {formatPrice(todaysSpecial.price, shopCountry)}
                           </span>
                           <button
                             type="button"
@@ -944,7 +850,7 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
                               </div>
                               <div className="flex items-center gap-2 shrink-0">
                                 <span className="font-bold text-amber-600">
-                                  {formatPrice(item.price)}
+                                  {formatPrice(item.price, shopCountry)}
                                 </span>
                                 <button
                                   type="button"
@@ -1075,106 +981,6 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
                 </button>
               </div>
             </div>
-
-            {/* Active Orders & Live Pipeline Breakdown */}
-            <div className="bg-white dark:bg-stone-900 rounded-3xl border border-stone-200 dark:border-stone-800 p-5 sm:p-6 shadow-xs transition-colors">
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-4">
-                <div>
-                  <h3 className="text-base font-bold font-display text-stone-900 dark:text-stone-100 flex items-center gap-2">
-                    <Clock className="w-4 h-4 text-amber-600" />
-                    <span>Active Orders & Kitchen Pipeline</span>
-                  </h3>
-                  <p className="text-xs text-stone-500 dark:text-stone-400 mt-0.5">
-                    Live queue of incoming customer requests with one-tap status advancement.
-                  </p>
-                </div>
-
-                {/* Order Status Filters */}
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  {(['ALL', 'PENDING', 'PREPARING', 'READY', 'COMPLETED'] as const).map((st) => (
-                    <button
-                      key={st}
-                      onClick={() => setActiveOrderFilter(st)}
-                      className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition-colors ${
-                        activeOrderFilter === st
-                          ? 'bg-amber-600 text-white shadow-2xs font-bold'
-                          : 'bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-300 hover:text-stone-900'
-                      }`}
-                    >
-                      {st === 'ALL' ? 'All Orders' : st}
-                      {st !== 'ALL' && (
-                        <span className="ml-1 opacity-75">
-                          ({orders.filter((o) => o.status === st).length})
-                        </span>
-                      )}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Order Cards Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-                {filteredOrders.slice(0, 4).map((order) => (
-                  <div
-                    key={order.id}
-                    className="p-3.5 rounded-2xl border border-stone-200 dark:border-stone-800 bg-stone-50/60 dark:bg-stone-850/60 flex flex-col justify-between space-y-3"
-                  >
-                    <div>
-                      <div className="flex items-center justify-between mb-1.5">
-                        <span className="text-[11px] font-mono font-bold text-stone-600 dark:text-stone-400">
-                          {order.id}
-                        </span>
-                        <span
-                          className={`text-[10px] font-extrabold px-2 py-0.5 rounded-md uppercase tracking-wider ${
-                            order.status === 'PENDING'
-                              ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300'
-                              : order.status === 'PREPARING'
-                              ? 'bg-indigo-100 text-indigo-800 dark:bg-indigo-950/60 dark:text-indigo-300'
-                              : order.status === 'READY'
-                              ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300'
-                              : 'bg-stone-200 text-stone-700 dark:bg-stone-700 dark:text-stone-300'
-                          }`}
-                        >
-                          {order.status}
-                        </span>
-                      </div>
-
-                      <h4 className="font-bold text-xs sm:text-sm text-stone-900 dark:text-stone-100">
-                        {order.customerName}
-                      </h4>
-                      <p className="text-xs text-stone-600 dark:text-stone-300 line-clamp-2 mt-0.5">
-                        {order.itemsSummary}
-                      </p>
-                      <div className="flex items-center justify-between text-[11px] text-stone-500 dark:text-stone-400 mt-2">
-                        <span>{order.type} · {order.time}</span>
-                        <span className="font-bold text-stone-900 dark:text-stone-100">${order.total.toFixed(2)}</span>
-                      </div>
-                    </div>
-
-                    {order.status !== 'COMPLETED' ? (
-                      <button
-                        onClick={() => advanceOrderStatus(order.id)}
-                        className="w-full py-1.5 px-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold transition-all shadow-2xs flex items-center justify-center gap-1"
-                      >
-                        <span>
-                          {order.status === 'PENDING'
-                            ? 'Accept & Prepare'
-                            : order.status === 'PREPARING'
-                            ? 'Mark as Ready'
-                            : 'Complete Order'}
-                        </span>
-                        <ChevronRight className="w-3.5 h-3.5" />
-                      </button>
-                    ) : (
-                      <div className="flex items-center justify-center gap-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 py-1">
-                        <CheckCircle2 className="w-3.5 h-3.5" />
-                        <span>Fulfilled</span>
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
           </div>
         );
       })()}
@@ -1183,11 +989,11 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
       {currentTab === 'shop_menus' && (
         <div className="space-y-6">
           {/* Action bar */}
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-            <div className="flex items-center gap-1.5 bg-stone-100 dark:bg-stone-800 p-1 rounded-xl border border-stone-200 dark:border-stone-700">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-1.5 bg-stone-100 dark:bg-stone-800 p-1 rounded-xl border border-stone-200 dark:border-stone-700">
               <button
                 onClick={() => setMenuFilter('ALL')}
-                className={`px-3 py-1 text-xs font-medium rounded-lg ${
+                className={`flex-1 sm:flex-none px-3 py-1.5 sm:py-1 text-xs font-medium rounded-lg text-center ${
                   menuFilter === 'ALL'
                     ? 'bg-white dark:bg-stone-700 font-semibold text-stone-900 dark:text-white shadow-xs'
                     : 'text-stone-600 dark:text-stone-300'
@@ -1197,44 +1003,45 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
               </button>
               <button
                 onClick={() => setMenuFilter('SPECIAL')}
-                className={`px-3 py-1 text-xs font-medium rounded-lg ${
+                className={`flex-1 sm:flex-none px-3 py-1.5 sm:py-1 text-xs font-medium rounded-lg text-center ${
                   menuFilter === 'SPECIAL' ? 'bg-rose-600 font-semibold text-white shadow-xs' : 'text-stone-600 dark:text-stone-300'
                 }`}
               >
-                Today's Specials ({menuItems.filter((m) => m.menuType === 'SPECIAL').length})
+                Today's ({menuItems.filter((m) => m.menuType === 'SPECIAL').length})
               </button>
               <button
                 onClick={() => setMenuFilter('WEEKLY')}
-                className={`px-3 py-1 text-xs font-medium rounded-lg ${
+                className={`flex-1 sm:flex-none px-3 py-1.5 sm:py-1 text-xs font-medium rounded-lg text-center ${
                   menuFilter === 'WEEKLY' ? 'bg-amber-600 font-semibold text-white shadow-xs' : 'text-stone-600 dark:text-stone-300'
                 }`}
               >
-                Weekly Specials ({menuItems.filter((m) => m.menuType === 'WEEKLY').length})
+                Weekly ({menuItems.filter((m) => m.menuType === 'WEEKLY').length})
               </button>
               <button
                 onClick={() => setMenuFilter('PERMANENT')}
-                className={`px-3 py-1 text-xs font-medium rounded-lg ${
+                className={`flex-1 sm:flex-none px-3 py-1.5 sm:py-1 text-xs font-medium rounded-lg text-center ${
                   menuFilter === 'PERMANENT'
                     ? 'bg-stone-800 dark:bg-stone-600 font-semibold text-white shadow-xs'
                     : 'text-stone-600 dark:text-stone-300'
                 }`}
               >
-                Master Menu ({menuItems.filter((m) => m.menuType === 'PERMANENT').length})
+                Master ({menuItems.filter((m) => m.menuType === 'PERMANENT').length})
               </button>
             </div>
 
             <button
               onClick={() => openCreateModal(menuFilter !== 'ALL' ? menuFilter : 'SPECIAL')}
-              className="flex items-center gap-1.5 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold rounded-xl shadow-xs transition-colors"
+              className="flex items-center justify-center gap-1.5 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold rounded-xl shadow-xs transition-colors shrink-0"
             >
               <Plus className="w-4 h-4" />
               <span>{t.addNewDish}</span>
             </button>
           </div>
 
-          {/* Menu Items Table */}
+          {/* Menu Items Container */}
           <div className="bg-white dark:bg-stone-900 rounded-2xl border border-stone-200 dark:border-stone-800 overflow-hidden shadow-xs transition-colors">
-            <div className="overflow-x-auto">
+            {/* Desktop Table View (md and up) */}
+            <div className="hidden md:block overflow-x-auto">
               <table className="w-full text-left text-xs">
                 <thead className="bg-stone-50 dark:bg-stone-800 border-b border-stone-200 dark:border-stone-700 text-stone-500 dark:text-stone-400 uppercase tracking-wider font-semibold">
                   <tr>
@@ -1324,7 +1131,7 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
                           )}
                         </td>
                         <td className="py-3 px-4 font-bold text-stone-900 dark:text-stone-100 tabular-nums">
-                          {formatPrice(item.price)}
+                          {formatPrice(item.price, shopCountry)}
                         </td>
                         <td className="py-3 px-4 text-right">
                           <div className="flex items-center justify-end gap-1.5">
@@ -1349,6 +1156,115 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
                   )}
                 </tbody>
               </table>
+            </div>
+
+            {/* Mobile-Focused Stacked Card List (< md) */}
+            <div className="md:hidden divide-y divide-stone-100 dark:divide-stone-800">
+              {filteredItems.length === 0 ? (
+                <div className="py-10 px-4 text-center text-stone-400 text-xs">
+                  {t.noDishesFound} Tap "{t.addNewDish}" above to add your first menu item.
+                </div>
+              ) : (
+                filteredItems.map((item) => (
+                  <div key={item.id} className="p-4 space-y-3">
+                    {/* Top Row: Thumbnail + Title + Price */}
+                    <div className="flex items-start gap-3">
+                      <img
+                        src={item.image}
+                        alt={item.title}
+                        className="w-16 h-16 rounded-xl object-cover bg-stone-100 dark:bg-stone-800 shrink-0 border border-stone-200 dark:border-stone-700"
+                        referrerPolicy="no-referrer"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start justify-between gap-2">
+                          <h4 className="font-bold text-sm text-stone-900 dark:text-stone-100 truncate">
+                            {item.title}
+                          </h4>
+                          <span className="font-extrabold text-sm text-amber-600 dark:text-amber-400 shrink-0 tabular-nums font-display">
+                            {formatPrice(item.price, shopCountry)}
+                          </span>
+                        </div>
+
+                        {/* Menu Type Pill & Category */}
+                        <div className="flex items-center gap-1.5 flex-wrap mt-1">
+                          <span
+                            className={`font-semibold text-[10px] px-2 py-0.5 rounded ${
+                              item.menuType === 'SPECIAL'
+                                ? 'bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300'
+                                : item.menuType === 'WEEKLY'
+                                ? 'bg-amber-50 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300'
+                                : 'bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-300'
+                            }`}
+                          >
+                            {item.menuType === 'SPECIAL'
+                              ? "Today's Special"
+                              : item.menuType === 'WEEKLY'
+                              ? "Weekly Special"
+                              : "Master Menu"}
+                          </span>
+                          <span className="text-[11px] text-stone-500 dark:text-stone-400 truncate">
+                            {item.category}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Description */}
+                    {item.description && (
+                      <p className="text-xs text-stone-600 dark:text-stone-400 line-clamp-2 leading-relaxed">
+                        {item.description}
+                      </p>
+                    )}
+
+                    {/* Metadata & Actions row */}
+                    <div className="pt-2 flex items-center justify-between gap-2 border-t border-stone-100/80 dark:border-stone-800/80">
+                      {/* Dietary & Schedule */}
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {item.isVegetarian && (
+                          <span className="text-[10px] bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 px-1.5 py-0.5 rounded font-medium">
+                            Veg
+                          </span>
+                        )}
+                        {item.isHalal && (
+                          <span className="text-[10px] bg-sky-50 dark:bg-sky-950/60 text-sky-700 dark:text-sky-300 px-1.5 py-0.5 rounded font-medium">
+                            Halal
+                          </span>
+                        )}
+                        {item.menuType === 'SPECIAL' && (
+                          <span className="text-[11px] text-rose-700 dark:text-rose-400 font-medium">
+                            {item.specialDate || 'Today'}
+                          </span>
+                        )}
+                        {item.menuType === 'WEEKLY' && item.availableDays && item.availableDays.length > 0 && (
+                          <span className="text-[11px] text-amber-800 dark:text-amber-400">
+                            {item.availableDays.join(', ')}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Action buttons */}
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => openEditModal(item)}
+                          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-300 hover:bg-stone-200 dark:hover:bg-stone-700 text-xs font-semibold transition-colors"
+                        >
+                          <Edit2 className="w-3.5 h-3.5" />
+                          <span>Edit</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onDeleteMenuItem(item.id)}
+                          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 hover:bg-rose-100 text-xs font-semibold transition-colors"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          <span>Delete</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </div>
@@ -1991,18 +1907,24 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-stone-700 dark:text-stone-300 mb-1">
-                    Price ($ USD) *
+                  <label className="block text-xs font-semibold text-stone-700 dark:text-stone-300 mb-1 flex items-center justify-between">
+                    <span>Price ({shopCurrency.symbol} {shopCurrency.code}) *</span>
+                    <span className="text-[10px] text-amber-700 dark:text-amber-400 font-bold">{shopCurrency.name}</span>
                   </label>
-                  <input
-                    type="number"
-                    step="0.10"
-                    required
-                    value={price}
-                    onChange={(e) => setPrice(e.target.value)}
-                    placeholder="6.50"
-                    className="w-full text-xs px-3 py-2 bg-stone-50 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-lg focus:outline-none focus:border-amber-600 text-stone-900 dark:text-stone-100"
-                  />
+                  <div className="relative rounded-lg shadow-2xs">
+                    <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+                      <span className="text-stone-500 dark:text-stone-400 font-bold text-xs">{shopCurrency.symbol}</span>
+                    </div>
+                    <input
+                      type="number"
+                      step={shopCurrency.step}
+                      required
+                      value={price}
+                      onChange={(e) => setPrice(e.target.value)}
+                      placeholder={shopCurrency.placeholder}
+                      className="w-full text-xs pl-9 pr-3 py-2 bg-stone-50 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-lg focus:outline-none focus:border-amber-600 text-stone-900 dark:text-stone-100 font-semibold"
+                    />
+                  </div>
                 </div>
 
                 <div>

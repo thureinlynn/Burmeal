@@ -2,6 +2,7 @@ import React from 'react';
 import { MenuItem } from '../types';
 import { formatPrice } from '../utils/filter';
 import { useLanguage } from '../context/LanguageContext';
+import { useLocation } from '../context/LocationContext';
 import { X, Bookmark, Store, Leaf, ShieldCheck, Calendar, Clock, ArrowRight } from 'lucide-react';
 
 interface ItemDetailModalProps {
@@ -18,6 +19,7 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
   onVisitShop,
 }) => {
   const { t } = useLanguage();
+  const { selectedCountry } = useLocation();
   if (!item) return null;
 
   return (
@@ -76,7 +78,7 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
             </span>
 
             <span className="text-xl font-bold tabular-nums bg-stone-900/80 px-2.5 py-0.5 rounded backdrop-blur">
-              {formatPrice(item.price)}
+              {formatPrice(item.price, selectedCountry)}
             </span>
           </div>
         </div>

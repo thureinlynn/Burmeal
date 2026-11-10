@@ -36,18 +36,11 @@ export const ShopCard: React.FC<ShopCardProps> = ({ shop, onFollowToggle, onSele
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
 
-        {/* Status indicator */}
+        {/* Order & Pick-Up Insight badge replacing generic status */}
         <div className="absolute top-2.5 right-2.5">
-          <span
-            className={`text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded backdrop-blur ${
-              shop.status === 'APPROVED'
-                ? 'bg-emerald-600/90 text-white'
-                : shop.status === 'PENDING'
-                ? 'bg-amber-600/90 text-white'
-                : 'bg-rose-600/90 text-white'
-            }`}
-          >
-            {shop.status}
+          <span className="text-[10px] font-bold tracking-wide px-2.5 py-0.5 rounded-full backdrop-blur-md bg-stone-900/80 text-amber-300 border border-amber-400/40 shadow-xs flex items-center gap-1">
+            <Store className="w-3 h-3 text-amber-400" />
+            <span>Direct Pick-Up</span>
           </span>
         </div>
 
@@ -94,9 +87,20 @@ export const ShopCard: React.FC<ShopCardProps> = ({ shop, onFollowToggle, onSele
             {shop.bio}
           </p>
 
+          {/* Kitchen Pick-Up Insight */}
+          <div className="text-[11px] bg-amber-50/80 dark:bg-amber-950/40 border border-amber-200/60 dark:border-amber-900/40 rounded-xl px-2.5 py-1.5 text-stone-700 dark:text-stone-300 flex items-center gap-1.5 mb-2.5">
+            <span className="font-bold text-amber-700 dark:text-amber-400 shrink-0 text-[10px] uppercase tracking-wider flex items-center gap-1">
+              <Store className="w-3 h-3 text-amber-600" />
+              <span>Insight:</span>
+            </span>
+            <span className="truncate text-[11px]">
+              Direct contact with cook &bull; Pick up at address
+            </span>
+          </div>
+
           {/* Detailed Address line */}
           <div className="text-[11px] text-stone-500 dark:text-stone-400 flex items-center gap-1.5 mb-3">
-            <MapPin className="w-3.5 h-3.5 text-stone-400 shrink-0" />
+            <MapPin className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
             <span className="truncate">
               {[shop.address, shop.city, shop.country].filter(Boolean).join(', ')}
             </span>

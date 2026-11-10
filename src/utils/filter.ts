@@ -1,4 +1,5 @@
 import { MenuItem, MenuType } from '../types';
+import { getCurrencyForCountry } from './countries';
 
 export interface FeedFilterParams {
   query?: string;
@@ -126,13 +127,44 @@ export function buildContactLinks(contact: {
 }
 
 /**
- * Format price in local currency format
+ * Format price in local currency format relative to country or region
  */
-export function formatPrice(amount: number): string {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(amount);
+export function formatPrice(amount: number, countryOrRegion?: string): string {
+  const currency = getCurrencyForCountry(countryOrRegion);
+  const num = typeof amount === 'number' ? amount : parseFloat(amount as any) || 0;
+
+  if (currency.code === 'MMK') {
+    const val = num < 50 ? Math.round(num * 1000) : Math.round(num);
+    return `${val.toLocaleString()} Ks`;
+  }
+  if (currency.code === 'JPY') {
+    const val = num < 50 ? Math.round(num * 130) : Math.round(num);
+    return `¥${val.toLocaleString()}`;
+  }
+  if (currency.code === 'KRW') {
+    const val = num < 50 ? Math.round(num * 1300) : Math.round(num);
+    return `₩${val.toLocaleString()}`;
+  }
+  if (currency.code === 'THB') {
+    const val = num < 20 ? num * 25 : num;
+    return `฿${val.toFixed(2)}`;
+  }
+  if (currency.code === 'SGD') {
+    return `S$${num.toFixed(2)}`;
+  }
+  if (currency.code === 'MYR') {
+    const val = num < 10 ? num * 3 : num;
+    return `RM ${val.toFixed(2)}`;
+  }
+  if (currency.code === 'GBP') {
+    return `£${num.toFixed(2)}`;
+  }
+  if (currency.code === 'EUR') {
+    return `€${num.toFixed(2)}`;
+  }
+  if (currency.code === 'AUD') {
+    const val = num < 10 ? num * 1.5 : num;
+    return `A$${val.toFixed(2)}`;
+  }
+  return `$${num.toFixed(2)}`;
 }

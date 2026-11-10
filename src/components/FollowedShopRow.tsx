@@ -81,15 +81,15 @@ export const FollowedShopRow: React.FC<FollowedShopRowProps> = ({
                 {shop.cuisineType}
               </span>
 
-              {shop.status === 'APPROVED' && (
-                <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
-                  Verified
-                </span>
-              )}
+              {/* Order & Pick-Up Insight Pill replacing verified badge */}
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/15 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-300/60 dark:border-amber-700/60 inline-flex items-center gap-1 shadow-2xs">
+                <Sparkles className="w-2.5 h-2.5 text-amber-600 dark:text-amber-400" />
+                <span>Direct Contact • Pick-Up</span>
+              </span>
             </div>
 
             {/* Location & Operating Hours */}
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-stone-500 dark:text-stone-400 mb-1.5">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-stone-500 dark:text-stone-400 mb-1">
               <span className="flex items-center gap-1 truncate">
                 <MapPin className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
                 <span className="truncate">{shop.city || shop.locationArea}, {shop.country}</span>
@@ -101,6 +101,17 @@ export const FollowedShopRow: React.FC<FollowedShopRowProps> = ({
                   <span>{shop.operatingHours}</span>
                 </span>
               )}
+            </div>
+
+            {/* Kitchen & Pick-Up Address Insight */}
+            <div className="flex items-center gap-2 px-2.5 py-1 rounded-xl bg-amber-50/70 dark:bg-amber-950/30 border border-amber-200/60 dark:border-amber-900/40 text-[11px] text-stone-700 dark:text-stone-300 mb-1.5">
+              <span className="font-bold text-amber-700 dark:text-amber-400 flex items-center gap-1 shrink-0 text-[10px] uppercase tracking-wide">
+                <Store className="w-3 h-3 text-amber-600" />
+                <span>Kitchen Insight:</span>
+              </span>
+              <span className="truncate">
+                Direct chat with cook &bull; Pick up at address: <span className="font-semibold text-stone-900 dark:text-stone-100">{[shop.address, shop.city].filter(Boolean).join(', ') || shop.locationArea}</span>
+              </span>
             </div>
 
             {/* Bio line */}

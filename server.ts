@@ -819,6 +819,17 @@ app.post('/api/admin/seed', (req: Request, res: Response) => {
   return res.json({ success: true, message: 'Database verified and seeded.' });
 });
 
+// SEO & Search Engine Endpoints
+app.get('/robots.txt', (_req: Request, res: Response) => {
+  res.type('text/plain');
+  res.send(`User-agent: *\nAllow: /\n\nSitemap: https://burmeal.astronerd.me/sitemap.xml\n`);
+});
+
+app.get('/sitemap.xml', (_req: Request, res: Response) => {
+  res.type('application/xml');
+  res.sendFile(path.resolve(process.cwd(), 'public', 'sitemap.xml'));
+});
+
 // Mount Vite middleware in development
 async function startServer() {
   const isProduction = process.env.NODE_ENV === 'production';

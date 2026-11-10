@@ -157,6 +157,21 @@ export const ShopProfileView: React.FC<ShopProfileViewProps> = ({
               </a>
             )}
           </div>
+
+          {/* Direct Contact & Kitchen Pick-Up Insight Banner */}
+          <div className="p-3.5 bg-amber-500/10 dark:bg-amber-950/40 rounded-xl border border-amber-300/60 dark:border-amber-800/60 flex items-start gap-3">
+            <div className="w-8 h-8 rounded-lg bg-amber-100 dark:bg-amber-900/60 text-amber-700 dark:text-amber-300 flex items-center justify-center shrink-0 mt-0.5">
+              <Sparkles className="w-4 h-4" />
+            </div>
+            <div className="text-xs">
+              <h4 className="font-bold text-amber-900 dark:text-amber-200 flex items-center gap-1.5">
+                <span>Direct Contact &bull; Kitchen Pick-Up Model</span>
+              </h4>
+              <p className="text-stone-600 dark:text-stone-300 text-[11px] leading-relaxed mt-0.5">
+                BurMeal connects you directly with authentic Burmese home cooks. Reach out via WhatsApp, Viber, or phone to place your order, confirm availability, and pick up fresh homemade motherland food directly at this kitchen address.
+              </p>
+            </div>
+          </div>
         </div>
 
         {/* SECTION 4: DEDICATED CONTACT & DIRECT ORDERING SECTION */}
