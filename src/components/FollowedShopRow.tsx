@@ -1,7 +1,7 @@
 import React from 'react';
 import { Shop, MenuItem } from '../types';
 import { Heart, MapPin, Store, ArrowRight, MessageCircle, Phone, Clock, Utensils, Sparkles } from 'lucide-react';
-import { buildContactLinks } from '../utils/filter';
+import { buildContactLinks, formatPrice } from '../utils/filter';
 import { getCountryFlag } from '../utils/countries';
 import { useLanguage } from '../context/LanguageContext';
 
@@ -220,7 +220,7 @@ export const FollowedShopRow: React.FC<FollowedShopRowProps> = ({
                   </h4>
                   <div className="flex items-center justify-between gap-1 mt-0.5">
                     <span className="text-xs font-bold text-amber-700 dark:text-amber-400 tabular-nums">
-                      ${typeof dish.price === 'number' ? dish.price.toFixed(2) : dish.price}
+                      {formatPrice(dish.price, dish.shopCountry || shop.country)}
                     </span>
                     <span className="text-[9px] uppercase font-bold px-1.5 py-0.2 rounded bg-stone-200/60 dark:bg-stone-750 text-stone-600 dark:text-stone-300">
                       {dish.menuType}

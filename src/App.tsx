@@ -119,7 +119,18 @@ export default function App() {
     }
     try {
       const data = await apiClient.getSavedItems(token);
-      setSavedItems(data);
+      // Guarantee each saved item preserves its genuine shop country currency
+      const enriched = data.map((item) => {
+        const foundShop =
+          shops.find((s) => s.id === item.shopId) ||
+          allFollowedShops.find((s) => s.id === item.shopId);
+        return {
+          ...item,
+          shopCountry: item.shopCountry || item.country || foundShop?.country,
+          shopName: item.shopName || foundShop?.name,
+        };
+      });
+      setSavedItems(enriched);
     } catch (err) {
       console.error('Failed to load saved items', err);
     }
@@ -702,18 +713,28 @@ export default function App() {
               </div>
             ) : (
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-6">
-                {savedItems.map((item) => (
-                  <MenuCard
-                    key={item.id}
-                    item={item}
-                    onToggleSave={handleToggleSave}
-                    onSelectItem={(it) => setSelectedItemForDetail(it)}
-                    onSelectShop={(sId) => {
-                      setSelectedShopId(sId);
-                      setCurrentTab('shop_detail');
-                    }}
-                  />
-                ))}
+                {savedItems.map((item) => {
+                  const itemShop =
+                    shops.find((s) => s.id === item.shopId) ||
+                    allFollowedShops.find((s) => s.id === item.shopId);
+                  const enrichedItem = {
+                    ...item,
+                    shopCountry: item.shopCountry || item.country || itemShop?.country,
+                    shopName: item.shopName || itemShop?.name,
+                  };
+                  return (
+                    <MenuCard
+                      key={item.id}
+                      item={enrichedItem}
+                      onToggleSave={handleToggleSave}
+                      onSelectItem={(it) => setSelectedItemForDetail({ ...it, ...enrichedItem })}
+                      onSelectShop={(sId) => {
+                        setSelectedShopId(sId);
+                        setCurrentTab('shop_detail');
+                      }}
+                    />
+                  );
+                })}
               </div>
             )}
           </div>
@@ -823,7 +844,18 @@ export default function App() {
 
       {/* Item Detail Modal (prominent Visit Shop Profile action, NO item contact buttons) */}
       <ItemDetailModal
-        item={selectedItemForDetail}
+        item={
+          selectedItemForDetail
+            ? {
+                ...selectedItemForDetail,
+                shopCountry:
+                  selectedItemForDetail.shopCountry ||
+                  selectedItemForDetail.country ||
+                  shops.find((s) => s.id === selectedItemForDetail.shopId)?.country ||
+                  allFollowedShops.find((s) => s.id === selectedItemForDetail.shopId)?.country,
+              }
+            : null
+        }
         onClose={() => setSelectedItemForDetail(null)}
         onToggleSave={handleToggleSave}
         onVisitShop={(shopId) => {

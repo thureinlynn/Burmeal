@@ -317,7 +317,11 @@ export const ShopProfileView: React.FC<ShopProfileViewProps> = ({
           {filteredItems.map((item) => (
             <MenuCard
               key={item.id}
-              item={item}
+              item={{
+                ...item,
+                shopCountry: item.shopCountry || shop.country,
+                shopName: item.shopName || shop.name,
+              }}
               onToggleSave={onToggleSave}
               onSelectItem={onSelectItem}
             />

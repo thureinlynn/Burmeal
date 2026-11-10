@@ -47,6 +47,10 @@ export interface MenuItem {
   id: string;
   shopId: string;
   shopName?: string;
+  shopCountry?: string;
+  shopRegion?: string;
+  shopCity?: string;
+  country?: string;
   title: string;
   description: string;
   image: string;

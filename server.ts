@@ -481,6 +481,7 @@ app.get('/api/menu-items', (req: Request, res: Response) => {
 
     let sql = `
       SELECT m.*, s.name as shop_name, s.status as shop_status,
+             s.country as shop_country, s.region as shop_region, s.city as shop_city,
              s.whatsapp_phone, s.viber_phone, s.line_id, s.facebook_url, s.phone_number
       FROM menu_items m
       JOIN shops s ON m.shop_id = s.id
@@ -581,6 +582,10 @@ function formatMenuItems(items: any[], userId?: string) {
     id: m.id,
     shopId: m.shop_id,
     shopName: m.shop_name,
+    shopCountry: m.shop_country,
+    shopRegion: m.shop_region,
+    shopCity: m.shop_city,
+    country: m.shop_country,
     title: m.title,
     description: m.description,
     image: m.image,
@@ -795,7 +800,9 @@ app.get('/api/saved-items', (req: Request, res: Response) => {
     if (!user) return res.status(401).json({ error: 'Please log in to view saved items.' });
 
     const items = db.prepare(`
-      SELECT m.*, s.name as shop_name, s.whatsapp_phone, s.viber_phone, s.line_id, s.facebook_url, s.phone_number
+      SELECT m.*, s.name as shop_name,
+             s.country as shop_country, s.region as shop_region, s.city as shop_city,
+             s.whatsapp_phone, s.viber_phone, s.line_id, s.facebook_url, s.phone_number
       FROM saved_items si
       JOIN menu_items m ON si.item_id = m.id
       JOIN shops s ON m.shop_id = s.id

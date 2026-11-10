@@ -5,6 +5,8 @@ import { useLanguage } from '../context/LanguageContext';
 import { useLocation } from '../context/LocationContext';
 import { Bookmark, Leaf, ShieldCheck, Store, ArrowRight, Calendar, Clock } from 'lucide-react';
 
+import { getCountryFlag } from '../utils/countries';
+
 interface MenuCardProps {
   item: MenuItem;
   onToggleSave: (item: MenuItem) => void;
@@ -20,6 +22,10 @@ export const MenuCard: React.FC<MenuCardProps> = ({
 }) => {
   const { t } = useLanguage();
   const { selectedCountry } = useLocation();
+
+  // If item is from a specific shop, ALWAYS format price in that shop's country currency!
+  // It must never change depending on which region the user is currently viewing.
+  const itemCurrencyCountry = item.shopCountry || item.country || selectedCountry;
 
   return (
     <div
@@ -96,7 +102,7 @@ export const MenuCard: React.FC<MenuCardProps> = ({
           </span>
 
           <span className="bg-stone-900/85 backdrop-blur text-white font-bold text-[11px] sm:text-xs px-1.5 py-0.5 rounded tabular-nums">
-            {formatPrice(item.price, selectedCountry)}
+            {formatPrice(item.price, itemCurrencyCountry)}
           </span>
         </div>
       </div>
@@ -116,6 +122,11 @@ export const MenuCard: React.FC<MenuCardProps> = ({
               >
                 {item.shopName}
               </button>
+            )}
+            {item.shopCountry && (
+              <span className="text-xs shrink-0" title={item.shopCountry}>
+                {getCountryFlag(item.shopCountry)}
+              </span>
             )}
             <span aria-hidden="true">·</span>
             <span className="truncate">{item.category}</span>

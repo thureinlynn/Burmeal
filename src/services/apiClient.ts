@@ -510,6 +510,10 @@ export const apiClient = {
       return {
         ...it,
         shopName: s?.name || it.shopName || 'Local Kitchen',
+        shopCountry: s?.country || it.shopCountry,
+        shopRegion: s?.region || it.shopRegion,
+        shopCity: s?.city || it.shopCity,
+        country: s?.country || it.country || it.shopCountry,
         isSaved: userId ? db.savedItems.some((sv) => sv.customerId === userId && sv.itemId === it.id) : false,
         contactLinks: s
           ? {
@@ -651,10 +655,18 @@ export const apiClient = {
     const savedIds = db.savedItems.filter((s) => s.customerId === userId).map((s) => s.itemId);
     return db.menuItems
       .filter((m) => savedIds.includes(m.id))
-      .map((m) => ({
-        ...m,
-        isSaved: true,
-      }));
+      .map((m) => {
+        const s = db.shops.find((shp) => shp.id === m.shopId);
+        return {
+          ...m,
+          shopName: s?.name || m.shopName,
+          shopCountry: s?.country || m.shopCountry,
+          shopRegion: s?.region || m.shopRegion,
+          shopCity: s?.city || m.shopCity,
+          country: s?.country || m.country || m.shopCountry,
+          isSaved: true,
+        };
+      });
   },
 
   // Toggle save

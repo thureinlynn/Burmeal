@@ -3,6 +3,7 @@ import { MenuItem } from '../types';
 import { formatPrice } from '../utils/filter';
 import { useLanguage } from '../context/LanguageContext';
 import { useLocation } from '../context/LocationContext';
+import { getCountryFlag } from '../utils/countries';
 import { X, Bookmark, Store, Leaf, ShieldCheck, Calendar, Clock, ArrowRight } from 'lucide-react';
 
 interface ItemDetailModalProps {
@@ -21,6 +22,9 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
   const { t } = useLanguage();
   const { selectedCountry } = useLocation();
   if (!item) return null;
+
+  // Use the shop's country currency so saved items and dishes keep their genuine local currency
+  const itemCurrencyCountry = item.shopCountry || item.country || selectedCountry;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
@@ -78,7 +82,7 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
             </span>
 
             <span className="text-xl font-bold tabular-nums bg-stone-900/80 px-2.5 py-0.5 rounded backdrop-blur">
-              {formatPrice(item.price, selectedCountry)}
+              {formatPrice(item.price, itemCurrencyCountry)}
             </span>
           </div>
         </div>
@@ -86,8 +90,14 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
         {/* Content Body */}
         <div className="p-5 flex-1 overflow-y-auto space-y-4">
           <div>
-            <div className="flex items-center gap-2 text-xs text-stone-500 mb-1">
+            <div className="flex items-center gap-2 text-xs text-stone-500 mb-1 flex-wrap">
               <span className="font-semibold text-amber-700">{item.shopName}</span>
+              {item.shopCountry && (
+                <span className="inline-flex items-center gap-1 text-[11px] text-stone-400 font-medium">
+                  <span>{getCountryFlag(item.shopCountry)}</span>
+                  <span>{item.shopCountry}</span>
+                </span>
+              )}
               <span aria-hidden="true">·</span>
               <span>{item.category}</span>
             </div>
