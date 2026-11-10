@@ -1162,15 +1162,15 @@ export function generateAllMockMenuItems(shops: Shop[]): MenuItem[] {
   const totalPool = MASTER_DISH_POOL.length; // 50 items
 
   shops.forEach((shop, sIdx) => {
-    // 11 items per shop
-    const shopItemsCount = 11;
+    // 2 items per shop (removed ~82% of items data as requested)
+    const shopItemsCount = 2;
 
     for (let i = 0; i < shopItemsCount; i++) {
       const dishIdx = (sIdx * 3 + i) % totalPool;
       const baseDish = MASTER_DISH_POOL[dishIdx];
       const itemId = `item_${shop.id}_${i + 1}`;
 
-      // Distribute menu types: 1 Special, 3 Weekly, 7 Permanent
+      // Distribute menu types: 1 Special, 1 Weekly or Permanent
       let mType: MenuType = 'PERMANENT';
       let specialDate: string | undefined = undefined;
       let availableDays: string[] | undefined = undefined;
@@ -1178,16 +1178,18 @@ export function generateAllMockMenuItems(shops: Shop[]): MenuItem[] {
       if (i === 0) {
         mType = 'SPECIAL';
         specialDate = todayStr;
-      } else if (i >= 1 && i <= 3) {
-        mType = 'WEEKLY';
-        const daySets = [
-          ['Mon', 'Wed', 'Fri'],
-          ['Tue', 'Thu', 'Sat'],
-          ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'],
-          ['Sat', 'Sun'],
-          ['Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
-        ];
-        availableDays = daySets[(sIdx + i) % daySets.length];
+      } else {
+        mType = sIdx % 2 === 0 ? 'WEEKLY' : 'PERMANENT';
+        if (mType === 'WEEKLY') {
+          const daySets = [
+            ['Mon', 'Wed', 'Fri'],
+            ['Tue', 'Thu', 'Sat'],
+            ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'],
+            ['Sat', 'Sun'],
+            ['Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+          ];
+          availableDays = daySets[(sIdx + i) % daySets.length];
+        }
       }
 
       allItems.push({
