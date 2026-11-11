@@ -773,6 +773,54 @@ export const apiClient = {
     };
   },
 
+  // Auth: Firebase Customer Login (Google & Facebook)
+  async firebaseLogin(payload: {
+    uid: string;
+    email?: string | null;
+    name?: string | null;
+    avatarUrl?: string | null;
+    provider?: string;
+  }): Promise<{ success: boolean; user?: User; shopId?: string; token?: string; error?: string }> {
+    try {
+      const res = await fetch('/api/auth/firebase-login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (res.ok) {
+        const ct = res.headers.get('content-type') || '';
+        if (ct.includes('application/json')) {
+          const data = await res.json();
+          if (data && data.token) {
+            localStorage.setItem(TOKEN_KEY, data.token);
+            localStorage.setItem('burmeal_user_data', JSON.stringify(data.user));
+            return { success: true, user: data.user, shopId: data.shopId, token: data.token };
+          }
+        }
+      }
+    } catch {}
+
+    // Fallback in-memory/localStorage
+    const db = getLocalDb();
+    let user = db.users.find((u) => u.id === payload.uid || (payload.email && u.email === payload.email));
+    if (!user) {
+      user = {
+        id: payload.uid,
+        email: payload.email || `${payload.uid}@customer.burmeal.com`,
+        name: payload.name || 'Customer',
+        role: 'CUSTOMER',
+        avatarUrl: payload.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${payload.uid}`,
+        createdAt: new Date().toISOString(),
+      };
+      db.users.push(user);
+      saveLocalDb(db);
+    }
+    const token = 'tok_' + user.id;
+    localStorage.setItem(TOKEN_KEY, token);
+    localStorage.setItem('burmeal_user_data', JSON.stringify(user));
+    return { success: true, user, token };
+  },
+
   // Auth: Register (Supports both CUSTOMER and SHOP_OWNER on Vercel without server error)
   async register(formData: any): Promise<{ success: boolean; user?: User; shopId?: string; token?: string; error?: string }> {
     try {

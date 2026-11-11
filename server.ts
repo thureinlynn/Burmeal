@@ -169,6 +169,61 @@ app.post('/api/auth/login', (req: Request, res: Response) => {
   }
 });
 
+// 2b. Auth: Firebase Login (Google & Facebook for User/Customer only)
+app.post('/api/auth/firebase-login', (req: Request, res: Response) => {
+  try {
+    const { uid, email, name, avatarUrl, provider } = req.body;
+    if (!uid) {
+      return res.status(400).json({ error: 'Firebase UID required' });
+    }
+
+    // Check if user already exists
+    let user = db.prepare('SELECT * FROM users WHERE id = ? OR (email = ? AND email != "")').get(uid, email || '') as any;
+    const now = new Date().toISOString();
+
+    if (!user) {
+      // Create user with strict CUSTOMER role (not Shop)
+      const cleanEmail = email || `${uid}@customer.burmeal.com`;
+      const cleanName = name || (provider?.includes('google') ? 'Google Customer' : 'Facebook Customer');
+      const dummyHash = bcrypt.hashSync(crypto.randomBytes(16).toString('hex'), 10);
+      db.prepare(`
+        INSERT INTO users (id, email, password_hash, name, role, avatar_url, created_at)
+        VALUES (?, ?, ?, ?, 'CUSTOMER', ?, ?)
+      `).run(uid, cleanEmail, dummyHash, cleanName, avatarUrl || null, now);
+
+      user = {
+        id: uid,
+        email: cleanEmail,
+        name: cleanName,
+        role: 'CUSTOMER',
+        avatar_url: avatarUrl,
+      };
+    }
+
+    const token = 'tok_' + crypto.randomBytes(24).toString('hex');
+    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+    db.prepare(`
+      INSERT INTO sessions (token, user_id, expires_at)
+      VALUES (?, ?, ?)
+    `).run(token, user.id, expiresAt);
+
+    return res.json({
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        avatarUrl: user.avatar_url,
+      },
+      token,
+      shopId: null,
+    });
+  } catch (err) {
+    console.error('Firebase login error:', err);
+    return res.status(500).json({ error: 'Failed to process Firebase login' });
+  }
+});
+
 // 3. Auth: Current Session
 app.get('/api/auth/me', (req: Request, res: Response) => {
   const user = getAuthenticatedUser(req);

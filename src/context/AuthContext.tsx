@@ -1,6 +1,14 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User } from '../types';
 import { apiClient } from '../services/apiClient';
+import {
+  auth,
+  googleProvider,
+  facebookProvider,
+  signInWithPopup,
+  signOut as firebaseSignOut,
+  onAuthStateChanged,
+} from '../firebase';
 
 interface AuthContextType {
   user: User | null;
@@ -8,6 +16,8 @@ interface AuthContextType {
   shopId: string | null;
   isLoading: boolean;
   login: (email: string, password?: string) => Promise<{ success: boolean; error?: string }>;
+  loginWithGoogle: () => Promise<{ success: boolean; error?: string }>;
+  loginWithFacebook: () => Promise<{ success: boolean; error?: string }>;
   register: (data: any) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
   switchDemoRole: (role: 'CUSTOMER' | 'SHOP_OWNER' | 'ADMIN') => Promise<void>;
@@ -101,7 +111,66 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  // Customer Firebase Google Sign-In
+  const loginWithGoogle = async () => {
+    try {
+      const result = await signInWithPopup(auth, googleProvider);
+      const fbUser = result.user;
+      const res = await apiClient.firebaseLogin({
+        uid: fbUser.uid,
+        email: fbUser.email,
+        name: fbUser.displayName,
+        avatarUrl: fbUser.photoURL,
+        provider: 'google.com',
+      });
+      if (res.success && res.user) {
+        setUser(res.user);
+        if (res.token) {
+          setToken(res.token);
+          localStorage.setItem('burmeal_token', res.token);
+        }
+        setShopId(null);
+        return { success: true };
+      }
+      return { success: false, error: res.error || 'Google sign-in failed' };
+    } catch (err: any) {
+      console.warn('Google popup error:', err);
+      return { success: false, error: err.message || 'Google sign-in popup closed or cancelled' };
+    }
+  };
+
+  // Customer Firebase Facebook Sign-In
+  const loginWithFacebook = async () => {
+    try {
+      const result = await signInWithPopup(auth, facebookProvider);
+      const fbUser = result.user;
+      const res = await apiClient.firebaseLogin({
+        uid: fbUser.uid,
+        email: fbUser.email,
+        name: fbUser.displayName,
+        avatarUrl: fbUser.photoURL,
+        provider: 'facebook.com',
+      });
+      if (res.success && res.user) {
+        setUser(res.user);
+        if (res.token) {
+          setToken(res.token);
+          localStorage.setItem('burmeal_token', res.token);
+        }
+        setShopId(null);
+        return { success: true };
+      }
+      return { success: false, error: res.error || 'Facebook sign-in failed' };
+    } catch (err: any) {
+      console.warn('Facebook popup error:', err);
+      return { success: false, error: err.message || 'Facebook sign-in popup closed or cancelled' };
+    }
+  };
+
   const logout = async () => {
+    try {
+      await firebaseSignOut(auth);
+    } catch {}
     setUser(null);
     setToken(null);
     setShopId(null);
@@ -126,6 +195,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         shopId,
         isLoading,
         login,
+        loginWithGoogle,
+        loginWithFacebook,
         register,
         logout,
         switchDemoRole,

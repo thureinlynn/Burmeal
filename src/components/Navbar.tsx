@@ -257,24 +257,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   <LogOut className="w-4 h-4" />
                 </button>
               </div>
-            ) : (
-              /* Segmented login buttons for tablet and desktop */
-              <div className="hidden sm:flex items-center bg-white/45 dark:bg-stone-850/50 backdrop-blur-md p-0.5 rounded-xl border border-white/60 dark:border-white/10 shadow-2xs text-xs">
-                <button
-                  onClick={() => onOpenAuth('CUSTOMER')}
-                  className="px-2.5 py-1 text-xs font-medium text-stone-700 dark:text-stone-300 hover:text-stone-900 dark:hover:text-white rounded"
-                >
-                  {t.customerRole}
-                </button>
-                <span className="text-stone-300 dark:text-stone-600">|</span>
-                <button
-                  onClick={() => onOpenAuth('SHOP_OWNER')}
-                  className="px-2.5 py-1 text-xs font-bold text-amber-700 dark:text-amber-400 hover:text-amber-800 rounded"
-                >
-                  {t.shopRole}
-                </button>
-              </div>
-            )}
+            ) : null}
           </div>
         </div>
       </div>

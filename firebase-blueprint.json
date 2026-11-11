@@ -1,0 +1,114 @@
+{
+  "entities": {
+    "user": {
+      "title": "User",
+      "description": "Registered customer or shop owner account profile",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "email": { "type": "string", "maxLength": 256 },
+        "name": { "type": "string", "maxLength": 120 },
+        "role": { "type": "string", "enum": ["CUSTOMER", "SHOP_OWNER", "ADMIN"] },
+        "avatarUrl": { "type": "string", "maxLength": 1000 },
+        "createdAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "email", "name", "role", "createdAt"]
+    },
+    "shop": {
+      "title": "Shop",
+      "description": "Artisan culinary shop profile and contact information",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "ownerId": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 160 },
+        "bio": { "type": "string", "maxLength": 1000 },
+        "coverImage": { "type": "string", "maxLength": 1000 },
+        "avatarImage": { "type": "string", "maxLength": 1000 },
+        "status": { "type": "string", "enum": ["PENDING", "APPROVED", "REJECTED"] },
+        "cuisineType": { "type": "string", "maxLength": 100 },
+        "locationArea": { "type": "string", "maxLength": 200 },
+        "country": { "type": "string", "maxLength": 100 },
+        "region": { "type": "string", "maxLength": 100 },
+        "city": { "type": "string", "maxLength": 100 },
+        "address": { "type": "string", "maxLength": 300 },
+        "whatsappPhone": { "type": "string", "maxLength": 50 },
+        "viberPhone": { "type": "string", "maxLength": 50 },
+        "lineId": { "type": "string", "maxLength": 100 },
+        "facebookUrl": { "type": "string", "maxLength": 500 },
+        "phoneNumber": { "type": "string", "maxLength": 50 },
+        "createdAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "ownerId", "name", "status", "cuisineType", "country", "createdAt"]
+    },
+    "menuItem": {
+      "title": "MenuItem",
+      "description": "Culinary menu offering categorized into Daily Special, Weekly Rotating, or Master Menu",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "shopId": { "type": "string", "maxLength": 128 },
+        "shopName": { "type": "string", "maxLength": 160 },
+        "shopCountry": { "type": "string", "maxLength": 100 },
+        "shopRegion": { "type": "string", "maxLength": 100 },
+        "shopCity": { "type": "string", "maxLength": 100 },
+        "country": { "type": "string", "maxLength": 100 },
+        "title": { "type": "string", "maxLength": 160 },
+        "description": { "type": "string", "maxLength": 1000 },
+        "image": { "type": "string", "maxLength": 1000 },
+        "price": { "type": "number" },
+        "category": { "type": "string", "maxLength": 100 },
+        "menuType": { "type": "string", "enum": ["SPECIAL", "WEEKLY", "PERMANENT"] },
+        "isVegetarian": { "type": "boolean" },
+        "isHalal": { "type": "boolean" },
+        "specialDate": { "type": "string", "maxLength": 32 },
+        "createdAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "shopId", "title", "price", "category", "menuType", "createdAt"]
+    },
+    "savedItem": {
+      "title": "SavedItem",
+      "description": "Bookmarked menu dish for a customer",
+      "type": "object",
+      "properties": {
+        "customerId": { "type": "string", "maxLength": 128 },
+        "itemId": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["customerId", "itemId", "createdAt"]
+    },
+    "follow": {
+      "title": "Follow",
+      "description": "Follow relationship linking customer to a shop",
+      "type": "object",
+      "properties": {
+        "customerId": { "type": "string", "maxLength": 128 },
+        "shopId": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["customerId", "shopId", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "user",
+      "description": "User profiles indexed by UID"
+    },
+    "/shops/{shopId}": {
+      "schema": "shop",
+      "description": "Approved and pending shop listings"
+    },
+    "/menu_items/{itemId}": {
+      "schema": "menuItem",
+      "description": "Menu items across shops"
+    },
+    "/saved_items/{savedId}": {
+      "schema": "savedItem",
+      "description": "Saved dishes bookmarked by customers"
+    },
+    "/follows/{followId}": {
+      "schema": "follow",
+      "description": "Followed shop relations"
+    }
+  }
+}

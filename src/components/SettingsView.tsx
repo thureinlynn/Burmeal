@@ -16,9 +16,6 @@ import {
   Store,
   LogOut,
   User,
-  Search,
-  ExternalLink,
-  Sparkles,
 } from 'lucide-react';
 
 export const SettingsView: React.FC = () => {
@@ -238,83 +235,6 @@ export const SettingsView: React.FC = () => {
           </div>
         </div>
       )}
-
-      {/* 6. SEO, Google Search Console & Domain Settings */}
-      <div className="bg-white dark:bg-stone-900 rounded-2xl border border-stone-200 dark:border-stone-800 p-5 shadow-xs space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-sm font-bold font-display text-stone-900 dark:text-stone-100 flex items-center gap-2">
-            <Search className="w-4 h-4 text-amber-600" />
-            <span>SEO &amp; Google Search Console</span>
-          </h2>
-          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
-            SEO Ready
-          </span>
-        </div>
-
-        <p className="text-xs text-stone-600 dark:text-stone-400 leading-relaxed">
-          Configured for the global Myanmar (Burmese) diaspora searching for authentic motherland cooking and home kitchens in the US, UK, EU, Japan, Australia, and Singapore.
-        </p>
-
-        <div className="space-y-2.5 text-xs">
-          <div className="p-3 bg-stone-50 dark:bg-stone-850 rounded-xl border border-stone-200 dark:border-stone-750 flex items-center justify-between gap-2">
-            <div>
-              <span className="text-[10px] uppercase font-bold text-stone-400 block">Production Domain</span>
-              <a
-                href="https://burmeal.astronerd.me"
-                target="_blank"
-                rel="noreferrer"
-                className="font-bold text-amber-700 dark:text-amber-400 hover:underline inline-flex items-center gap-1 mt-0.5"
-              >
-                <span>https://burmeal.astronerd.me</span>
-                <ExternalLink className="w-3 h-3" />
-              </a>
-            </div>
-            <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300">
-              Primary Host
-            </span>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-            <div className="p-2.5 bg-stone-50 dark:bg-stone-850 rounded-xl border border-stone-200/80 dark:border-stone-750">
-              <span className="text-[10px] uppercase font-bold text-stone-400 block">Sitemap XML</span>
-              <a
-                href="https://burmeal.astronerd.me/sitemap.xml"
-                target="_blank"
-                rel="noreferrer"
-                className="text-[11px] font-semibold text-stone-700 dark:text-stone-300 hover:text-amber-600 flex items-center gap-1 mt-0.5 truncate"
-              >
-                <span className="truncate">/sitemap.xml</span>
-                <ExternalLink className="w-3 h-3 shrink-0" />
-              </a>
-            </div>
-
-            <div className="p-2.5 bg-stone-50 dark:bg-stone-850 rounded-xl border border-stone-200/80 dark:border-stone-750">
-              <span className="text-[10px] uppercase font-bold text-stone-400 block">Robots Protocol</span>
-              <a
-                href="https://burmeal.astronerd.me/robots.txt"
-                target="_blank"
-                rel="noreferrer"
-                className="text-[11px] font-semibold text-stone-700 dark:text-stone-300 hover:text-amber-600 flex items-center gap-1 mt-0.5 truncate"
-              >
-                <span className="truncate">/robots.txt</span>
-                <ExternalLink className="w-3 h-3 shrink-0" />
-              </a>
-            </div>
-          </div>
-
-          {/* Operational Model Insight */}
-          <div className="p-3 bg-amber-500/10 dark:bg-amber-950/40 rounded-xl border border-amber-300/50 dark:border-amber-800/50 text-[11px] text-stone-700 dark:text-stone-300">
-            <div className="flex items-center gap-1.5 font-bold text-amber-800 dark:text-amber-300 mb-1">
-              <Sparkles className="w-3.5 h-3.5 text-amber-600" />
-              <span>Platform Insight: Direct Cook Contact &amp; Kitchen Pick-Up</span>
-            </div>
-            <p className="leading-relaxed">
-              BurMeal operates as a community discovery bridge. Customers contact home cooks directly via WhatsApp, Viber, or phone to confirm meal orders, and pick them up at the kitchen address.
-            </p>
-          </div>
-        </div>
-      </div>
-
       {/* App Info Footer */}
       <div className="text-center text-xs text-stone-400 dark:text-stone-500 pt-2 flex items-center justify-center gap-1.5">
         <Info className="w-3.5 h-3.5" />

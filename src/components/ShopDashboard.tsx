@@ -5,7 +5,6 @@ import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { COUNTRIES, getCountryFlag, getCurrencyForCountry } from '../utils/countries';
-import { CreativeCountryFlagBackground } from './CreativeCountryFlagBackground';
 import {
   LayoutDashboard,
   UtensilsCrossed,
@@ -344,11 +343,8 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
   return (
     <div className="space-y-6">
       {/* Top Banner Status Bar with Live Store Open/Closed Toggle & 3 Tab Selector */}
-      <div className="relative overflow-hidden rounded-2xl border border-white/60 dark:border-white/10 p-4 sm:p-5 shadow-lg backdrop-blur-md transition-all">
-        {/* Creative Blurry Country Flag Background based on shop's country */}
-        <CreativeCountryFlagBackground country={shopCountry} />
-
-        <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+      <div className="bg-white dark:bg-stone-900 rounded-2xl border border-stone-200 dark:border-stone-800 p-4 sm:p-5 shadow-xs transition-colors">
+        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
           <div className="flex items-center gap-3.5">
           <img
             src={shop.avatarImage}
@@ -454,8 +450,8 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
             </button>
           </div>
         </div>
-        </div>
       </div>
+    </div>
 
       {/* ================= TAB 1: "HOME" (OVERVIEW & SALES INSIGHTS) ================= */}
       {currentTab === 'shop_overview' && (() => {

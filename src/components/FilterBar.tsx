@@ -1,9 +1,7 @@
 import React from 'react';
 import { MenuType } from '../types';
 import { useLanguage } from '../context/LanguageContext';
-import { useLocation } from '../context/LocationContext';
-import { CreativeCountryFlagBackground } from './CreativeCountryFlagBackground';
-import { Search, Sparkles, Leaf, ShieldCheck, X } from 'lucide-react';
+import { Search, Leaf, ShieldCheck, X } from 'lucide-react';
 
 interface FilterBarProps {
   searchQuery: string;
@@ -33,14 +31,10 @@ export const FilterBar: React.FC<FilterBarProps> = ({
   onCategoryChange,
 }) => {
   const { t } = useLanguage();
-  const { selectedCountry } = useLocation();
 
   return (
-    <div className="relative overflow-hidden border border-white/70 dark:border-white/15 rounded-2xl p-3 sm:p-4 shadow-lg backdrop-blur-md transition-all duration-500">
-      {/* Dynamic Creative Blurry Flag Background according to selected country */}
-      <CreativeCountryFlagBackground country={selectedCountry} />
-
-      <div className="relative z-10 space-y-3">
+    <div className="bg-white/90 dark:bg-stone-900/90 backdrop-blur-md rounded-2xl border border-stone-200/90 dark:border-stone-800/90 p-3 sm:p-4 shadow-xs transition-colors">
+      <div className="space-y-3">
         {/* Search Input */}
         <div className="relative">
           <Search className="w-4 h-4 text-stone-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
@@ -146,7 +140,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
           </button>
         </div>
       </div>
-      </div>
     </div>
-  );
+  </div>
+);
 };
