@@ -169,7 +169,7 @@ app.post('/api/auth/login', (req: Request, res: Response) => {
   }
 });
 
-// 2b. Auth: Firebase Login (Google & Facebook for User/Customer only)
+// 2b. Auth: Firebase Login (Google for User/Customer only)
 app.post('/api/auth/firebase-login', (req: Request, res: Response) => {
   try {
     const { uid, email, name, avatarUrl, provider } = req.body;
@@ -184,7 +184,7 @@ app.post('/api/auth/firebase-login', (req: Request, res: Response) => {
     if (!user) {
       // Create user with strict CUSTOMER role (not Shop)
       const cleanEmail = email || `${uid}@customer.burmeal.com`;
-      const cleanName = name || (provider?.includes('google') ? 'Google Customer' : 'Facebook Customer');
+      const cleanName = name || 'Google Customer';
       const dummyHash = bcrypt.hashSync(crypto.randomBytes(16).toString('hex'), 10);
       db.prepare(`
         INSERT INTO users (id, email, password_hash, name, role, avatar_url, created_at)

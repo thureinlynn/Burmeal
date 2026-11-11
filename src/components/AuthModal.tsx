@@ -2,7 +2,20 @@ import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { COUNTRIES, getCountryFlag } from '../utils/countries';
-import { X, Lock, Mail, User, Store, ArrowRight, ShieldCheck, MapPin } from 'lucide-react';
+import {
+  X,
+  Lock,
+  Mail,
+  User,
+  Store,
+  ArrowRight,
+  ShieldCheck,
+  MapPin,
+  Copy,
+  Check,
+  ExternalLink,
+  AlertTriangle,
+} from 'lucide-react';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -15,7 +28,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   onClose,
   defaultRole = 'CUSTOMER',
 }) => {
-  const { login, register, loginWithGoogle, loginWithFacebook } = useAuth();
+  const { login, register, loginWithGoogle, switchDemoRole } = useAuth();
   const { t } = useLanguage();
 
   const [isSignUp, setIsSignUp] = useState(false);
@@ -34,6 +47,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [country, setCountry] = useState('Myanmar');
 
   const [error, setError] = useState<string | null>(null);
+  const [errorDetails, setErrorDetails] = useState<{
+    code?: string;
+    message: string;
+  } | null>(null);
+  const [copiedDomain, setCopiedDomain] = useState(false);
   const [loading, setLoading] = useState(false);
 
   if (!isOpen) return null;
@@ -41,6 +59,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setErrorDetails(null);
     setLoading(true);
 
     try {
@@ -91,7 +110,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           <div className="flex rounded-xl bg-stone-100 dark:bg-stone-800 p-1 border border-stone-200 dark:border-stone-700">
             <button
               type="button"
-              onClick={() => setRole('CUSTOMER')}
+              onClick={() => {
+                setRole('CUSTOMER');
+                setError(null);
+                setErrorDetails(null);
+              }}
               className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${
                 role === 'CUSTOMER'
                   ? 'bg-white dark:bg-stone-700 text-stone-900 dark:text-stone-100 shadow-xs'
@@ -102,7 +125,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             </button>
             <button
               type="button"
-              onClick={() => setRole('SHOP_OWNER')}
+              onClick={() => {
+                setRole('SHOP_OWNER');
+                setError(null);
+                setErrorDetails(null);
+              }}
               className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${
                 role === 'SHOP_OWNER'
                   ? 'bg-amber-600 text-white shadow-xs'
@@ -123,13 +150,84 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             : 'Access your dedicated Shop Dashboard to manage daily/weekly specials.'}
         </p>
 
-        {error && (
+        {/* Diagnostic Error Panel or Standard Error */}
+        {errorDetails?.code === 'auth/unauthorized-domain' ? (
+          <div className="mb-4 p-3.5 bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 rounded-xl text-stone-900 dark:text-stone-100 space-y-2.5">
+            <div className="flex items-start gap-2.5">
+              <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+              <div>
+                <h4 className="text-xs font-bold text-amber-900 dark:text-amber-200">
+                  Firebase Domain Authorization Required
+                </h4>
+                <p className="text-[11px] text-amber-800/90 dark:text-amber-300/90 mt-0.5 leading-relaxed">
+                  Firebase Authentication requires your current preview origin to be added to the Authorized Domains list before Google popups are permitted.
+                </p>
+              </div>
+            </div>
+
+            {/* Current Hostname with Copy Button */}
+            <div className="p-2 bg-white dark:bg-stone-900 rounded-lg border border-amber-200 dark:border-amber-800/60 flex items-center justify-between gap-2">
+              <div className="min-w-0 flex-1">
+                <span className="text-[10px] uppercase font-bold text-stone-400 block">Host to authorize</span>
+                <code className="text-[11px] font-mono font-semibold text-stone-800 dark:text-stone-200 truncate block">
+                  {typeof window !== 'undefined' ? window.location.hostname : 'preview domain'}
+                </code>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  if (typeof window !== 'undefined') {
+                    navigator.clipboard.writeText(window.location.hostname);
+                    setCopiedDomain(true);
+                    setTimeout(() => setCopiedDomain(false), 2500);
+                  }
+                }}
+                className="px-2.5 py-1.5 bg-amber-100 hover:bg-amber-200 dark:bg-amber-900/60 dark:hover:bg-amber-900 text-amber-900 dark:text-amber-200 rounded-md text-[11px] font-bold flex items-center gap-1 shrink-0 transition-colors cursor-pointer"
+              >
+                {copiedDomain ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                <span>{copiedDomain ? 'Copied!' : 'Copy Host'}</span>
+              </button>
+            </div>
+
+            {/* Action Buttons: Open Console Settings & Quick Demo Customer Fallback */}
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 pt-1">
+              <a
+                href="https://console.firebase.google.com/project/burmeal-48966/authentication/settings"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex-1 py-1.5 px-3 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold inline-flex items-center justify-center gap-1.5 transition-colors shadow-2xs"
+              >
+                <span>Add in Firebase Console</span>
+                <ExternalLink className="w-3 h-3" />
+              </a>
+              <button
+                type="button"
+                onClick={async () => {
+                  setError(null);
+                  setErrorDetails(null);
+                  await switchDemoRole('CUSTOMER');
+                  onClose();
+                }}
+                className="py-1.5 px-3 bg-stone-100 hover:bg-stone-200 dark:bg-stone-800 dark:hover:bg-stone-700 text-stone-800 dark:text-stone-200 rounded-lg text-xs font-semibold inline-flex items-center justify-center gap-1 transition-colors cursor-pointer"
+              >
+                <span>Demo Customer Login</span>
+              </button>
+            </div>
+          </div>
+        ) : errorDetails ? (
+          <div className="mb-4 p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 text-amber-900 dark:text-amber-200 text-xs rounded-lg flex items-start gap-2">
+            <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <p className="font-semibold">{errorDetails.message}</p>
+            </div>
+          </div>
+        ) : error ? (
           <div className="mb-4 p-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300 text-xs rounded-lg">
             {error}
           </div>
-        )}
+        ) : null}
 
-        {/* Social Authentication: Google & Facebook for User (Customer) Only */}
+        {/* Social Authentication: Google for User (Customer) Only */}
         {role === 'CUSTOMER' && (
           <div className="space-y-2 mb-4">
             <button
@@ -137,13 +235,47 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               disabled={loading}
               onClick={async () => {
                 setError(null);
+                setErrorDetails(null);
                 setLoading(true);
                 const res = await loginWithGoogle();
                 setLoading(false);
                 if (res.success) {
                   onClose();
                 } else {
-                  setError(res.error || 'Google sign-in failed');
+                  const errText = (res.error || '').toLowerCase();
+                  const code = res.errorCode || '';
+                  if (
+                    code === 'auth/unauthorized-domain' ||
+                    errText.includes('unauthorized-domain') ||
+                    errText.includes('authorized domain')
+                  ) {
+                    setErrorDetails({
+                      code: 'auth/unauthorized-domain',
+                      message: res.error || 'Domain not authorized in Firebase Console',
+                    });
+                    setError(null);
+                  } else if (
+                    code === 'auth/popup-blocked' ||
+                    errText.includes('popup-blocked')
+                  ) {
+                    setErrorDetails({
+                      code: 'auth/popup-blocked',
+                      message: 'Pop-up window was blocked by your browser. Please allow pop-ups for this site.',
+                    });
+                    setError(null);
+                  } else if (
+                    code === 'auth/operation-not-allowed' ||
+                    errText.includes('operation-not-allowed')
+                  ) {
+                    setErrorDetails({
+                      code: 'auth/operation-not-allowed',
+                      message: 'Google sign-in is not enabled in Firebase Console. Please enable it in Authentication > Sign-in method.',
+                    });
+                    setError(null);
+                  } else {
+                    setError(res.error || 'Google sign-in failed');
+                    setErrorDetails(null);
+                  }
                 }
               }}
               className="w-full py-2.5 px-4 rounded-xl border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-800 text-stone-700 dark:text-stone-200 hover:bg-stone-50 dark:hover:bg-stone-750 font-semibold text-xs flex items-center justify-center gap-2.5 transition-all shadow-2xs hover:shadow-xs active:scale-98 disabled:opacity-50 cursor-pointer"
@@ -167,28 +299,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 />
               </svg>
               <span>Continue with Google</span>
-            </button>
-
-            <button
-              type="button"
-              disabled={loading}
-              onClick={async () => {
-                setError(null);
-                setLoading(true);
-                const res = await loginWithFacebook();
-                setLoading(false);
-                if (res.success) {
-                  onClose();
-                } else {
-                  setError(res.error || 'Facebook sign-in failed');
-                }
-              }}
-              className="w-full py-2.5 px-4 rounded-xl border border-[#1877F2]/30 bg-[#1877F2] hover:bg-[#166fe5] text-white font-semibold text-xs flex items-center justify-center gap-2.5 transition-all shadow-2xs hover:shadow-xs active:scale-98 disabled:opacity-50 cursor-pointer"
-            >
-              <svg className="w-4 h-4 shrink-0 fill-current" viewBox="0 0 24 24">
-                <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
-              </svg>
-              <span>Continue with Facebook</span>
             </button>
 
             <div className="relative flex py-2 items-center">
@@ -370,6 +480,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             onClick={() => {
               setIsSignUp(!isSignUp);
               setError(null);
+              setErrorDetails(null);
             }}
             className="text-xs text-amber-700 font-semibold hover:underline"
           >

@@ -773,7 +773,7 @@ export const apiClient = {
     };
   },
 
-  // Auth: Firebase Customer Login (Google & Facebook)
+  // Auth: Firebase Customer Login (Google)
   async firebaseLogin(payload: {
     uid: string;
     email?: string | null;
