@@ -4,6 +4,14 @@ import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import path from 'path';
 import { db, initDb } from './src/server/db.js';
+import {
+  syncShopToFirestore,
+  syncMenuItemToFirestore,
+  deleteMenuItemFromFirestore,
+  syncUserToFirestore,
+  syncFollowToFirestore,
+  syncSavedItemToFirestore,
+} from './src/server/firestoreSync.js';
 
 initDb();
 
@@ -103,6 +111,21 @@ app.post('/api/auth/register', (req: Request, res: Response) => {
       VALUES (?, ?, ?)
     `).run(token, userId, expiresAt);
 
+    // Sync newly registered user to Firestore
+    syncUserToFirestore({
+      id: userId,
+      email,
+      name,
+      role: assignedRole,
+      avatarUrl,
+      createdAt: now,
+    });
+
+    if (createdShopId) {
+      const shopRow = db.prepare('SELECT * FROM shops WHERE id = ?').get(createdShopId);
+      if (shopRow) syncShopToFirestore(shopRow);
+    }
+
     return res.json({
       user: {
         id: userId,
@@ -151,6 +174,16 @@ app.post('/api/auth/login', (req: Request, res: Response) => {
       INSERT INTO sessions (token, user_id, expires_at)
       VALUES (?, ?, ?)
     `).run(token, user.id, expiresAt);
+
+    // Sync logged in user profile to Firestore
+    syncUserToFirestore({
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      role: user.role,
+      avatarUrl: user.avatar_url,
+      createdAt: user.created_at,
+    });
 
     return res.json({
       user: {
@@ -206,6 +239,14 @@ app.post('/api/auth/firebase-login', (req: Request, res: Response) => {
       INSERT INTO sessions (token, user_id, expires_at)
       VALUES (?, ?, ?)
     `).run(token, user.id, expiresAt);
+
+    syncUserToFirestore({
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      role: user.role,
+      avatarUrl: user.avatar_url,
+    });
 
     return res.json({
       user: {
@@ -500,6 +541,9 @@ app.put('/api/shops/:id', (req: Request, res: Response) => {
       req.params.id
     );
 
+    const updatedShop = db.prepare('SELECT * FROM shops WHERE id = ?').get(req.params.id);
+    if (updatedShop) syncShopToFirestore(updatedShop);
+
     return res.json({ success: true, message: 'Shop profile updated successfully.' });
   } catch (err) {
     console.error('Error updating shop:', err);
@@ -521,6 +565,10 @@ app.patch('/api/admin/shops/:id/status', (req: Request, res: Response) => {
     }
 
     db.prepare('UPDATE shops SET status = ? WHERE id = ?').run(status, req.params.id);
+
+    const updatedShop = db.prepare('SELECT * FROM shops WHERE id = ?').get(req.params.id);
+    if (updatedShop) syncShopToFirestore(updatedShop);
+
     return res.json({ success: true, status });
   } catch (err) {
     console.error('Admin status update error:', err);
@@ -715,6 +763,9 @@ app.post('/api/menu-items', (req: Request, res: Response) => {
       now
     );
 
+    const createdItem = db.prepare('SELECT * FROM menu_items WHERE id = ?').get(itemId);
+    if (createdItem) syncMenuItemToFirestore(createdItem, shop);
+
     return res.json({ success: true, itemId });
   } catch (err) {
     console.error('Error creating menu item:', err);
@@ -772,6 +823,10 @@ app.put('/api/menu-items/:id', (req: Request, res: Response) => {
       req.params.id
     );
 
+    const updatedItem = db.prepare('SELECT * FROM menu_items WHERE id = ?').get(req.params.id);
+    const shop = db.prepare('SELECT * FROM shops WHERE id = ?').get(existing.shop_id);
+    if (updatedItem) syncMenuItemToFirestore(updatedItem, shop);
+
     return res.json({ success: true });
   } catch (err) {
     console.error('Error updating menu item:', err);
@@ -797,6 +852,8 @@ app.delete('/api/menu-items/:id', (req: Request, res: Response) => {
     }
 
     db.prepare('DELETE FROM menu_items WHERE id = ?').run(req.params.id);
+    deleteMenuItemFromFirestore(req.params.id);
+
     return res.json({ success: true });
   } catch (err) {
     console.error('Error deleting menu item:', err);
@@ -815,9 +872,11 @@ app.post('/api/shops/:id/follow', (req: Request, res: Response) => {
 
     if (existing) {
       db.prepare('DELETE FROM follows WHERE customer_id = ? AND shop_id = ?').run(user.id, shopId);
+      syncFollowToFirestore(user.id, shopId, false);
       return res.json({ followed: false });
     } else {
       db.prepare('INSERT INTO follows (customer_id, shop_id, created_at) VALUES (?, ?, ?)').run(user.id, shopId, new Date().toISOString());
+      syncFollowToFirestore(user.id, shopId, true);
       return res.json({ followed: true });
     }
   } catch (err) {
@@ -837,9 +896,11 @@ app.post('/api/menu-items/:id/save', (req: Request, res: Response) => {
 
     if (existing) {
       db.prepare('DELETE FROM saved_items WHERE customer_id = ? AND item_id = ?').run(user.id, itemId);
+      syncSavedItemToFirestore(user.id, itemId, false);
       return res.json({ saved: false });
     } else {
       db.prepare('INSERT INTO saved_items (customer_id, item_id, created_at) VALUES (?, ?, ?)').run(user.id, itemId, new Date().toISOString());
+      syncSavedItemToFirestore(user.id, itemId, true);
       return res.json({ saved: true });
     }
   } catch (err) {
@@ -898,7 +959,7 @@ async function startServer() {
 
   if (!isProduction) {
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: { middlewareMode: true, hmr: false },
       appType: 'spa',
     });
     app.use(vite.middlewares);

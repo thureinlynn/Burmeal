@@ -5,6 +5,9 @@ import {
   signInWithPopup,
   signOut as firebaseSignOut,
   onAuthStateChanged,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  updateProfile,
   User as FirebaseUser,
 } from 'firebase/auth';
 import {
@@ -13,11 +16,15 @@ import {
   getDoc,
   getDocFromServer,
   setDoc,
+  updateDoc,
+  deleteDoc,
   collection,
   query,
   where,
+  orderBy,
   getDocs,
   onSnapshot,
+  writeBatch,
   serverTimestamp,
 } from 'firebase/firestore';
 
@@ -25,6 +32,22 @@ export {
   signInWithPopup,
   firebaseSignOut as signOut,
   onAuthStateChanged,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  updateProfile,
+  doc,
+  getDoc,
+  getDocs,
+  setDoc,
+  updateDoc,
+  deleteDoc,
+  collection,
+  query,
+  where,
+  orderBy,
+  onSnapshot,
+  writeBatch,
+  serverTimestamp,
   type FirebaseUser,
 };
 
@@ -81,7 +104,7 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
       emailVerified: auth.currentUser?.emailVerified,
       isAnonymous: auth.currentUser?.isAnonymous,
       providerInfo:
-        auth.currentUser?.providerData?.map((p) => ({
+        auth.currentUser?.providerData?.map((p: any) => ({
           providerId: p.providerId,
           email: p.email,
         })) || [],

@@ -4,6 +4,7 @@ import { useLanguage } from './context/LanguageContext';
 import { useLocation } from './context/LocationContext';
 import { MenuItem, Shop, MenuType } from './types';
 import { apiClient } from './services/apiClient';
+import { firestoreService } from './services/firestoreService';
 import { Navbar } from './components/Navbar';
 import { BottomNav } from './components/BottomNav';
 import { FilterBar } from './components/FilterBar';
@@ -289,6 +290,17 @@ export default function App() {
     if (!token) return;
     try {
       await apiClient.createMenuItem(data, token);
+      try {
+        await firestoreService.createMenuItem({
+          ...data,
+          shopName: ownerShop?.name || '',
+          shopCountry: ownerShop?.country || '',
+          shopRegion: ownerShop?.region || '',
+          shopCity: ownerShop?.city || '',
+        });
+      } catch (fbErr) {
+        console.warn('Direct Firestore item write notice:', fbErr);
+      }
       await loadOwnerData();
       await loadMenuItems();
     } catch (err) {
@@ -300,6 +312,11 @@ export default function App() {
     if (!token) return;
     try {
       await apiClient.updateMenuItem(id, data, token);
+      try {
+        await firestoreService.updateMenuItem(id, data);
+      } catch (fbErr) {
+        console.warn('Direct Firestore item update notice:', fbErr);
+      }
       await loadOwnerData();
       await loadMenuItems();
     } catch (err) {
@@ -311,6 +328,11 @@ export default function App() {
     if (!token) return;
     try {
       await apiClient.deleteMenuItem(id, token);
+      try {
+        await firestoreService.deleteMenuItem(id);
+      } catch (fbErr) {
+        console.warn('Direct Firestore item delete notice:', fbErr);
+      }
       await loadOwnerData();
       await loadMenuItems();
     } catch (err) {

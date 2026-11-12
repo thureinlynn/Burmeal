@@ -3,6 +3,16 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script>
+      // Suppress benign HMR WebSocket connection failure in container proxy environments
+      window.addEventListener('unhandledrejection', function(event) {
+        var reason = event && event.reason;
+        var msg = reason ? (reason.message || String(reason)) : '';
+        if (msg.indexOf('WebSocket') !== -1 || msg.indexOf('websocket') !== -1) {
+          event.preventDefault();
+        }
+      });
+    </script>
     <title>BurMeal – Authentic Burmese Home Cooking & Motherland Food</title>
     <meta name="description" content="Connect with Burmese home cooks abroad. Discover authentic Myanmar home cooking, daily specials, Mohinga, and regional delicacies with direct contact and kitchen pick-up." />
     <meta name="keywords" content="Burmese food abroad, Myanmar home cooking, Burmese home chefs, Mohinga, Ohn No Khao Swe, Burmese diaspora food, authentic Myanmar cuisine, buy motherland food, sell home cooking, Burmese food USA, Burmese food UK, Myanmar food Japan, Myanmar food Australia, Burmese food EU, kitchen pick up food" />
