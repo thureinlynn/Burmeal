@@ -6,7 +6,6 @@ import {
   UtensilsCrossed,
   ShieldAlert,
   Store,
-  LogOut,
   Heart,
   Bookmark,
   User,
@@ -31,7 +30,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenAuth,
   hasFollowedShops,
 }) => {
-  const { user, logout, switchDemoRole } = useAuth();
+  const { user } = useAuth();
   const { t } = useLanguage();
   const { theme, toggleTheme } = useTheme();
   const { selectedCountry, selectedRegionName, selectedFlag, openLocationModal } = useLocation();
@@ -207,55 +206,18 @@ export const Navbar: React.FC<NavbarProps> = ({
               )}
             </button>
 
-            {/* Quick Demo Switcher (Desktop only) */}
-            <div className="hidden xl:flex items-center bg-white/45 dark:bg-stone-850/50 backdrop-blur-md rounded-xl p-0.5 border border-white/60 dark:border-white/10 shadow-2xs text-xs">
-              <button
-                onClick={() => switchDemoRole('CUSTOMER')}
-                className={`px-2 py-1 rounded-lg transition-all ${
-                  user?.role === 'CUSTOMER' ? 'bg-white dark:bg-stone-700 font-bold text-stone-900 dark:text-stone-100 shadow-xs' : 'text-stone-500 hover:text-stone-800 dark:hover:text-stone-200'
-                }`}
-              >
-                {t.customerRole}
-              </button>
-              <button
-                onClick={() => switchDemoRole('SHOP_OWNER')}
-                className={`px-2 py-1 rounded-lg transition-all ${
-                  user?.role === 'SHOP_OWNER' ? 'bg-white dark:bg-stone-700 font-bold text-stone-900 dark:text-stone-100 shadow-xs' : 'text-stone-500 hover:text-stone-800 dark:hover:text-stone-200'
-                }`}
-              >
-                {t.shopRole}
-              </button>
-              <button
-                onClick={() => switchDemoRole('ADMIN')}
-                className={`px-2 py-1 rounded-lg transition-all ${
-                  user?.role === 'ADMIN' ? 'bg-white dark:bg-stone-700 font-bold text-stone-900 dark:text-stone-100 shadow-xs' : 'text-stone-500 hover:text-stone-800 dark:hover:text-stone-200'
-                }`}
-              >
-                {t.adminRole}
-              </button>
-            </div>
-
-            {/* User Account / Combined Login Button for Mobile & Desktop */}
+            {/* User Account Badge for Mobile & Desktop */}
             {user ? (
-              <div className="flex items-center gap-1.5">
-                <div className="flex items-center gap-1.5 px-2 py-1 bg-white/50 dark:bg-stone-850/60 backdrop-blur-md border border-white/60 dark:border-white/10 rounded-xl shadow-2xs">
-                  <img
-                    src={user.avatarUrl || 'https://api.dicebear.com/7.x/avataaars/svg?seed=user'}
-                    alt={user.name}
-                    className="w-5 h-5 sm:w-6 sm:h-6 rounded-full object-cover"
-                    referrerPolicy="no-referrer"
-                  />
-                  <span className="hidden sm:inline text-xs font-semibold text-stone-900 dark:text-stone-100 truncate max-w-[80px]">
-                    {user.name}
-                  </span>
-                </div>
-                <button
-                  onClick={() => logout()}
-                  title={t.signOut}
-                  className="p-1.5 sm:p-2 text-stone-500 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100 hover:bg-white/60 dark:hover:bg-stone-800/60 rounded-xl transition-colors"
-                >
-                  <LogOut className="w-4 h-4" />
-                </button>
+              <div className="flex items-center gap-2 px-2.5 py-1.5 bg-white/50 dark:bg-stone-850/60 backdrop-blur-md border border-white/60 dark:border-white/10 rounded-xl shadow-2xs">
+                <img
+                  src={user.avatarUrl || 'https://api.dicebear.com/7.x/avataaars/svg?seed=user'}
+                  alt={user.name}
+                  className="w-5 h-5 sm:w-6 sm:h-6 rounded-full object-cover"
+                  referrerPolicy="no-referrer"
+                />
+                <span className="hidden sm:inline text-xs font-semibold text-stone-900 dark:text-stone-100 truncate max-w-[100px]">
+                  {user.name}
+                </span>
               </div>
             ) : null}
           </div>
