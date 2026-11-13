@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Shop } from '../types';
 import { Store, MessageCircle, Heart, MapPin } from 'lucide-react';
 import { buildContactLinks } from '../utils/filter';
 import { getCountryFlag } from '../utils/countries';
+import { resolveCoverDesign, pickRandomFoodCoverDesign, buildShopCoverSeed } from '../utils/coverDesigns';
 import { useLanguage } from '../context/LanguageContext';
 
 interface ShopCardProps {
@@ -23,15 +24,24 @@ export const ShopCard: React.FC<ShopCardProps> = ({ shop, onFollowToggle, onSele
   });
 
   const countryFlag = getCountryFlag(shop.country);
+  const coverSeed = buildShopCoverSeed(shop.id, shop.name);
+  const [coverSrc, setCoverSrc] = useState<string>(() =>
+    resolveCoverDesign(shop.coverImage, coverSeed)
+  );
+
+  useEffect(() => {
+    setCoverSrc(resolveCoverDesign(shop.coverImage, coverSeed));
+  }, [coverSeed, shop.coverImage]);
 
   return (
     <div className="bg-white dark:bg-stone-900 rounded-2xl border border-stone-200 dark:border-stone-800 overflow-hidden hover:border-amber-400 dark:hover:border-amber-500 hover:shadow-md transition-all flex flex-col group">
       {/* Cover Header */}
       <div className="relative h-36 w-full bg-stone-100 dark:bg-stone-800 overflow-hidden cursor-pointer" onClick={() => onSelectShop(shop.id)}>
         <img
-          src={shop.coverImage}
+          src={coverSrc}
           alt={shop.name}
           referrerPolicy="no-referrer"
+          onError={() => setCoverSrc((prev) => pickRandomFoodCoverDesign(prev))}
           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />

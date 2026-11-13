@@ -4,6 +4,7 @@ import { Heart, MapPin, Store, ArrowRight, MessageCircle, Phone, Clock, Utensils
 import { buildContactLinks, formatPrice } from '../utils/filter';
 import { getCountryFlag } from '../utils/countries';
 import { useLanguage } from '../context/LanguageContext';
+import { resolveCoverDesign, buildShopCoverSeed, pickRandomFoodCoverDesign } from '../utils/coverDesigns';
 
 interface FollowedShopRowProps {
   shop: Shop;
@@ -22,6 +23,12 @@ export const FollowedShopRow: React.FC<FollowedShopRowProps> = ({
 }) => {
   const { t } = useLanguage();
   const flag = getCountryFlag(shop.country);
+  const [coverSrc, setCoverSrc] = React.useState<string>(() =>
+    resolveCoverDesign(shop.coverImage, buildShopCoverSeed(shop.id, shop.name))
+  );
+  React.useEffect(() => {
+    setCoverSrc(resolveCoverDesign(shop.coverImage, buildShopCoverSeed(shop.id, shop.name)));
+  }, [shop.id, shop.name, shop.coverImage]);
 
   const contact = buildContactLinks({
     whatsappPhone: shop.whatsappPhone,
@@ -46,9 +53,10 @@ export const FollowedShopRow: React.FC<FollowedShopRowProps> = ({
             className="relative w-20 h-20 sm:w-28 sm:h-24 rounded-2xl overflow-hidden shrink-0 cursor-pointer bg-stone-100 dark:bg-stone-800 border border-stone-200 dark:border-stone-700/80 group-hover:shadow-sm transition-all"
           >
             <img
-              src={shop.coverImage}
+              src={coverSrc}
               alt={shop.name}
               referrerPolicy="no-referrer"
+              onError={() => setCoverSrc((prev) => pickRandomFoodCoverDesign(prev))}
               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
             />
             <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/20" />

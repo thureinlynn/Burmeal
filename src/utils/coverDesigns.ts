@@ -13,6 +13,24 @@ export function isDefaultCoverImage(url?: string | null): boolean {
   return url.trim() === DEFAULT_PLACEHOLDER_COVER;
 }
 
+export function hashShopSeed(seed: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < seed.length; i++) {
+    h ^= seed.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  h ^= h >>> 16;
+  h = Math.imul(h, 0x85ebca6b);
+  h ^= h >>> 13;
+  h = Math.imul(h, 0xc2b2ae35);
+  h ^= h >>> 16;
+  return h >>> 0;
+}
+
+export function buildShopCoverSeed(id?: string | null, name?: string | null): string {
+  return [id?.trim(), name?.trim()].filter(Boolean).join('|');
+}
+
 export function pickRandomFoodCoverDesign(
   excludeUrl?: string,
   randomFn: () => number = Math.random
@@ -27,12 +45,21 @@ export function pickRandomFoodCoverDesign(
   return pool[index];
 }
 
+export function pickSeededFoodCoverDesign(seed: string): string {
+  const index = hashShopSeed(seed) % GENERATED_FOOD_COVER_DESIGNS.length;
+  return GENERATED_FOOD_COVER_DESIGNS[index];
+}
+
 export function resolveCoverDesign(
   coverImage?: string | null,
+  shopSeed?: string | null,
   randomFn: () => number = Math.random
 ): string {
   if (!isDefaultCoverImage(coverImage)) {
     return (coverImage as string).trim();
+  }
+  if (shopSeed && shopSeed.trim()) {
+    return pickSeededFoodCoverDesign(shopSeed.trim());
   }
   return pickRandomFoodCoverDesign(undefined, randomFn);
 }

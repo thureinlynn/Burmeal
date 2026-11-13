@@ -3,7 +3,7 @@ import { Shop, MenuItem, MenuType } from '../types';
 import { useLanguage } from '../context/LanguageContext';
 import { buildContactLinks } from '../utils/filter';
 import { getCountryFlag } from '../utils/countries';
-import { resolveCoverDesign, pickRandomFoodCoverDesign } from '../utils/coverDesigns';
+import { resolveCoverDesign, pickRandomFoodCoverDesign, buildShopCoverSeed } from '../utils/coverDesigns';
 import { MenuCard } from './MenuCard';
 import {
   MapPin,
@@ -38,11 +38,14 @@ export const ShopProfileView: React.FC<ShopProfileViewProps> = ({
 }) => {
   const { t } = useLanguage();
   const [selectedMenuType, setSelectedMenuType] = useState<MenuType | 'ALL'>('ALL');
-  const [coverSrc, setCoverSrc] = useState<string>(() => resolveCoverDesign(shop.coverImage));
+  const coverSeed = buildShopCoverSeed(shop.id, shop.name);
+  const [coverSrc, setCoverSrc] = useState<string>(() =>
+    resolveCoverDesign(shop.coverImage, coverSeed)
+  );
 
   useEffect(() => {
-    setCoverSrc(resolveCoverDesign(shop.coverImage));
-  }, [shop.id, shop.coverImage]);
+    setCoverSrc(resolveCoverDesign(shop.coverImage, coverSeed));
+  }, [coverSeed, shop.coverImage]);
 
   const contact = buildContactLinks({
     whatsappPhone: shop.whatsappPhone,
