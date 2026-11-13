@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Shop, MenuItem, MenuType } from '../types';
 import { useLanguage } from '../context/LanguageContext';
 import { buildContactLinks } from '../utils/filter';
 import { getCountryFlag } from '../utils/countries';
+import { resolveCoverDesign, pickRandomFoodCoverDesign } from '../utils/coverDesigns';
 import { MenuCard } from './MenuCard';
 import {
   MapPin,
@@ -37,6 +38,11 @@ export const ShopProfileView: React.FC<ShopProfileViewProps> = ({
 }) => {
   const { t } = useLanguage();
   const [selectedMenuType, setSelectedMenuType] = useState<MenuType | 'ALL'>('ALL');
+  const [coverSrc, setCoverSrc] = useState<string>(() => resolveCoverDesign(shop.coverImage));
+
+  useEffect(() => {
+    setCoverSrc(resolveCoverDesign(shop.coverImage));
+  }, [shop.id, shop.coverImage]);
 
   const contact = buildContactLinks({
     whatsappPhone: shop.whatsappPhone,
@@ -71,10 +77,11 @@ export const ShopProfileView: React.FC<ShopProfileViewProps> = ({
       <div className="bg-white dark:bg-stone-900 rounded-2xl border border-stone-200 dark:border-stone-800 overflow-hidden shadow-xs transition-colors">
         <div className="relative h-44 sm:h-64 w-full bg-stone-900 overflow-hidden">
           <img
-            src={shop.coverImage}
+            src={coverSrc}
             alt={shop.name}
             className="w-full h-full object-cover opacity-85"
             referrerPolicy="no-referrer"
+            onError={() => setCoverSrc((prev) => pickRandomFoodCoverDesign(prev))}
           />
           <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/35 to-transparent" />
 
