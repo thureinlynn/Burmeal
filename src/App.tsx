@@ -23,10 +23,7 @@ import {
   Sparkles,
   Heart,
   Bookmark,
-  Calendar,
   Store,
-  ArrowRight,
-  TrendingUp,
   MapPin,
 } from 'lucide-react';
 
@@ -234,31 +231,59 @@ export default function App() {
   // Dedicated Owner Shop & Menu state (never filtered out by consumer region)
   const [ownerShop, setOwnerShop] = useState<Shop | null>(null);
   const [ownerMenuItems, setOwnerMenuItems] = useState<MenuItem[]>([]);
-  const [, setIsOwnerLoading] = useState(false);
+  const [isOwnerLoading, setIsOwnerLoading] = useState(false);
 
   const loadOwnerData = async () => {
     if (user?.role !== 'SHOP_OWNER') {
       setOwnerShop(null);
       setOwnerMenuItems([]);
+      setIsOwnerLoading(false);
       return;
     }
     setIsOwnerLoading(true);
     try {
-      let targetShopId = shopId;
-      if (!targetShopId && user) {
-        const allShops = await apiClient.getShops(null, token);
-        const myShop = allShops.find((s) => s.ownerId === user.id);
-        if (myShop) targetShopId = myShop.id;
+      let resolvedShop: Shop | null = null;
+      if (shopId) {
+        resolvedShop = await firestoreService.getShopById(shopId);
       }
-      if (targetShopId) {
-        const sData = await apiClient.getShop(targetShopId, token);
-        if (sData) {
-          setOwnerShop(sData);
+      if (!resolvedShop && user.id) {
+        resolvedShop = await firestoreService.getShopByOwnerId(user.id);
+      }
+      if (!resolvedShop && user.email) {
+        resolvedShop = await firestoreService.getShopByOwnerEmail(user.email);
+      }
+      if (!resolvedShop && shopId) {
+        resolvedShop = await apiClient.getShop(shopId, token);
+      }
+      if (!resolvedShop) {
+        const allShops = await apiClient.getShops(null, token);
+        resolvedShop =
+          allShops.find(
+            (s) =>
+              s.ownerId === user.id ||
+              (user.email && s.ownerEmail?.toLowerCase() === user.email.toLowerCase())
+          ) || null;
+      }
+
+      if (resolvedShop) {
+        setOwnerShop(resolvedShop);
+        const [fsItems, apiRes] = await Promise.all([
+          firestoreService.getMenuItemsByShopId(resolvedShop.id),
+          apiClient.getMenuItems({ shopId: resolvedShop.id }, token),
+        ]);
+        const mergedMap = new Map<string, MenuItem>();
+        for (const item of fsItems) {
+          mergedMap.set(item.id, item);
         }
-        const mData = await apiClient.getMenuItems({ shopId: targetShopId }, token);
-        if (mData && Array.isArray(mData.items)) {
-          setOwnerMenuItems(mData.items);
+        for (const item of apiRes?.items || []) {
+          if (!mergedMap.has(item.id)) {
+            mergedMap.set(item.id, item);
+          }
         }
+        setOwnerMenuItems(Array.from(mergedMap.values()));
+      } else {
+        setOwnerShop(null);
+        setOwnerMenuItems([]);
       }
     } catch (err) {
       console.error('Failed to load owner data:', err);
@@ -270,15 +295,22 @@ export default function App() {
   useEffect(() => {
     if (user?.role === 'SHOP_OWNER') {
       loadOwnerData();
+    } else {
+      setOwnerShop(null);
+      setOwnerMenuItems([]);
+      setIsOwnerLoading(false);
     }
   }, [user, user?.role, shopId, token]);
 
   // Shop Owner handlers
   const handleUpdateShopProfile = async (data: Partial<Shop>) => {
     const targetId = ownerShop?.id || shopId;
-    if (!targetId || !token) return;
+    if (!targetId) return;
     try {
-      await apiClient.updateShop(targetId, data, token);
+      await apiClient.updateShop(targetId, data, token).catch(() => null);
+      await firestoreService.updateShop(targetId, data).catch((fbErr) => {
+        console.warn('Direct Firestore shop update notice:', fbErr);
+      });
       await loadOwnerData();
       await loadShops();
     } catch (err) {
@@ -287,13 +319,20 @@ export default function App() {
   };
 
   const handleCreateMenuItem = async (data: any) => {
-    if (!token) return;
+    const targetShopId = ownerShop?.id || shopId;
+    if (!targetShopId) return;
     try {
-      await apiClient.createMenuItem(data, token);
+      const payload = {
+        ...data,
+        shopId: data.shopId || targetShopId,
+      };
+      const created = await apiClient.createMenuItem(payload, token);
+      const itemId = created?.id || `item_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
       try {
         await firestoreService.createMenuItem({
-          ...data,
-          shopName: ownerShop?.name || '',
+          ...payload,
+          id: itemId,
+          shopName: ownerShop?.name || created?.shopName || '',
           shopCountry: ownerShop?.country || '',
           shopRegion: ownerShop?.region || '',
           shopCity: ownerShop?.city || '',
@@ -309,9 +348,8 @@ export default function App() {
   };
 
   const handleUpdateMenuItem = async (id: string, data: any) => {
-    if (!token) return;
     try {
-      await apiClient.updateMenuItem(id, data, token);
+      await apiClient.updateMenuItem(id, data, token).catch(() => false);
       try {
         await firestoreService.updateMenuItem(id, data);
       } catch (fbErr) {
@@ -325,9 +363,8 @@ export default function App() {
   };
 
   const handleDeleteMenuItem = async (id: string) => {
-    if (!token) return;
     try {
-      await apiClient.deleteMenuItem(id, token);
+      await apiClient.deleteMenuItem(id, token).catch(() => false);
       try {
         await firestoreService.deleteMenuItem(id);
       } catch (fbErr) {
@@ -385,12 +422,18 @@ export default function App() {
 
   const resolvedOwnerShop = ownerShop || fallbackOwnerShop;
 
-  // Strict Role Segregation: If user is SHOP_OWNER, enforce shop dashboard tabs
+  // Strict Role Segregation: enforce shop tabs for SHOP_OWNER and reset protected tabs on logout
   useEffect(() => {
     if (user?.role === 'SHOP_OWNER') {
       const validShopTabs = ['shop_overview', 'shop_menus', 'shop_profile', 'shop_settings', 'shop_detail'];
       if (!validShopTabs.includes(currentTab)) {
         setCurrentTab('shop_overview');
+      }
+    } else if (!user) {
+      const authOnlyTabs = ['shop_overview', 'shop_menus', 'shop_profile', 'shop_settings', 'admin', 'profile'];
+      if (authOnlyTabs.includes(currentTab)) {
+        setSelectedShopId(null);
+        setCurrentTab('feed');
       }
     }
   }, [user, user?.role, currentTab]);
@@ -414,7 +457,11 @@ export default function App() {
       {/* Main Content Area */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6">
         {user?.role === 'SHOP_OWNER' ? (
-          currentTab === 'shop_detail' ? (
+          isOwnerLoading && !ownerShop ? (
+            <div className="bg-white dark:bg-stone-900 rounded-3xl border border-stone-200 dark:border-stone-800 p-12 text-center text-xs text-stone-500 dark:text-stone-400">
+              Loading your shop dashboard...
+            </div>
+          ) : currentTab === 'shop_detail' ? (
             <ShopProfileView
               shop={resolvedOwnerShop}
               menuItems={ownerMenuItems}

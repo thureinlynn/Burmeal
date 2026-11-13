@@ -495,6 +495,28 @@ var REGION_SPECS = [
       { name: "Crows Nest Lower North Shore Dining", bio: "Cozy village restaurant serving authentic family recipes and sweet palm sugar tea.", cuisineType: "Village Family Restaurant", locationArea: "Crows Nest, Sydney", address: "88 Willoughby Rd, Crows Nest NSW", avatarSeed: "au_crowsnest" },
       { name: "Hawthorn Glenferrie Road Noodle Bar", bio: "University precinct student favorite with cheap and hearty Shan noodles and iced faluda.", cuisineType: "University Precinct Diner", locationArea: "Hawthorn, Melbourne", address: "680 Glenferrie Rd, Hawthorn VIC", avatarSeed: "au_hawthorn" }
     ]
+  },
+  // 16. European Union (Major EU Diaspora Hubs: Germany, France, Netherlands, Spain)
+  {
+    regionId: "EU-ALL",
+    regionName: "European Union (Berlin, Paris, Amsterdam)",
+    countryName: "European Union",
+    city: "Berlin",
+    phonePrefix: "+49 30",
+    currencySymbol: "\u20AC",
+    shops: [
+      { name: "Berlin Mitte Myanmar Kitchen", bio: "Artisanal Burmese dishes, fresh yellow Shan tofu, and organic tea leaf salads in Berlin Mitte.", cuisineType: "Continental Diaspora Bistro", locationArea: "Mitte, Berlin", address: "Torstra\xDFe 88, Berlin, Germany", avatarSeed: "eu_berlin" },
+      { name: "Paris Belleville Rangoon Delights", bio: "Cosmopolitan Paris bistro preparing fragrant coconut chicken noodles, samosa thoke, and sweet faluda.", cuisineType: "Parisian Burmese Bistro", locationArea: "Belleville, Paris", address: "Rue de Belleville 45, Paris, France", avatarSeed: "eu_paris" },
+      { name: "Amsterdam Jordaan Mohinga House", bio: "Canalside favorite serving warm bowls of lemongrass catfish soup and crispy yellow split-pea fritters.", cuisineType: "Canalside Comfort Food", locationArea: "Jordaan, Amsterdam", address: "Prinsengracht 210, Amsterdam, Netherlands", avatarSeed: "eu_amsterdam" },
+      { name: "Munich Bavarian Pagoda Dining", bio: "Bavarian-Burmese friendly dining room pairing slow-braised spiced beef with fresh salads and beers.", cuisineType: "Alpine Burmese Dining", locationArea: "Schwabing, Munich", address: "Leopoldstra\xDFe 54, Munich, Germany", avatarSeed: "eu_munich" },
+      { name: "Frankfurt Financial District Noodle Bar", bio: "Fast lunch sets of Shan rice noodles, tea leaf salads, and iced green tea for bankers.", cuisineType: "CBD Healthy Lunch", locationArea: "Frankfurt Central", address: "Taunusanlage 8, Frankfurt, Germany", avatarSeed: "eu_frankfurt" },
+      { name: "Lyon Presqu\u2019\xEEle Burmese Flavors", bio: "Gastronomy capital dining featuring artisanal kyay oh and crispy gourd fritters.", cuisineType: "Culinary Heritage Dining", locationArea: "Presqu\u2019\xEEle, Lyon", address: "Rue Merci\xE8re 18, Lyon, France", avatarSeed: "eu_lyon" },
+      { name: "Rotterdam Markthal Myanmar Corner", bio: "Vibrant modern food hall stall serving spicy Danbauk biryani and cold drinks.", cuisineType: "Modern Food Hall", locationArea: "Markthal, Rotterdam", address: "Verlengde Nieuwstraat, Rotterdam", avatarSeed: "eu_rotterdam" },
+      { name: "Madrid Malasa\xF1a Burmese Cantina", bio: "Sunny terrace dining with spicy tamarind fish, crunchy peanuts, and fresh mint salads.", cuisineType: "Mediterranean Burmese Lounge", locationArea: "Malasa\xF1a, Madrid", address: "Calle de Manuela Malasa\xF1a 14, Madrid", avatarSeed: "eu_madrid" },
+      { name: "Barcelona Eixample Tea Lounge", bio: "Catalan-Burmese cafe serving fermented tea leaf salad, coconut soup, and avocado shakes.", cuisineType: "Cosmopolitan Cafe", locationArea: "Eixample, Barcelona", address: "Carrer de Val\xE8ncia 240, Barcelona", avatarSeed: "eu_barcelona" },
+      { name: "Stockholm S\xF6dermalm Organic Shan Food", bio: "Nordic organic ingredients blended with highland Shan tofu and roasted chili oil.", cuisineType: "Nordic-Shan Organic", locationArea: "S\xF6dermalm, Stockholm", address: "G\xF6tgatan 78, Stockholm, Sweden", avatarSeed: "eu_stockholm" },
+      { name: "Brussels EU Quarter Myanmar Cuisine", bio: "European capital favorite for warm bowls of Ohn No Khao Sw\xE8 and chicken curry.", cuisineType: "Diplomatic District Dining", locationArea: "European Quarter, Brussels", address: "Rue de la Loi 150, Brussels, Belgium", avatarSeed: "eu_brussels" }
+    ]
   }
 ];
 var MASTER_DISH_POOL = [
@@ -1017,7 +1039,7 @@ function generateAllMockShops() {
   const allShops = [];
   const now = (/* @__PURE__ */ new Date()).toISOString();
   REGION_SPECS.forEach((spec, rIdx) => {
-    spec.shops.forEach((s, sIdx) => {
+    spec.shops.slice(0, 11).forEach((s, sIdx) => {
       let shopId = `shop_r${rIdx + 1}_${sIdx + 1}`;
       let ownerId = `usr_owner_r${rIdx + 1}_${sIdx + 1}`;
       let ownerEmail = `owner_${spec.regionId.toLowerCase()}_${sIdx + 1}@burmeal.com`;
@@ -1069,7 +1091,7 @@ function generateAllMockShops() {
         operatingHours: "7:00 AM - 8:30 PM",
         createdAt: now,
         followerCount: 15 + (rIdx * 7 + sIdx * 3) % 45,
-        itemCount: 22,
+        itemCount: 11,
         isFollowed: false
       });
     });
@@ -1082,7 +1104,7 @@ function generateAllMockMenuItems(shops) {
   const todayStr = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
   const totalPool = MASTER_DISH_POOL.length;
   shops.forEach((shop, sIdx) => {
-    const shopItemsCount = 22;
+    const shopItemsCount = 2;
     for (let i = 0; i < shopItemsCount; i++) {
       const dishIdx = (sIdx * 3 + i) % totalPool;
       const baseDish = MASTER_DISH_POOL[dishIdx];
@@ -1090,24 +1112,30 @@ function generateAllMockMenuItems(shops) {
       let mType = "PERMANENT";
       let specialDate = void 0;
       let availableDays = void 0;
-      if (i === 0 || i === 1) {
+      if (i === 0) {
         mType = "SPECIAL";
         specialDate = todayStr;
-      } else if (i >= 2 && i <= 6) {
-        mType = "WEEKLY";
-        const daySets = [
-          ["Mon", "Wed", "Fri"],
-          ["Tue", "Thu", "Sat"],
-          ["Mon", "Tue", "Wed", "Thu", "Fri"],
-          ["Sat", "Sun"],
-          ["Wed", "Thu", "Fri", "Sat", "Sun"]
-        ];
-        availableDays = daySets[(sIdx + i) % daySets.length];
+      } else {
+        mType = sIdx % 2 === 0 ? "WEEKLY" : "PERMANENT";
+        if (mType === "WEEKLY") {
+          const daySets = [
+            ["Mon", "Wed", "Fri"],
+            ["Tue", "Thu", "Sat"],
+            ["Mon", "Tue", "Wed", "Thu", "Fri"],
+            ["Sat", "Sun"],
+            ["Wed", "Thu", "Fri", "Sat", "Sun"]
+          ];
+          availableDays = daySets[(sIdx + i) % daySets.length];
+        }
       }
       allItems.push({
         id: itemId,
         shopId: shop.id,
         shopName: shop.name,
+        shopCountry: shop.country,
+        shopRegion: shop.region,
+        shopCity: shop.city,
+        country: shop.country,
         title: baseDish.title,
         description: baseDish.description,
         image: baseDish.imageUrl,
@@ -1372,10 +1400,15 @@ function initDb() {
 }
 function seedInitialData() {
   const shopCount = db.prepare("SELECT COUNT(*) as count FROM shops").get();
-  if (shopCount.count >= 300) {
+  if (shopCount.count === 176) {
     return;
   }
-  console.log("Seeding SQLite database with comprehensive multi-region prototype data (>20 shops per region, >20 items per shop)...");
+  if (shopCount.count > 0 && shopCount.count !== 176) {
+    console.log("Reseeding SQLite database with updated international & EU dataset (176 shops, 1,936 items)...");
+    db.prepare("DELETE FROM menu_items").run();
+    db.prepare("DELETE FROM shops").run();
+  }
+  console.log("Seeding SQLite database with balanced prototype data (11 shops per region, 11 items per shop, 16 regions)...");
   const salt = bcrypt.genSaltSync(10);
   const passwordHash = bcrypt.hashSync("burmeal123", salt);
   const now = (/* @__PURE__ */ new Date()).toISOString();
@@ -1488,11 +1521,201 @@ function seedInitialData() {
   console.log(`Database seeded successfully: ${shops.length} shops and ${menuItems.length} menu items across all regions.`);
 }
 
+// src/server/firestoreSync.ts
+import { initializeApp as initializeApp2, getApps as getApps2, getApp as getApp2 } from "firebase/app";
+import { getFirestore as getFirestore2, doc as doc2, setDoc as setDoc2, deleteDoc as deleteDoc2 } from "firebase/firestore";
+
+// src/firebase.ts
+import { initializeApp, getApps, getApp } from "firebase/app";
+import {
+  getAuth,
+  GoogleAuthProvider,
+  signInWithPopup,
+  signOut as firebaseSignOut,
+  onAuthStateChanged,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  updateProfile
+} from "firebase/auth";
+import {
+  getFirestore,
+  doc,
+  getDoc,
+  getDocFromServer,
+  setDoc,
+  updateDoc,
+  deleteDoc,
+  collection,
+  query,
+  where,
+  orderBy,
+  getDocs,
+  onSnapshot,
+  writeBatch,
+  serverTimestamp
+} from "firebase/firestore";
+var firebaseConfig = {
+  apiKey: "AIzaSyDWO3qOyvvUsQ4igX1RFpqYJwblHF5zfD0",
+  authDomain: "burmeal-48966.firebaseapp.com",
+  projectId: "burmeal-48966",
+  storageBucket: "burmeal-48966.firebasestorage.app",
+  messagingSenderId: "1034717391066",
+  appId: "1:1034717391066:web:e8c51b067880ad41de9de3"
+};
+var app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
+var auth = getAuth(app);
+var db2 = getFirestore(app);
+var googleProvider = new GoogleAuthProvider();
+googleProvider.setCustomParameters({ prompt: "select_account" });
+async function testFirestoreConnection() {
+  try {
+    await getDocFromServer(doc(db2, "system", "connection"));
+    return true;
+  } catch (error) {
+    if (error instanceof Error && error.message.includes("the client is offline")) {
+      console.warn("Firebase client is offline. Verify network connection and project rules.");
+    }
+    return false;
+  }
+}
+testFirestoreConnection();
+
+// src/server/firestoreSync.ts
+var app2 = getApps2().length > 0 ? getApp2() : initializeApp2(firebaseConfig);
+var serverDb = getFirestore2(app2);
+async function syncShopToFirestore(shop) {
+  try {
+    const ref = doc2(serverDb, "shops", shop.id);
+    await setDoc2(
+      ref,
+      {
+        id: shop.id,
+        ownerId: shop.ownerId || shop.owner_id,
+        name: shop.name,
+        bio: shop.bio || "",
+        coverImage: shop.coverImage || shop.cover_image || "",
+        avatarImage: shop.avatarImage || shop.avatar_image || "",
+        status: shop.status || "APPROVED",
+        cuisineType: shop.cuisineType || shop.cuisine_type || "Burmese Cuisine",
+        locationArea: shop.locationArea || shop.location_area || "",
+        address: shop.address || "",
+        city: shop.city || "",
+        region: shop.region || "",
+        country: shop.country || "",
+        facebookUrl: shop.facebookUrl || shop.facebook_url || "",
+        whatsappPhone: shop.whatsappPhone || shop.whatsapp_phone || "",
+        viberPhone: shop.viberPhone || shop.viber_phone || "",
+        lineId: shop.lineId || shop.line_id || "",
+        phoneNumber: shop.phoneNumber || shop.phone_number || "",
+        createdAt: shop.createdAt || shop.created_at || (/* @__PURE__ */ new Date()).toISOString()
+      },
+      { merge: true }
+    );
+  } catch (err) {
+    console.warn("syncShopToFirestore error:", err);
+  }
+}
+async function syncMenuItemToFirestore(item, shop) {
+  try {
+    const payload = {
+      id: item.id,
+      shopId: item.shopId || item.shop_id,
+      shopName: item.shopName || shop?.name || "",
+      shopCountry: item.shopCountry || shop?.country || "",
+      shopRegion: item.shopRegion || shop?.region || "",
+      shopCity: item.shopCity || shop?.city || "",
+      country: item.country || shop?.country || "",
+      title: item.title,
+      description: item.description || "",
+      image: item.image || "",
+      price: Number(item.price) || 0,
+      category: item.category || "Noodles & Broth",
+      menuType: item.menuType || item.menu_type || "PERMANENT",
+      isVegetarian: Boolean(item.isVegetarian ?? item.is_vegetarian),
+      isHalal: Boolean(item.isHalal ?? item.is_halal),
+      specialDate: item.specialDate || item.special_date || null,
+      availableDays: item.availableDays || (item.available_days ? JSON.parse(item.available_days) : null),
+      createdAt: item.createdAt || item.created_at || (/* @__PURE__ */ new Date()).toISOString()
+    };
+    await Promise.all([
+      setDoc2(doc2(serverDb, "menu_items", item.id), payload, { merge: true }),
+      setDoc2(doc2(serverDb, "items", item.id), payload, { merge: true })
+    ]);
+  } catch (err) {
+    console.warn("syncMenuItemToFirestore error:", err);
+  }
+}
+async function deleteMenuItemFromFirestore(itemId) {
+  try {
+    await Promise.all([
+      deleteDoc2(doc2(serverDb, "menu_items", itemId)),
+      deleteDoc2(doc2(serverDb, "items", itemId))
+    ]);
+  } catch (err) {
+    console.warn("deleteMenuItemFromFirestore error:", err);
+  }
+}
+async function syncUserToFirestore(user) {
+  try {
+    const payload = {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      role: user.role,
+      avatarUrl: user.avatarUrl || user.avatar_url || "",
+      createdAt: user.createdAt || user.created_at || (/* @__PURE__ */ new Date()).toISOString()
+    };
+    await Promise.all([
+      setDoc2(doc2(serverDb, "users", user.id), payload, { merge: true }),
+      setDoc2(doc2(serverDb, "accounts", user.id), payload, { merge: true }),
+      setDoc2(doc2(serverDb, "user_accounts", user.id), payload, { merge: true })
+    ]);
+  } catch (err) {
+    console.warn("syncUserToFirestore error:", err);
+  }
+}
+async function syncFollowToFirestore(customerId, shopId, isFollowed) {
+  try {
+    const followId = `${customerId}_${shopId}`;
+    const ref = doc2(serverDb, "follows", followId);
+    if (isFollowed) {
+      await setDoc2(ref, {
+        id: followId,
+        customerId,
+        shopId,
+        createdAt: (/* @__PURE__ */ new Date()).toISOString()
+      });
+    } else {
+      await deleteDoc2(ref);
+    }
+  } catch (err) {
+    console.warn("syncFollowToFirestore error:", err);
+  }
+}
+async function syncSavedItemToFirestore(customerId, itemId, isSaved) {
+  try {
+    const savedId = `${customerId}_${itemId}`;
+    const ref = doc2(serverDb, "saved_items", savedId);
+    if (isSaved) {
+      await setDoc2(ref, {
+        id: savedId,
+        customerId,
+        itemId,
+        createdAt: (/* @__PURE__ */ new Date()).toISOString()
+      });
+    } else {
+      await deleteDoc2(ref);
+    }
+  } catch (err) {
+    console.warn("syncSavedItemToFirestore error:", err);
+  }
+}
+
 // server.ts
 initDb();
-var app = express();
+var app3 = express();
 var PORT = 3e3;
-app.use(express.json());
+app3.use(express.json());
 function getAuthenticatedUser(req) {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
@@ -1518,7 +1741,7 @@ function getAuthenticatedUser(req) {
     avatarUrl: session.avatar_url
   };
 }
-app.post("/api/auth/register", (req, res) => {
+app3.post("/api/auth/register", (req, res) => {
   try {
     const { email, password, name, role, shopName, cuisineType, locationArea } = req.body;
     if (!email || !password || !name) {
@@ -1569,6 +1792,18 @@ app.post("/api/auth/register", (req, res) => {
       INSERT INTO sessions (token, user_id, expires_at)
       VALUES (?, ?, ?)
     `).run(token, userId, expiresAt);
+    syncUserToFirestore({
+      id: userId,
+      email,
+      name,
+      role: assignedRole,
+      avatarUrl,
+      createdAt: now
+    });
+    if (createdShopId) {
+      const shopRow = db.prepare("SELECT * FROM shops WHERE id = ?").get(createdShopId);
+      if (shopRow) syncShopToFirestore(shopRow);
+    }
     return res.json({
       user: {
         id: userId,
@@ -1585,7 +1820,7 @@ app.post("/api/auth/register", (req, res) => {
     return res.status(500).json({ error: "Server error during registration." });
   }
 });
-app.post("/api/auth/login", (req, res) => {
+app3.post("/api/auth/login", (req, res) => {
   try {
     const { email, password } = req.body;
     if (!email || !password) {
@@ -1610,6 +1845,14 @@ app.post("/api/auth/login", (req, res) => {
       INSERT INTO sessions (token, user_id, expires_at)
       VALUES (?, ?, ?)
     `).run(token, user.id, expiresAt);
+    syncUserToFirestore({
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      role: user.role,
+      avatarUrl: user.avatar_url,
+      createdAt: user.created_at
+    });
     return res.json({
       user: {
         id: user.id,
@@ -1626,7 +1869,148 @@ app.post("/api/auth/login", (req, res) => {
     return res.status(500).json({ error: "Server error during login." });
   }
 });
-app.get("/api/auth/me", (req, res) => {
+app3.post("/api/auth/firebase-login", (req, res) => {
+  try {
+    const { uid, email, name, avatarUrl, provider } = req.body;
+    if (!uid) {
+      return res.status(400).json({ error: "Firebase UID required" });
+    }
+    let user = db.prepare('SELECT * FROM users WHERE id = ? OR (email = ? AND email != "")').get(uid, email || "");
+    const now = (/* @__PURE__ */ new Date()).toISOString();
+    if (!user) {
+      const cleanEmail = email || `${uid}@customer.burmeal.com`;
+      const cleanName = name || "Google Customer";
+      const dummyHash = bcrypt2.hashSync(crypto.randomBytes(16).toString("hex"), 10);
+      db.prepare(`
+        INSERT INTO users (id, email, password_hash, name, role, avatar_url, created_at)
+        VALUES (?, ?, ?, ?, 'CUSTOMER', ?, ?)
+      `).run(uid, cleanEmail, dummyHash, cleanName, avatarUrl || null, now);
+      user = {
+        id: uid,
+        email: cleanEmail,
+        name: cleanName,
+        role: "CUSTOMER",
+        avatar_url: avatarUrl
+      };
+    }
+    const token = "tok_" + crypto.randomBytes(24).toString("hex");
+    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1e3).toISOString();
+    db.prepare(`
+      INSERT INTO sessions (token, user_id, expires_at)
+      VALUES (?, ?, ?)
+    `).run(token, user.id, expiresAt);
+    syncUserToFirestore({
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      role: user.role,
+      avatarUrl: user.avatar_url
+    });
+    let shopId = null;
+    if (user.role === "SHOP_OWNER") {
+      const shop = db.prepare("SELECT id FROM shops WHERE owner_id = ?").get(user.id);
+      if (shop) shopId = shop.id;
+    }
+    return res.json({
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        avatarUrl: user.avatar_url
+      },
+      token,
+      shopId
+    });
+  } catch (err) {
+    console.error("Firebase login error:", err);
+    return res.status(500).json({ error: "Failed to process Firebase login" });
+  }
+});
+app3.post("/api/auth/firebase-sync", (req, res) => {
+  try {
+    const { user: incomingUser, shop: incomingShop } = req.body;
+    if (!incomingUser?.id || !incomingUser?.email) {
+      return res.status(400).json({ error: "User ID and email required" });
+    }
+    const now = (/* @__PURE__ */ new Date()).toISOString();
+    const role = incomingUser.role === "SHOP_OWNER" ? "SHOP_OWNER" : incomingUser.role === "ADMIN" ? "ADMIN" : "CUSTOMER";
+    const existingById = db.prepare("SELECT * FROM users WHERE id = ?").get(incomingUser.id);
+    const existingByEmail = !existingById ? db.prepare("SELECT * FROM users WHERE email = ?").get(incomingUser.email) : null;
+    const existing = existingById || existingByEmail;
+    let effectiveUserId = incomingUser.id;
+    if (!existing) {
+      const dummyHash = bcrypt2.hashSync(crypto.randomBytes(16).toString("hex"), 10);
+      db.prepare(`
+        INSERT INTO users (id, email, password_hash, name, role, avatar_url, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        incomingUser.id,
+        incomingUser.email,
+        dummyHash,
+        incomingUser.name || incomingUser.email.split("@")[0],
+        role,
+        incomingUser.avatarUrl || null,
+        incomingUser.createdAt || now
+      );
+    } else {
+      effectiveUserId = existing.id;
+      db.prepare(`
+        UPDATE users SET name = ?, role = ?, avatar_url = ?
+        WHERE id = ?
+      `).run(
+        incomingUser.name || existing.name,
+        role === "SHOP_OWNER" || existing.role === "SHOP_OWNER" ? "SHOP_OWNER" : role,
+        incomingUser.avatarUrl || existing.avatar_url,
+        effectiveUserId
+      );
+    }
+    let syncedShopId = null;
+    if (incomingShop && incomingShop.id) {
+      const existingShop = db.prepare("SELECT id FROM shops WHERE id = ?").get(incomingShop.id);
+      if (!existingShop) {
+        db.prepare(`
+          INSERT INTO shops (id, owner_id, name, bio, cover_image, avatar_image, status, cuisine_type, location_area, address, city, region, country, created_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(
+          incomingShop.id,
+          effectiveUserId,
+          incomingShop.name,
+          incomingShop.bio || "",
+          incomingShop.coverImage || "/src/assets/images/burmeal_hero_spread_1793906769541.jpg",
+          incomingShop.avatarImage || "",
+          incomingShop.status || "APPROVED",
+          incomingShop.cuisineType || "Burmese Cuisine",
+          incomingShop.locationArea || "Downtown",
+          incomingShop.address || "",
+          incomingShop.city || "Yangon",
+          incomingShop.region || "Yangon Region",
+          incomingShop.country || "Myanmar",
+          incomingShop.createdAt || now
+        );
+      }
+      syncedShopId = incomingShop.id;
+    } else if (role === "SHOP_OWNER") {
+      const shop = db.prepare("SELECT id FROM shops WHERE owner_id = ?").get(effectiveUserId);
+      if (shop) syncedShopId = shop.id;
+    }
+    const token = "tok_" + crypto.randomBytes(24).toString("hex");
+    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1e3).toISOString();
+    db.prepare(`
+      INSERT INTO sessions (token, user_id, expires_at)
+      VALUES (?, ?, ?)
+    `).run(token, effectiveUserId, expiresAt);
+    return res.json({
+      success: true,
+      token,
+      shopId: syncedShopId
+    });
+  } catch (err) {
+    console.error("Firebase sync error:", err);
+    return res.status(500).json({ error: "Failed to sync Firebase account" });
+  }
+});
+app3.get("/api/auth/me", (req, res) => {
   const user = getAuthenticatedUser(req);
   if (!user) {
     return res.status(401).json({ error: "Unauthorized" });
@@ -1638,7 +2022,7 @@ app.get("/api/auth/me", (req, res) => {
   }
   return res.json({ user, shopId });
 });
-app.post("/api/auth/logout", (req, res) => {
+app3.post("/api/auth/logout", (req, res) => {
   const authHeader = req.headers.authorization;
   if (authHeader && authHeader.startsWith("Bearer ")) {
     const token = authHeader.substring(7);
@@ -1646,32 +2030,72 @@ app.post("/api/auth/logout", (req, res) => {
   }
   return res.json({ success: true });
 });
+var REGION_PREFIX_TO_COUNTRY = {
+  "MM": "Myanmar",
+  "TH": "Thailand",
+  "SG": "Singapore",
+  "MY": "Malaysia",
+  "JP": "Japan",
+  "US": "United States",
+  "EU": "European Union",
+  "GB": "United Kingdom",
+  "KR": "South Korea",
+  "AU": "Australia"
+};
+function getCountryFromRegionId(regionId) {
+  if (!regionId) return void 0;
+  const prefix = regionId.split("-")[0]?.toUpperCase();
+  return REGION_PREFIX_TO_COUNTRY[prefix];
+}
 function buildRegionSqlClause(regionId, country) {
+  let effectiveCountry = country;
+  if (!effectiveCountry && regionId) {
+    effectiveCountry = getCountryFromRegionId(regionId);
+  }
   let clause = "";
-  if (country) {
-    const cleanCountry = country.replace(/'/g, "''");
-    clause += ` AND LOWER(s.country) = LOWER('${cleanCountry}')`;
+  if (effectiveCountry) {
+    if (effectiveCountry.toLowerCase() === "european union") {
+      clause += ` AND (LOWER(s.country) IN ('european union', 'germany', 'france', 'netherlands', 'italy', 'spain', 'sweden', 'belgium', 'europe'))`;
+    } else {
+      const cleanCountry = effectiveCountry.replace(/'/g, "''");
+      clause += ` AND LOWER(s.country) = LOWER('${cleanCountry}')`;
+    }
   }
   if (regionId && !regionId.endsWith("-ALL")) {
     const r = regionId.toUpperCase();
     if (r === "MM-YGN") clause += ` AND (LOWER(s.region) LIKE '%yangon%' OR LOWER(s.city) LIKE '%yangon%')`;
     else if (r === "MM-MDY") clause += ` AND (LOWER(s.region) LIKE '%mandalay%' OR LOWER(s.city) LIKE '%mandalay%')`;
-    else if (r === "MM-SHN") clause += ` AND (LOWER(s.region) LIKE '%shan%' OR LOWER(s.city) LIKE '%taunggyi%' OR LOWER(s.city) LIKE '%nyaungshwe%')`;
+    else if (r === "MM-SHN") clause += ` AND (LOWER(s.region) LIKE '%shan%' OR LOWER(s.city) LIKE '%taunggyi%' OR LOWER(s.city) LIKE '%nyaungshwe%' OR LOWER(s.location_area) LIKE '%inle%')`;
     else if (r === "MM-BGO") clause += ` AND (LOWER(s.region) LIKE '%bago%' OR LOWER(s.city) LIKE '%bago%')`;
     else if (r === "MM-AYY") clause += ` AND (LOWER(s.region) LIKE '%ayeyarwady%' OR LOWER(s.city) LIKE '%pathein%')`;
+    else if (r === "MM-MON") clause += ` AND (LOWER(s.region) LIKE '%mon%' OR LOWER(s.city) LIKE '%mawlamyine%')`;
+    else if (r === "MM-KRN") clause += ` AND (LOWER(s.region) LIKE '%kayin%' OR LOWER(s.city) LIKE '%hpa-an%')`;
     else if (r === "TH-BKK") clause += ` AND (LOWER(s.region) LIKE '%bangkok%' OR LOWER(s.city) LIKE '%bangkok%')`;
     else if (r === "TH-CNX") clause += ` AND (LOWER(s.region) LIKE '%chiang mai%' OR LOWER(s.city) LIKE '%chiang mai%')`;
     else if (r === "TH-MSOT") clause += ` AND (LOWER(s.region) LIKE '%mae sot%' OR LOWER(s.city) LIKE '%mae sot%')`;
+    else if (r === "US-SF") clause += ` AND (LOWER(s.city) LIKE '%san francisco%' OR LOWER(s.city) LIKE '%oakland%' OR LOWER(s.city) LIKE '%fremont%' OR LOWER(s.city) LIKE '%berkeley%' OR LOWER(s.city) LIKE '%san jose%')`;
+    else if (r === "US-LA") clause += ` AND (LOWER(s.city) LIKE '%los angeles%' OR LOWER(s.location_area) LIKE '%alhambra%' OR LOWER(s.location_area) LIKE '%silver lake%')`;
+    else if (r === "US-NYC") clause += ` AND (LOWER(s.city) LIKE '%new york%' OR LOWER(s.location_area) LIKE '%queens%' OR LOWER(s.location_area) LIKE '%elmhurst%' OR LOWER(s.location_area) LIKE '%brooklyn%')`;
+    else if (r === "EU-DE") clause += ` AND (LOWER(s.country) = 'germany' OR LOWER(s.city) LIKE '%berlin%' OR LOWER(s.city) LIKE '%munich%')`;
+    else if (r === "EU-FR") clause += ` AND (LOWER(s.country) = 'france' OR LOWER(s.city) LIKE '%paris%')`;
+    else if (r === "EU-NL") clause += ` AND (LOWER(s.country) = 'netherlands' OR LOWER(s.city) LIKE '%amsterdam%')`;
+    else if (r === "GB-LDN") clause += ` AND (LOWER(s.city) LIKE '%london%' OR LOWER(s.location_area) LIKE '%soho%' OR LOWER(s.location_area) LIKE '%camden%')`;
+    else if (r === "GB-MAN") clause += ` AND (LOWER(s.city) LIKE '%manchester%')`;
+    else if (r === "JP-TYO") clause += ` AND (LOWER(s.city) LIKE '%tokyo%' OR LOWER(s.location_area) LIKE '%takadanobaba%' OR LOWER(s.location_area) LIKE '%shinjuku%')`;
+    else if (r === "AU-SYD") clause += ` AND (LOWER(s.city) LIKE '%sydney%' OR LOWER(s.location_area) LIKE '%cabramatta%')`;
+    else if (r === "AU-MEL") clause += ` AND (LOWER(s.city) LIKE '%melbourne%' OR LOWER(s.location_area) LIKE '%richmond%')`;
+    else if (r === "KR-SEL") clause += ` AND (LOWER(s.city) LIKE '%seoul%' OR LOWER(s.location_area) LIKE '%itaewon%' OR LOWER(s.location_area) LIKE '%hongdae%')`;
+    else if (r === "KR-INC") clause += ` AND (LOWER(s.city) LIKE '%incheon%' OR LOWER(s.location_area) LIKE '%bupyeong%')`;
   }
   return clause;
 }
-app.get("/api/shops", (req, res) => {
+app3.get("/api/shops", (req, res) => {
   try {
     const user = getAuthenticatedUser(req);
     const statusFilter = req.query.status;
     const countryFilter = req.query.country;
     const regionIdFilter = req.query.regionId;
-    let query = `
+    let query2 = `
       SELECT s.*, u.email as owner_email,
         (SELECT COUNT(*) FROM follows WHERE shop_id = s.id) as follower_count,
         (SELECT COUNT(*) FROM menu_items WHERE shop_id = s.id) as item_count
@@ -1679,15 +2103,20 @@ app.get("/api/shops", (req, res) => {
       JOIN users u ON s.owner_id = u.id
     `;
     if (statusFilter && user?.role === "ADMIN") {
-      query += ` WHERE s.status = '${statusFilter}'`;
+      query2 += ` WHERE s.status = '${statusFilter}'`;
     } else if (user?.role === "ADMIN") {
-      query += ` WHERE 1=1`;
+      query2 += ` WHERE 1=1`;
     } else {
-      query += ` WHERE s.status = 'APPROVED'`;
+      query2 += ` WHERE s.status = 'APPROVED'`;
     }
-    query += buildRegionSqlClause(regionIdFilter, countryFilter);
-    query += ` ORDER BY s.created_at DESC`;
-    const shops = db.prepare(query).all();
+    const followedOnlyFilter = req.query.followedOnly === "true";
+    if (followedOnlyFilter && user) {
+      query2 += ` AND s.id IN (SELECT shop_id FROM follows WHERE customer_id = '${user.id}')`;
+    } else {
+      query2 += buildRegionSqlClause(regionIdFilter, countryFilter);
+    }
+    query2 += ` ORDER BY s.created_at DESC`;
+    const shops = db.prepare(query2).all();
     let userFollows = [];
     if (user) {
       const rows = db.prepare("SELECT shop_id FROM follows WHERE customer_id = ?").all(user.id);
@@ -1724,7 +2153,7 @@ app.get("/api/shops", (req, res) => {
     return res.status(500).json({ error: "Failed to fetch shops" });
   }
 });
-app.get("/api/shops/:id", (req, res) => {
+app3.get("/api/shops/:id", (req, res) => {
   try {
     const user = getAuthenticatedUser(req);
     const shop = db.prepare(`
@@ -1773,7 +2202,7 @@ app.get("/api/shops/:id", (req, res) => {
     return res.status(500).json({ error: "Failed to fetch shop details" });
   }
 });
-app.put("/api/shops/:id", (req, res) => {
+app3.put("/api/shops/:id", (req, res) => {
   try {
     const user = getAuthenticatedUser(req);
     if (!user) return res.status(401).json({ error: "Unauthorized" });
@@ -1823,13 +2252,15 @@ app.put("/api/shops/:id", (req, res) => {
       phoneNumber !== void 0 ? phoneNumber : shop.phone_number,
       req.params.id
     );
+    const updatedShop = db.prepare("SELECT * FROM shops WHERE id = ?").get(req.params.id);
+    if (updatedShop) syncShopToFirestore(updatedShop);
     return res.json({ success: true, message: "Shop profile updated successfully." });
   } catch (err) {
     console.error("Error updating shop:", err);
     return res.status(500).json({ error: "Failed to update shop profile." });
   }
 });
-app.patch("/api/admin/shops/:id/status", (req, res) => {
+app3.patch("/api/admin/shops/:id/status", (req, res) => {
   try {
     const user = getAuthenticatedUser(req);
     if (!user || user.role !== "ADMIN") {
@@ -1840,30 +2271,33 @@ app.patch("/api/admin/shops/:id/status", (req, res) => {
       return res.status(400).json({ error: "Invalid status value." });
     }
     db.prepare("UPDATE shops SET status = ? WHERE id = ?").run(status, req.params.id);
+    const updatedShop = db.prepare("SELECT * FROM shops WHERE id = ?").get(req.params.id);
+    if (updatedShop) syncShopToFirestore(updatedShop);
     return res.json({ success: true, status });
   } catch (err) {
     console.error("Admin status update error:", err);
     return res.status(500).json({ error: "Failed to update shop status." });
   }
 });
-app.get("/api/menu-items", (req, res) => {
+app3.get("/api/menu-items", (req, res) => {
   try {
     const user = getAuthenticatedUser(req);
-    const { shopId, menuType, category, isVegetarian, isHalal, query, feedType, country, regionId } = req.query;
+    const { shopId, menuType, category, isVegetarian, isHalal, query: query2, feedType, country, regionId } = req.query;
     let sql = `
       SELECT m.*, s.name as shop_name, s.status as shop_status,
+             s.country as shop_country, s.region as shop_region, s.city as shop_city,
              s.whatsapp_phone, s.viber_phone, s.line_id, s.facebook_url, s.phone_number
       FROM menu_items m
       JOIN shops s ON m.shop_id = s.id
       WHERE 1=1
     `;
-    if (user?.role !== "ADMIN") {
+    if (user?.role !== "ADMIN" && !shopId) {
       sql += ` AND s.status = 'APPROVED'`;
     }
     if (shopId) {
       sql += ` AND m.shop_id = '${shopId}'`;
     }
-    if (!shopId) {
+    if (!shopId && feedType !== "FOLLOWED") {
       sql += buildRegionSqlClause(regionId, country);
     }
     if (menuType && menuType !== "ALL") {
@@ -1878,8 +2312,8 @@ app.get("/api/menu-items", (req, res) => {
     if (isHalal === "true") {
       sql += ` AND m.is_halal = 1`;
     }
-    if (query) {
-      const cleanQ = query.replace(/'/g, "''");
+    if (query2) {
+      const cleanQ = query2.replace(/'/g, "''");
       sql += ` AND (m.title LIKE '%${cleanQ}%' OR m.description LIKE '%${cleanQ}%' OR s.name LIKE '%${cleanQ}%' OR m.category LIKE '%${cleanQ}%')`;
     }
     if (feedType === "FOLLOWED") {
@@ -1930,6 +2364,10 @@ function formatMenuItems(items, userId) {
     id: m.id,
     shopId: m.shop_id,
     shopName: m.shop_name,
+    shopCountry: m.shop_country,
+    shopRegion: m.shop_region,
+    shopCity: m.shop_city,
+    country: m.shop_country,
     title: m.title,
     description: m.description,
     image: m.image,
@@ -1951,7 +2389,7 @@ function formatMenuItems(items, userId) {
     isSaved: savedIds.includes(m.id)
   }));
 }
-app.post("/api/menu-items", (req, res) => {
+app3.post("/api/menu-items", (req, res) => {
   try {
     const user = getAuthenticatedUser(req);
     if (!user) return res.status(401).json({ error: "Unauthorized" });
@@ -1996,13 +2434,15 @@ app.post("/api/menu-items", (req, res) => {
       availableDays ? JSON.stringify(availableDays) : null,
       now
     );
+    const createdItem = db.prepare("SELECT * FROM menu_items WHERE id = ?").get(itemId);
+    if (createdItem) syncMenuItemToFirestore(createdItem, shop);
     return res.json({ success: true, itemId });
   } catch (err) {
     console.error("Error creating menu item:", err);
     return res.status(500).json({ error: "Failed to create menu item" });
   }
 });
-app.put("/api/menu-items/:id", (req, res) => {
+app3.put("/api/menu-items/:id", (req, res) => {
   try {
     const user = getAuthenticatedUser(req);
     if (!user) return res.status(401).json({ error: "Unauthorized" });
@@ -2046,13 +2486,16 @@ app.put("/api/menu-items/:id", (req, res) => {
       availableDays !== void 0 ? JSON.stringify(availableDays) : existing.available_days,
       req.params.id
     );
+    const updatedItem = db.prepare("SELECT * FROM menu_items WHERE id = ?").get(req.params.id);
+    const shop = db.prepare("SELECT * FROM shops WHERE id = ?").get(existing.shop_id);
+    if (updatedItem) syncMenuItemToFirestore(updatedItem, shop);
     return res.json({ success: true });
   } catch (err) {
     console.error("Error updating menu item:", err);
     return res.status(500).json({ error: "Failed to update menu item" });
   }
 });
-app.delete("/api/menu-items/:id", (req, res) => {
+app3.delete("/api/menu-items/:id", (req, res) => {
   try {
     const user = getAuthenticatedUser(req);
     if (!user) return res.status(401).json({ error: "Unauthorized" });
@@ -2066,13 +2509,14 @@ app.delete("/api/menu-items/:id", (req, res) => {
       return res.status(403).json({ error: "Unauthorized to delete this item." });
     }
     db.prepare("DELETE FROM menu_items WHERE id = ?").run(req.params.id);
+    deleteMenuItemFromFirestore(req.params.id);
     return res.json({ success: true });
   } catch (err) {
     console.error("Error deleting menu item:", err);
     return res.status(500).json({ error: "Failed to delete menu item" });
   }
 });
-app.post("/api/shops/:id/follow", (req, res) => {
+app3.post("/api/shops/:id/follow", (req, res) => {
   try {
     const user = getAuthenticatedUser(req);
     if (!user) return res.status(401).json({ error: "Please log in to follow shops." });
@@ -2080,9 +2524,11 @@ app.post("/api/shops/:id/follow", (req, res) => {
     const existing = db.prepare("SELECT 1 FROM follows WHERE customer_id = ? AND shop_id = ?").get(user.id, shopId);
     if (existing) {
       db.prepare("DELETE FROM follows WHERE customer_id = ? AND shop_id = ?").run(user.id, shopId);
+      syncFollowToFirestore(user.id, shopId, false);
       return res.json({ followed: false });
     } else {
       db.prepare("INSERT INTO follows (customer_id, shop_id, created_at) VALUES (?, ?, ?)").run(user.id, shopId, (/* @__PURE__ */ new Date()).toISOString());
+      syncFollowToFirestore(user.id, shopId, true);
       return res.json({ followed: true });
     }
   } catch (err) {
@@ -2090,7 +2536,7 @@ app.post("/api/shops/:id/follow", (req, res) => {
     return res.status(500).json({ error: "Failed to update follow state" });
   }
 });
-app.post("/api/menu-items/:id/save", (req, res) => {
+app3.post("/api/menu-items/:id/save", (req, res) => {
   try {
     const user = getAuthenticatedUser(req);
     if (!user) return res.status(401).json({ error: "Please log in to save items." });
@@ -2098,9 +2544,11 @@ app.post("/api/menu-items/:id/save", (req, res) => {
     const existing = db.prepare("SELECT 1 FROM saved_items WHERE customer_id = ? AND item_id = ?").get(user.id, itemId);
     if (existing) {
       db.prepare("DELETE FROM saved_items WHERE customer_id = ? AND item_id = ?").run(user.id, itemId);
+      syncSavedItemToFirestore(user.id, itemId, false);
       return res.json({ saved: false });
     } else {
       db.prepare("INSERT INTO saved_items (customer_id, item_id, created_at) VALUES (?, ?, ?)").run(user.id, itemId, (/* @__PURE__ */ new Date()).toISOString());
+      syncSavedItemToFirestore(user.id, itemId, true);
       return res.json({ saved: true });
     }
   } catch (err) {
@@ -2108,12 +2556,14 @@ app.post("/api/menu-items/:id/save", (req, res) => {
     return res.status(500).json({ error: "Failed to save item" });
   }
 });
-app.get("/api/saved-items", (req, res) => {
+app3.get("/api/saved-items", (req, res) => {
   try {
     const user = getAuthenticatedUser(req);
     if (!user) return res.status(401).json({ error: "Please log in to view saved items." });
     const items = db.prepare(`
-      SELECT m.*, s.name as shop_name, s.whatsapp_phone, s.viber_phone, s.line_id, s.facebook_url, s.phone_number
+      SELECT m.*, s.name as shop_name,
+             s.country as shop_country, s.region as shop_region, s.city as shop_city,
+             s.whatsapp_phone, s.viber_phone, s.line_id, s.facebook_url, s.phone_number
       FROM saved_items si
       JOIN menu_items m ON si.item_id = m.id
       JOIN shops s ON m.shop_id = s.id
@@ -2126,28 +2576,40 @@ app.get("/api/saved-items", (req, res) => {
     return res.status(500).json({ error: "Failed to fetch saved items" });
   }
 });
-app.post("/api/admin/seed", (req, res) => {
+app3.post("/api/admin/seed", (req, res) => {
   const user = getAuthenticatedUser(req);
   if (!user || user.role !== "ADMIN") {
     return res.status(403).json({ error: "Admin only" });
   }
   return res.json({ success: true, message: "Database verified and seeded." });
 });
+app3.get("/robots.txt", (_req, res) => {
+  res.type("text/plain");
+  res.send(`User-agent: *
+Allow: /
+
+Sitemap: https://burmeal.astronerd.me/sitemap.xml
+`);
+});
+app3.get("/sitemap.xml", (_req, res) => {
+  res.type("application/xml");
+  res.sendFile(path2.resolve(process.cwd(), "public", "sitemap.xml"));
+});
 async function startServer() {
   const isProduction = process.env.NODE_ENV === "production";
   if (!isProduction) {
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: { middlewareMode: true, hmr: false },
       appType: "spa"
     });
-    app.use(vite.middlewares);
+    app3.use(vite.middlewares);
   } else {
-    app.use(express.static(path2.resolve(process.cwd(), "dist")));
-    app.get("*", (_req, res) => {
+    app3.use(express.static(path2.resolve(process.cwd(), "dist")));
+    app3.get("*", (_req, res) => {
       res.sendFile(path2.resolve(process.cwd(), "dist", "index.html"));
     });
   }
-  app.listen(PORT, "0.0.0.0", () => {
+  app3.listen(PORT, "0.0.0.0", () => {
     console.log(`BurMeal server running on http://0.0.0.0:${PORT}`);
   });
 }

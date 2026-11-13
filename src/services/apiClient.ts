@@ -294,15 +294,14 @@ function getUserIdFromToken(token?: string | null): string | null {
     const user = db.users.find((u) => u.id === id);
     if (user) return user.id;
   }
-  // Default to first user or demo user
   const storedUser = localStorage.getItem('burmeal_user_data');
   if (storedUser) {
     try {
       const u = JSON.parse(storedUser);
-      if (u.id) return u.id;
+      if (u?.id) return u.id;
     } catch {}
   }
-  return 'usr_cust_01';
+  return null;
 }
 
 export const apiClient = {
@@ -723,35 +722,26 @@ export const apiClient = {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
       });
-      if (res.ok) {
-        const ct = res.headers.get('content-type') || '';
-        if (ct.includes('application/json')) {
-          const data = await res.json();
-          if (data && data.token) {
-            localStorage.setItem(TOKEN_KEY, data.token);
-            if (data.shopId) localStorage.setItem(SHOP_ID_KEY, data.shopId);
-            return { success: true, user: data.user, shopId: data.shopId, token: data.token };
-          }
+      const ct = res.headers.get('content-type') || '';
+      if (ct.includes('application/json')) {
+        const data = await res.json();
+        if (res.ok && data && data.token) {
+          localStorage.setItem(TOKEN_KEY, data.token);
+          localStorage.setItem('burmeal_user_data', JSON.stringify(data.user));
+          if (data.shopId) localStorage.setItem(SHOP_ID_KEY, data.shopId);
+          else localStorage.removeItem(SHOP_ID_KEY);
+          return { success: true, user: data.user, shopId: data.shopId, token: data.token };
         }
+        return { success: false, error: data?.error || 'Invalid email or password.' };
       }
     } catch {}
 
-    // Client fallback login
+    // Client fallback login (static/offline mode only — never auto-creates a fake CUSTOMER)
     const db = getLocalDb();
-    let user = db.users.find((u) => u.email.toLowerCase() === email.toLowerCase());
+    const user = db.users.find((u) => u.email.toLowerCase() === email.toLowerCase());
 
     if (!user) {
-      // If user isn't found, auto-create customer demo session so public users can test on Vercel
-      user = {
-        id: 'usr_' + Date.now(),
-        email,
-        name: email.split('@')[0],
-        role: 'CUSTOMER',
-        avatarUrl: `https://api.dicebear.com/7.x/avataaars/svg?seed=${email}`,
-        createdAt: new Date().toISOString(),
-      };
-      db.users.push(user);
-      saveLocalDb(db);
+      return { success: false, error: 'Account not found. Please check your email or sign up first.' };
     }
 
     let shopId: string | undefined = undefined;
@@ -763,6 +753,7 @@ export const apiClient = {
     const token = 'tok_' + user.id;
     localStorage.setItem(TOKEN_KEY, token);
     if (shopId) localStorage.setItem(SHOP_ID_KEY, shopId);
+    else localStorage.removeItem(SHOP_ID_KEY);
     localStorage.setItem('burmeal_user_data', JSON.stringify(user));
 
     return {
@@ -821,7 +812,35 @@ export const apiClient = {
     return { success: true, user, token };
   },
 
-  // Auth: Register (Supports both CUSTOMER and SHOP_OWNER on Vercel without server error)
+  // Sync Firebase user & shop into SQLite session and local cache
+  async syncFirebaseAccount(user: User, shop?: Shop | null): Promise<{ token?: string; shopId?: string | null }> {
+    const db = getLocalDb();
+    if (!db.users.some((u) => u.id === user.id || u.email.toLowerCase() === user.email.toLowerCase())) {
+      db.users.push(user);
+    }
+    if (shop && !db.shops.some((s) => s.id === shop.id)) {
+      db.shops.unshift(shop);
+    }
+    saveLocalDb(db);
+
+    try {
+      const res = await fetch('/api/auth/firebase-sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user, shop }),
+      });
+      if (res.ok) {
+        const ct = res.headers.get('content-type') || '';
+        if (ct.includes('application/json')) {
+          const data = await res.json();
+          return { token: data.token, shopId: data.shopId };
+        }
+      }
+    } catch {}
+    return { shopId: shop?.id || null };
+  },
+
+  // Auth: Register (Supports both CUSTOMER and SHOP_OWNER)
   async register(formData: any): Promise<{ success: boolean; user?: User; shopId?: string; token?: string; error?: string }> {
     try {
       const res = await fetch('/api/auth/register', {
@@ -829,16 +848,17 @@ export const apiClient = {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData),
       });
-      if (res.ok) {
-        const ct = res.headers.get('content-type') || '';
-        if (ct.includes('application/json')) {
-          const data = await res.json();
-          if (data && data.token) {
-            localStorage.setItem(TOKEN_KEY, data.token);
-            if (data.shopId) localStorage.setItem(SHOP_ID_KEY, data.shopId);
-            return { success: true, user: data.user, shopId: data.shopId, token: data.token };
-          }
+      const ct = res.headers.get('content-type') || '';
+      if (ct.includes('application/json')) {
+        const data = await res.json();
+        if (res.ok && data && data.token) {
+          localStorage.setItem(TOKEN_KEY, data.token);
+          localStorage.setItem('burmeal_user_data', JSON.stringify(data.user));
+          if (data.shopId) localStorage.setItem(SHOP_ID_KEY, data.shopId);
+          else localStorage.removeItem(SHOP_ID_KEY);
+          return { success: true, user: data.user, shopId: data.shopId, token: data.token };
         }
+        return { success: false, error: data?.error || 'Registration failed.' };
       }
     } catch {}
 
@@ -919,6 +939,9 @@ export const apiClient = {
           const data = await res.json();
           return { user: data.user, shopId: data.shopId };
         }
+      }
+      if (res.status === 401) {
+        return null;
       }
     } catch {}
 

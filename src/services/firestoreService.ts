@@ -4,7 +4,6 @@ import {
   getDoc,
   getDocs,
   setDoc,
-  updateDoc,
   deleteDoc,
   collection,
   query,
@@ -13,7 +12,8 @@ import {
   handleFirestoreError,
   OperationType,
 } from '../firebase';
-import { Shop, MenuItem, User, MenuType } from '../types';
+import { Shop, MenuItem, User } from '../types';
+import { stripUndefined } from '../utils/authHelpers';
 
 export const firestoreService = {
   // 1. Subscribe to all approved shops with realtime updates
@@ -149,11 +149,11 @@ export const firestoreService = {
   // 7. Create Menu Item in Firestore (both /menu_items and /items)
   async createMenuItem(item: MenuItem): Promise<MenuItem> {
     const itemId = item.id || `item_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-    const fullItem: MenuItem = {
+    const fullItem = stripUndefined({
       ...item,
       id: itemId,
       createdAt: item.createdAt || new Date().toISOString(),
-    };
+    }) as MenuItem;
     try {
       await Promise.all([
         setDoc(doc(db, 'menu_items', itemId), fullItem),
@@ -168,10 +168,11 @@ export const firestoreService = {
 
   // 8. Update Menu Item in Firestore (both /menu_items and /items)
   async updateMenuItem(itemId: string, data: Partial<MenuItem>): Promise<void> {
+    const cleanData = stripUndefined(data);
     try {
       await Promise.all([
-        updateDoc(doc(db, 'menu_items', itemId), data),
-        updateDoc(doc(db, 'items', itemId), data),
+        setDoc(doc(db, 'menu_items', itemId), cleanData, { merge: true }),
+        setDoc(doc(db, 'items', itemId), cleanData, { merge: true }),
       ]);
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `menu_items/${itemId}`);
@@ -195,11 +196,11 @@ export const firestoreService = {
   // 10. Create Shop in Firestore
   async createShop(shop: Shop): Promise<Shop> {
     const shopId = shop.id || `shop_${Date.now()}`;
-    const fullShop: Shop = {
+    const fullShop = stripUndefined({
       ...shop,
       id: shopId,
       createdAt: shop.createdAt || new Date().toISOString(),
-    };
+    }) as Shop;
     const ref = doc(db, 'shops', shopId);
     try {
       await setDoc(ref, fullShop);
@@ -213,8 +214,9 @@ export const firestoreService = {
   // 11. Update Shop profile in Firestore
   async updateShop(shopId: string, data: Partial<Shop>): Promise<void> {
     const ref = doc(db, 'shops', shopId);
+    const cleanData = stripUndefined(data);
     try {
-      await updateDoc(ref, data);
+      await setDoc(ref, cleanData, { merge: true });
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `shops/${shopId}`);
       throw error;
@@ -233,12 +235,27 @@ export const firestoreService = {
     }
   },
 
+  async getUserByEmail(email: string): Promise<User | null> {
+    const q = query(collection(db, 'users'), where('email', '==', email));
+    try {
+      const snap = await getDocs(q);
+      if (!snap.empty) {
+        return snap.docs[0].data() as User;
+      }
+      return null;
+    } catch (error) {
+      handleFirestoreError(error, OperationType.GET, 'users');
+      return null;
+    }
+  },
+
   async saveUserProfile(user: User): Promise<void> {
+    const cleanUser = stripUndefined(user) as User;
     try {
       await Promise.all([
-        setDoc(doc(db, 'users', user.id), user, { merge: true }),
-        setDoc(doc(db, 'accounts', user.id), user, { merge: true }),
-        setDoc(doc(db, 'user_accounts', user.id), user, { merge: true }),
+        setDoc(doc(db, 'users', user.id), cleanUser, { merge: true }),
+        setDoc(doc(db, 'accounts', user.id), cleanUser, { merge: true }),
+        setDoc(doc(db, 'user_accounts', user.id), cleanUser, { merge: true }),
       ]);
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, `users/${user.id}`);
@@ -246,7 +263,18 @@ export const firestoreService = {
     }
   },
 
-  // 13. Find Shop by Owner UID
+  // 13. Find Shop by ID, Owner UID, or Owner Email
+  async getShopById(shopId: string): Promise<Shop | null> {
+    const ref = doc(db, 'shops', shopId);
+    try {
+      const snap = await getDoc(ref);
+      return snap.exists() ? (snap.data() as Shop) : null;
+    } catch (error) {
+      handleFirestoreError(error, OperationType.GET, `shops/${shopId}`);
+      return null;
+    }
+  },
+
   async getShopByOwnerId(ownerId: string): Promise<Shop | null> {
     const q = query(collection(db, 'shops'), where('ownerId', '==', ownerId));
     try {
@@ -258,6 +286,35 @@ export const firestoreService = {
     } catch (error) {
       handleFirestoreError(error, OperationType.GET, 'shops');
       return null;
+    }
+  },
+
+  async getShopByOwnerEmail(ownerEmail: string): Promise<Shop | null> {
+    const q = query(collection(db, 'shops'), where('ownerEmail', '==', ownerEmail));
+    try {
+      const snap = await getDocs(q);
+      if (!snap.empty) {
+        return snap.docs[0].data() as Shop;
+      }
+      return null;
+    } catch (error) {
+      handleFirestoreError(error, OperationType.GET, 'shops');
+      return null;
+    }
+  },
+
+  async getMenuItemsByShopId(shopId: string): Promise<MenuItem[]> {
+    const q = query(collection(db, 'menu_items'), where('shopId', '==', shopId));
+    try {
+      const snap = await getDocs(q);
+      const list: MenuItem[] = [];
+      snap.forEach((docSnap) => {
+        list.push(docSnap.data() as MenuItem);
+      });
+      return list;
+    } catch (error) {
+      handleFirestoreError(error, OperationType.GET, 'menu_items');
+      return [];
     }
   },
 };

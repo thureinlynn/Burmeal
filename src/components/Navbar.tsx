@@ -3,17 +3,14 @@ import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
 import {
-  UtensilsCrossed,
-  ShieldAlert,
-  Store,
   Heart,
   Bookmark,
   User,
   Settings as SettingsIcon,
   Sun,
   Moon,
-  MapPin,
   ChevronDown,
+  LogIn,
 } from 'lucide-react';
 import { useLocation } from '../context/LocationContext';
 
@@ -176,18 +173,6 @@ export const Navbar: React.FC<NavbarProps> = ({
                 </button>
               </>
             )}
-
-            {user?.role === 'ADMIN' && (
-              <button
-                onClick={() => onSelectTab('admin')}
-                className={`flex items-center gap-1.5 hover:text-stone-900 dark:hover:text-white transition-colors whitespace-nowrap shrink-0 ${
-                  currentTab === 'admin' ? 'text-amber-700 dark:text-amber-400 font-bold border-b-2 border-amber-600 pb-1' : ''
-                }`}
-              >
-                <ShieldAlert className="w-4 h-4 text-amber-600" />
-                <span>{t.navAdmin}</span>
-              </button>
-            )}
           </nav>
 
           {/* Zone 3: Combined Auth button, Theme toggle, Language */}
@@ -206,7 +191,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               )}
             </button>
 
-            {/* User Account Badge for Mobile & Desktop */}
+            {/* User Account Badge or Sign In Button */}
             {user ? (
               <div className="flex items-center gap-2 px-2.5 py-1.5 bg-white/50 dark:bg-stone-850/60 backdrop-blur-md border border-white/60 dark:border-white/10 rounded-xl shadow-2xs">
                 <img
@@ -219,7 +204,15 @@ export const Navbar: React.FC<NavbarProps> = ({
                   {user.name}
                 </span>
               </div>
-            ) : null}
+            ) : (
+              <button
+                onClick={() => onOpenAuth('CUSTOMER')}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold shadow-xs transition-all active:scale-95 cursor-pointer"
+              >
+                <LogIn className="w-3.5 h-3.5" />
+                <span>{t.signIn}</span>
+              </button>
+            )}
           </div>
         </div>
       </div>

@@ -248,6 +248,12 @@ app.post('/api/auth/firebase-login', (req: Request, res: Response) => {
       avatarUrl: user.avatar_url,
     });
 
+    let shopId: string | null = null;
+    if (user.role === 'SHOP_OWNER') {
+      const shop = db.prepare('SELECT id FROM shops WHERE owner_id = ?').get(user.id) as any;
+      if (shop) shopId = shop.id;
+    }
+
     return res.json({
       user: {
         id: user.id,
@@ -257,11 +263,104 @@ app.post('/api/auth/firebase-login', (req: Request, res: Response) => {
         avatarUrl: user.avatar_url,
       },
       token,
-      shopId: null,
+      shopId,
     });
   } catch (err) {
     console.error('Firebase login error:', err);
     return res.status(500).json({ error: 'Failed to process Firebase login' });
+  }
+});
+
+// 2c. Auth: Sync Firebase User & Shop Owner Profile to SQLite session
+app.post('/api/auth/firebase-sync', (req: Request, res: Response) => {
+  try {
+    const { user: incomingUser, shop: incomingShop } = req.body;
+    if (!incomingUser?.id || !incomingUser?.email) {
+      return res.status(400).json({ error: 'User ID and email required' });
+    }
+
+    const now = new Date().toISOString();
+    const role = incomingUser.role === 'SHOP_OWNER' ? 'SHOP_OWNER' : incomingUser.role === 'ADMIN' ? 'ADMIN' : 'CUSTOMER';
+
+    const existingById = db.prepare('SELECT * FROM users WHERE id = ?').get(incomingUser.id) as any;
+    const existingByEmail = !existingById
+      ? (db.prepare('SELECT * FROM users WHERE email = ?').get(incomingUser.email) as any)
+      : null;
+    const existing = existingById || existingByEmail;
+
+    let effectiveUserId = incomingUser.id;
+    if (!existing) {
+      const dummyHash = bcrypt.hashSync(crypto.randomBytes(16).toString('hex'), 10);
+      db.prepare(`
+        INSERT INTO users (id, email, password_hash, name, role, avatar_url, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        incomingUser.id,
+        incomingUser.email,
+        dummyHash,
+        incomingUser.name || incomingUser.email.split('@')[0],
+        role,
+        incomingUser.avatarUrl || null,
+        incomingUser.createdAt || now
+      );
+    } else {
+      effectiveUserId = existing.id;
+      db.prepare(`
+        UPDATE users SET name = ?, role = ?, avatar_url = ?
+        WHERE id = ?
+      `).run(
+        incomingUser.name || existing.name,
+        role === 'SHOP_OWNER' || existing.role === 'SHOP_OWNER' ? 'SHOP_OWNER' : role,
+        incomingUser.avatarUrl || existing.avatar_url,
+        effectiveUserId
+      );
+    }
+
+    let syncedShopId: string | null = null;
+    if (incomingShop && incomingShop.id) {
+      const existingShop = db.prepare('SELECT id FROM shops WHERE id = ?').get(incomingShop.id) as any;
+      if (!existingShop) {
+        db.prepare(`
+          INSERT INTO shops (id, owner_id, name, bio, cover_image, avatar_image, status, cuisine_type, location_area, address, city, region, country, created_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(
+          incomingShop.id,
+          effectiveUserId,
+          incomingShop.name,
+          incomingShop.bio || '',
+          incomingShop.coverImage || '/src/assets/images/burmeal_hero_spread_1793906769541.jpg',
+          incomingShop.avatarImage || '',
+          incomingShop.status || 'APPROVED',
+          incomingShop.cuisineType || 'Burmese Cuisine',
+          incomingShop.locationArea || 'Downtown',
+          incomingShop.address || '',
+          incomingShop.city || 'Yangon',
+          incomingShop.region || 'Yangon Region',
+          incomingShop.country || 'Myanmar',
+          incomingShop.createdAt || now
+        );
+      }
+      syncedShopId = incomingShop.id;
+    } else if (role === 'SHOP_OWNER') {
+      const shop = db.prepare('SELECT id FROM shops WHERE owner_id = ?').get(effectiveUserId) as any;
+      if (shop) syncedShopId = shop.id;
+    }
+
+    const token = 'tok_' + crypto.randomBytes(24).toString('hex');
+    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+    db.prepare(`
+      INSERT INTO sessions (token, user_id, expires_at)
+      VALUES (?, ?, ?)
+    `).run(token, effectiveUserId, expiresAt);
+
+    return res.json({
+      success: true,
+      token,
+      shopId: syncedShopId,
+    });
+  } catch (err) {
+    console.error('Firebase sync error:', err);
+    return res.status(500).json({ error: 'Failed to sync Firebase account' });
   }
 });
 

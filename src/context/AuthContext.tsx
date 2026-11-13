@@ -1,5 +1,5 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { User } from '../types';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
+import { User, Shop } from '../types';
 import { apiClient } from '../services/apiClient';
 import {
   auth,
@@ -9,22 +9,43 @@ import {
   onAuthStateChanged,
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
+  updateProfile,
 } from '../firebase';
 import { firestoreService } from '../services/firestoreService';
+import { resolveEffectiveUserRole, buildNewShopForOwner } from '../utils/authHelpers';
 
 interface AuthContextType {
   user: User | null;
   token: string | null;
   shopId: string | null;
   isLoading: boolean;
-  login: (email: string, password?: string) => Promise<{ success: boolean; error?: string; errorCode?: string }>;
+  login: (
+    email: string,
+    password?: string,
+    expectedRole?: 'CUSTOMER' | 'SHOP_OWNER'
+  ) => Promise<{ success: boolean; error?: string; errorCode?: string }>;
   loginWithGoogle: () => Promise<{ success: boolean; error?: string; errorCode?: string }>;
   register: (data: any) => Promise<{ success: boolean; error?: string; errorCode?: string }>;
   logout: () => Promise<void>;
-  switchDemoRole: (role: 'CUSTOMER' | 'SHOP_OWNER' | 'ADMIN') => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+function persistLocalSession(user: User, token: string, shopId?: string | null) {
+  localStorage.setItem('burmeal_token', token);
+  localStorage.setItem('burmeal_user_data', JSON.stringify(user));
+  if (shopId) {
+    localStorage.setItem('burmeal_shop_id', shopId);
+  } else {
+    localStorage.removeItem('burmeal_shop_id');
+  }
+}
+
+function clearLocalSession() {
+  localStorage.removeItem('burmeal_token');
+  localStorage.removeItem('burmeal_shop_id');
+  localStorage.removeItem('burmeal_user_data');
+}
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
@@ -32,229 +53,371 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [shopId, setShopId] = useState<string | null>(localStorage.getItem('burmeal_shop_id'));
   const [isLoading, setIsLoading] = useState(true);
 
-  // Check current session on mount
+  // Prevents onAuthStateChanged from racing ahead while register/login is writing Firestore docs
+  const isAuthActionInProgressRef = useRef(false);
+
   useEffect(() => {
-    async function loadUser() {
-      if (!token) {
-        setIsLoading(false);
+    let isMounted = true;
+
+    const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
+      if (!isMounted || isAuthActionInProgressRef.current) {
         return;
       }
-      try {
-        const data = await apiClient.getMe(token);
-        if (data && data.user) {
-          setUser(data.user);
-          if (data.shopId) {
-            setShopId(data.shopId);
-            localStorage.setItem('burmeal_shop_id', data.shopId);
+
+      if (fbUser) {
+        try {
+          let profile = await firestoreService.getUserProfile(fbUser.uid);
+          let ownedShop = await firestoreService.getShopByOwnerId(fbUser.uid);
+          if (!ownedShop && fbUser.email) {
+            ownedShop = await firestoreService.getShopByOwnerEmail(fbUser.email);
           }
-        } else {
-          // Token expired or invalid
-          localStorage.removeItem('burmeal_token');
-          localStorage.removeItem('burmeal_shop_id');
+
+          // Fallback to cached user data for matching UID if Firestore read failed transiently
+          if (!profile) {
+            try {
+              const cachedRaw = localStorage.getItem('burmeal_user_data');
+              if (cachedRaw) {
+                const cached = JSON.parse(cachedRaw) as User;
+                if (cached?.id === fbUser.uid) {
+                  profile = cached;
+                }
+              }
+            } catch {}
+          }
+
+          const resolved = resolveEffectiveUserRole(profile, ownedShop);
+          const hydratedUser: User = {
+            id: fbUser.uid,
+            email: profile?.email || fbUser.email || '',
+            name: profile?.name || fbUser.displayName || (fbUser.email ? fbUser.email.split('@')[0] : 'User'),
+            role: resolved.role,
+            avatarUrl:
+              profile?.avatarUrl ||
+              fbUser.photoURL ||
+              `https://api.dicebear.com/7.x/avataaars/svg?seed=${fbUser.uid}`,
+            createdAt: profile?.createdAt || new Date().toISOString(),
+          };
+
+          let effectiveToken = await fbUser.getIdToken();
+          const syncRes = await apiClient.syncFirebaseAccount(hydratedUser, ownedShop);
+          if (syncRes.token) {
+            effectiveToken = syncRes.token;
+          }
+
+          const effectiveShopId = resolved.shopId || syncRes.shopId || null;
+
+          if (!isMounted) return;
+          persistLocalSession(hydratedUser, effectiveToken, effectiveShopId);
+          setUser(hydratedUser);
+          setShopId(effectiveShopId);
+          setToken(effectiveToken);
+        } catch (err) {
+          console.error('Firebase session restore error:', err);
+        } finally {
+          if (isMounted) setIsLoading(false);
+        }
+        return;
+      }
+
+      // No Firebase user: check if a backend/SQLite `tok_` session exists
+      const storedToken = localStorage.getItem('burmeal_token');
+      if (storedToken && storedToken.startsWith('tok_')) {
+        try {
+          const data = await apiClient.getMe(storedToken);
+          if (isMounted && data && data.user) {
+            let resolvedShopId = data.shopId || null;
+            let resolvedUser = data.user;
+            if (resolvedUser.role === 'SHOP_OWNER' && !resolvedShopId) {
+              const ownedShop =
+                (await firestoreService.getShopByOwnerId(resolvedUser.id)) ||
+                (resolvedUser.email ? await firestoreService.getShopByOwnerEmail(resolvedUser.email) : null);
+              if (ownedShop) resolvedShopId = ownedShop.id;
+            }
+            persistLocalSession(resolvedUser, storedToken, resolvedShopId);
+            setUser(resolvedUser);
+            setShopId(resolvedShopId);
+            setToken(storedToken);
+          } else if (isMounted) {
+            clearLocalSession();
+            setToken(null);
+            setUser(null);
+            setShopId(null);
+          }
+        } catch (err) {
+          console.error('Session load error:', err);
+        } finally {
+          if (isMounted) setIsLoading(false);
+        }
+      } else {
+        clearLocalSession();
+        if (isMounted) {
           setToken(null);
           setUser(null);
           setShopId(null);
+          setIsLoading(false);
         }
-      } catch (err) {
-        console.error('Session load error:', err);
-      } finally {
-        setIsLoading(false);
       }
+    });
+
+    return () => {
+      isMounted = false;
+      unsubscribe();
+    };
+  }, []);
+
+  const login = async (
+    email: string,
+    password?: string,
+    expectedRole?: 'CUSTOMER' | 'SHOP_OWNER'
+  ) => {
+    const cleanEmail = email.trim();
+    if (!cleanEmail || !password) {
+      return { success: false, error: 'Email and password are required.' };
     }
 
-    loadUser();
-  }, [token]);
-
-  const login = async (email: string, password?: string) => {
-    // 1. Try Firebase Email/Password Sign-In if password is provided
-    if (password && password.length >= 6) {
-      try {
-        const userCred = await signInWithEmailAndPassword(auth, email, password);
-        const fbUser = userCred.user;
-        let profile = await firestoreService.getUserProfile(fbUser.uid);
-        if (!profile) {
-          profile = {
-            id: fbUser.uid,
-            email: fbUser.email || email,
-            name: fbUser.displayName || email.split('@')[0],
-            role: 'CUSTOMER',
-            avatarUrl: fbUser.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${fbUser.uid}`,
-            createdAt: new Date().toISOString(),
-          };
-          await firestoreService.saveUserProfile(profile);
-        }
-
-        const ownedShop = await firestoreService.getShopByOwnerId(fbUser.uid);
-        setUser(profile);
-        const fbToken = await fbUser.getIdToken();
-        setToken(fbToken);
-        localStorage.setItem('burmeal_token', fbToken);
-        if (ownedShop) {
-          setShopId(ownedShop.id);
-          localStorage.setItem('burmeal_shop_id', ownedShop.id);
-        } else {
-          setShopId(null);
-          localStorage.removeItem('burmeal_shop_id');
-        }
-        return { success: true };
-      } catch (fbErr: any) {
-        // If not found in Firebase Auth or wrong password, continue to check local demo credentials
-        console.warn('Firebase email login note:', fbErr?.code || fbErr?.message);
-      }
-    }
-
-    // 2. Fallback to API Client / Demo credentials (for instant demo accounts)
+    isAuthActionInProgressRef.current = true;
     try {
-      const res = await apiClient.login(email, password);
+      // 1. Try Firebase Email/Password Sign-In
+      if (password.length >= 6) {
+        try {
+          const userCred = await signInWithEmailAndPassword(auth, cleanEmail, password);
+          const fbUser = userCred.user;
+
+          let profile = await firestoreService.getUserProfile(fbUser.uid);
+          if (!profile) {
+            profile = await firestoreService.getUserByEmail(cleanEmail);
+          }
+
+          let ownedShop = await firestoreService.getShopByOwnerId(fbUser.uid);
+          if (!ownedShop) {
+            ownedShop = await firestoreService.getShopByOwnerEmail(cleanEmail);
+          }
+          if (!ownedShop && profile?.id && profile.id !== fbUser.uid) {
+            ownedShop = await firestoreService.getShopByOwnerId(profile.id);
+          }
+
+          const resolved = resolveEffectiveUserRole(profile, ownedShop, expectedRole);
+          if (resolved.error) {
+            await firebaseSignOut(auth).catch(() => {});
+            clearLocalSession();
+            return { success: false, error: resolved.error };
+          }
+
+          const finalUser: User = {
+            id: fbUser.uid,
+            email: profile?.email || fbUser.email || cleanEmail,
+            name: profile?.name || fbUser.displayName || cleanEmail.split('@')[0],
+            role: resolved.role,
+            avatarUrl:
+              profile?.avatarUrl ||
+              fbUser.photoURL ||
+              `https://api.dicebear.com/7.x/avataaars/svg?seed=${fbUser.uid}`,
+            createdAt: profile?.createdAt || new Date().toISOString(),
+          };
+
+          await firestoreService.saveUserProfile(finalUser);
+          if (ownedShop && ownedShop.ownerId !== fbUser.uid) {
+            await firestoreService.updateShop(ownedShop.id, { ownerId: fbUser.uid });
+            ownedShop = { ...ownedShop, ownerId: fbUser.uid };
+          }
+
+          let effectiveToken = await fbUser.getIdToken();
+          const syncRes = await apiClient.syncFirebaseAccount(finalUser, ownedShop);
+          if (syncRes.token) {
+            effectiveToken = syncRes.token;
+          }
+
+          const effectiveShopId = resolved.shopId || syncRes.shopId || null;
+          persistLocalSession(finalUser, effectiveToken, effectiveShopId);
+          setUser(finalUser);
+          setShopId(effectiveShopId);
+          setToken(effectiveToken);
+          return { success: true };
+        } catch (fbErr: any) {
+          // Only fall through to backend SQLite login for accounts seeded in SQLite that aren't in Firebase Auth yet
+          console.warn('Firebase email login fallback check:', fbErr?.code || fbErr?.message);
+        }
+      }
+
+      // 2. Try Backend SQLite Auth (for seeded / legacy accounts)
+      const res = await apiClient.login(cleanEmail, password);
       if (!res.success || !res.user) {
-        return { success: false, error: res.error || 'Login failed' };
+        return { success: false, error: res.error || 'Invalid email or password.' };
       }
 
-      setUser(res.user);
-      if (res.token) {
-        setToken(res.token);
-        localStorage.setItem('burmeal_token', res.token);
-      }
-      if (res.shopId) {
-        setShopId(res.shopId);
-        localStorage.setItem('burmeal_shop_id', res.shopId);
-      } else {
-        setShopId(null);
-        localStorage.removeItem('burmeal_shop_id');
+      let loggedInUser = res.user;
+      let resolvedShopId = res.shopId || null;
+
+      // Also check Firestore in case a Shop exists for this user
+      let ownedShop: Shop | null = null;
+      if (loggedInUser.role === 'SHOP_OWNER' || expectedRole === 'SHOP_OWNER') {
+        ownedShop =
+          (await firestoreService.getShopByOwnerId(loggedInUser.id)) ||
+          (await firestoreService.getShopByOwnerEmail(cleanEmail));
+        if (ownedShop) {
+          loggedInUser = { ...loggedInUser, role: 'SHOP_OWNER' };
+          resolvedShopId = ownedShop.id;
+        }
       }
 
-      // Sync demo user to Firestore if not already there
+      if (expectedRole === 'SHOP_OWNER' && loggedInUser.role !== 'SHOP_OWNER') {
+        clearLocalSession();
+        return {
+          success: false,
+          error:
+            'This email is registered as a Customer account, not a Shop Owner. Please sign up as a Shop Owner or switch to Customer login.',
+        };
+      }
+
+      const effectiveToken = res.token || 'tok_' + loggedInUser.id;
+      persistLocalSession(loggedInUser, effectiveToken, resolvedShopId);
+      setUser(loggedInUser);
+      setShopId(resolvedShopId);
+      setToken(effectiveToken);
+
       try {
-        await firestoreService.saveUserProfile(res.user);
+        await firestoreService.saveUserProfile(loggedInUser);
       } catch {}
 
       return { success: true };
     } catch (err: any) {
       return { success: false, error: 'Network error during login' };
+    } finally {
+      isAuthActionInProgressRef.current = false;
     }
   };
 
   const register = async (formData: any) => {
-    // 1. If password provided, register directly in Firebase Authentication
-    if (formData.password && formData.password.length >= 6) {
-      try {
-        const userCred = await createUserWithEmailAndPassword(auth, formData.email, formData.password);
-        const fbUser = userCred.user;
-        const newUser: User = {
-          id: fbUser.uid,
-          email: formData.email,
-          name: formData.name || formData.email.split('@')[0],
-          role: formData.role || 'CUSTOMER',
-          avatarUrl: `https://api.dicebear.com/7.x/avataaars/svg?seed=${fbUser.uid}`,
-          createdAt: new Date().toISOString(),
-        };
+    const cleanEmail = (formData.email || '').trim();
+    const password = formData.password || '';
+    const assignedRole = formData.role === 'SHOP_OWNER' ? 'SHOP_OWNER' : 'CUSTOMER';
 
-        // Save profile in Firestore /users/{uid}
-        await firestoreService.saveUserProfile(newUser);
-
-        let newShopId: string | null = null;
-        if (formData.role === 'SHOP_OWNER') {
-          newShopId = `shop_${Date.now()}`;
-          const newShop = {
-            id: newShopId,
-            ownerId: fbUser.uid,
-            name: formData.shopName || `${newUser.name}'s Kitchen`,
-            bio: 'Artisan home kitchen preparing authentic delicacies for direct contact and kitchen pick-up.',
-            coverImage: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=1200&q=80',
-            avatarImage: `https://api.dicebear.com/7.x/identicon/svg?seed=${newShopId}`,
-            status: 'APPROVED' as const,
-            cuisineType: formData.cuisineType || 'Traditional Burmese Cuisine',
-            locationArea: formData.locationArea || 'Downtown',
-            address: formData.address || '',
-            city: formData.city || 'Yangon',
-            region: formData.region || 'Yangon Region',
-            country: formData.country || 'Myanmar',
-            createdAt: new Date().toISOString(),
-          };
-          await firestoreService.createShop(newShop);
-        }
-
-        setUser(newUser);
-        const fbToken = await fbUser.getIdToken();
-        setToken(fbToken);
-        localStorage.setItem('burmeal_token', fbToken);
-        if (newShopId) {
-          setShopId(newShopId);
-          localStorage.setItem('burmeal_shop_id', newShopId);
-        }
-        return { success: true };
-      } catch (fbErr: any) {
-        console.warn('Firebase registration error:', fbErr);
-        if (fbErr.code === 'auth/email-already-in-use') {
-          return { success: false, error: 'This email is already in use. Please sign in instead.' };
-        }
-        if (fbErr.code === 'auth/weak-password') {
-          return { success: false, error: 'Password must be at least 6 characters.' };
-        }
-      }
+    if (!cleanEmail || !formData.name?.trim()) {
+      return { success: false, error: 'Full name and email are required.' };
+    }
+    if (password.length < 6) {
+      return { success: false, error: 'Password must be at least 6 characters.' };
     }
 
-    // 2. Fallback to API Client registration
+    isAuthActionInProgressRef.current = true;
     try {
-      const res = await apiClient.register(formData);
-      if (!res.success || !res.user) {
-        return { success: false, error: res.error || 'Registration failed' };
-      }
+      // 1. Register directly in Firebase Authentication
+      const userCred = await createUserWithEmailAndPassword(auth, cleanEmail, password);
+      const fbUser = userCred.user;
 
-      setUser(res.user);
-      if (res.token) {
-        setToken(res.token);
-        localStorage.setItem('burmeal_token', res.token);
-      }
-      if (res.shopId) {
-        setShopId(res.shopId);
-        localStorage.setItem('burmeal_shop_id', res.shopId);
-      }
-
-      // Sync to Firestore
       try {
-        await firestoreService.saveUserProfile(res.user);
+        await updateProfile(fbUser, { displayName: formData.name.trim() });
       } catch {}
 
+      const newUser: User = {
+        id: fbUser.uid,
+        email: cleanEmail,
+        name: formData.name.trim(),
+        role: assignedRole,
+        avatarUrl: `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(fbUser.uid)}`,
+        createdAt: new Date().toISOString(),
+      };
+
+      // Save profile in Firestore /users/{uid}, /accounts/{uid}, /user_accounts/{uid}
+      await firestoreService.saveUserProfile(newUser);
+
+      let newShop: Shop | null = null;
+      if (assignedRole === 'SHOP_OWNER') {
+        newShop = buildNewShopForOwner(fbUser.uid, cleanEmail, formData);
+        await firestoreService.createShop(newShop);
+      }
+
+      let effectiveToken = await fbUser.getIdToken();
+      const syncRes = await apiClient.syncFirebaseAccount(newUser, newShop);
+      if (syncRes.token) {
+        effectiveToken = syncRes.token;
+      }
+
+      const effectiveShopId = newShop?.id || syncRes.shopId || null;
+      persistLocalSession(newUser, effectiveToken, effectiveShopId);
+      setUser(newUser);
+      setShopId(effectiveShopId);
+      setToken(effectiveToken);
+
       return { success: true };
-    } catch (err: any) {
-      return { success: false, error: 'Network error during sign up' };
+    } catch (fbErr: any) {
+      console.warn('Firebase registration error:', fbErr);
+      if (fbErr.code === 'auth/email-already-in-use') {
+        return { success: false, error: 'This email is already in use. Please sign in instead.' };
+      }
+      if (fbErr.code === 'auth/weak-password') {
+        return { success: false, error: 'Password must be at least 6 characters.' };
+      }
+      if (fbErr.code === 'auth/invalid-email') {
+        return { success: false, error: 'Please enter a valid email address.' };
+      }
+
+      // Only fall back to API registration if Firebase Auth failed due to non-credential issues (e.g. operation-not-allowed)
+      try {
+        const res = await apiClient.register({ ...formData, email: cleanEmail, role: assignedRole });
+        if (!res.success || !res.user) {
+          return { success: false, error: res.error || fbErr.message || 'Registration failed' };
+        }
+
+        const effectiveToken = res.token || 'tok_' + res.user.id;
+        persistLocalSession(res.user, effectiveToken, res.shopId || null);
+        setUser(res.user);
+        setShopId(res.shopId || null);
+        setToken(effectiveToken);
+
+        try {
+          await firestoreService.saveUserProfile(res.user);
+        } catch {}
+
+        return { success: true };
+      } catch {
+        return { success: false, error: fbErr.message || 'Registration failed' };
+      }
+    } finally {
+      isAuthActionInProgressRef.current = false;
     }
   };
 
   // Customer Firebase Google Sign-In
   const loginWithGoogle = async () => {
+    isAuthActionInProgressRef.current = true;
     try {
       const result = await signInWithPopup(auth, googleProvider);
       const fbUser = result.user;
 
-      // Ensure user profile in Firestore
       let profile = await firestoreService.getUserProfile(fbUser.uid);
+      let ownedShop = await firestoreService.getShopByOwnerId(fbUser.uid);
+      if (!ownedShop && fbUser.email) {
+        ownedShop = await firestoreService.getShopByOwnerEmail(fbUser.email);
+      }
+
+      const resolved = resolveEffectiveUserRole(profile, ownedShop, 'CUSTOMER');
+
       if (!profile) {
         profile = {
           id: fbUser.uid,
           email: fbUser.email || '',
           name: fbUser.displayName || 'Google Customer',
-          role: 'CUSTOMER',
+          role: resolved.role,
           avatarUrl: fbUser.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${fbUser.uid}`,
           createdAt: new Date().toISOString(),
         };
-        await firestoreService.saveUserProfile(profile);
+      } else if (resolved.role === 'SHOP_OWNER' && profile.role !== 'SHOP_OWNER') {
+        profile = { ...profile, role: 'SHOP_OWNER' };
+      }
+      await firestoreService.saveUserProfile(profile);
+
+      let effectiveToken = await fbUser.getIdToken();
+      const syncRes = await apiClient.syncFirebaseAccount(profile, ownedShop);
+      if (syncRes.token) {
+        effectiveToken = syncRes.token;
       }
 
-      const res = await apiClient.firebaseLogin({
-        uid: fbUser.uid,
-        email: fbUser.email,
-        name: fbUser.displayName,
-        avatarUrl: fbUser.photoURL,
-        provider: 'google.com',
-      });
-
+      const effectiveShopId = resolved.shopId || syncRes.shopId || null;
+      persistLocalSession(profile, effectiveToken, effectiveShopId);
       setUser(profile);
-      const fbToken = await fbUser.getIdToken();
-      setToken(fbToken);
-      localStorage.setItem('burmeal_token', fbToken);
-      setShopId(null);
+      setShopId(effectiveShopId);
+      setToken(effectiveToken);
       return { success: true };
     } catch (err: any) {
       console.warn('Google popup error:', err);
@@ -264,27 +427,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         error: err.message || 'Google sign-in popup closed or cancelled',
         errorCode: code || 'auth/popup-error',
       };
+    } finally {
+      isAuthActionInProgressRef.current = false;
     }
   };
 
   const logout = async () => {
-    try {
-      await firebaseSignOut(auth);
-    } catch {}
+    const currentToken = localStorage.getItem('burmeal_token');
+    isAuthActionInProgressRef.current = true;
+    clearLocalSession();
     setUser(null);
     setToken(null);
     setShopId(null);
-    localStorage.removeItem('burmeal_token');
-    localStorage.removeItem('burmeal_shop_id');
-    localStorage.removeItem('burmeal_user_data');
-  };
-
-  const switchDemoRole = async (targetRole: 'CUSTOMER' | 'SHOP_OWNER' | 'ADMIN') => {
-    let email = 'customer@burmeal.com';
-    if (targetRole === 'SHOP_OWNER') email = 'mandalay@burmeal.com';
-    if (targetRole === 'ADMIN') email = 'admin@burmeal.com';
-
-    await login(email, 'burmeal123');
+    try {
+      await firebaseSignOut(auth);
+    } catch {}
+    if (currentToken && currentToken.startsWith('tok_')) {
+      try {
+        await fetch('/api/auth/logout', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${currentToken}` },
+        });
+      } catch {}
+    }
+    isAuthActionInProgressRef.current = false;
   };
 
   return (
@@ -298,7 +464,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         loginWithGoogle,
         register,
         logout,
-        switchDemoRole,
       }}
     >
       {children}

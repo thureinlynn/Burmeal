@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { COUNTRIES, getCountryFlag } from '../utils/countries';
@@ -8,8 +8,6 @@ import {
   Mail,
   User,
   Store,
-  ArrowRight,
-  ShieldCheck,
   MapPin,
   Copy,
   Check,
@@ -28,7 +26,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   onClose,
   defaultRole = 'CUSTOMER',
 }) => {
-  const { login, register, loginWithGoogle, switchDemoRole } = useAuth();
+  const { login, register, loginWithGoogle } = useAuth();
   const { t } = useLanguage();
 
   const [isSignUp, setIsSignUp] = useState(false);
@@ -53,6 +51,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   } | null>(null);
   const [copiedDomain, setCopiedDomain] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      setRole(defaultRole);
+      setError(null);
+      setErrorDetails(null);
+    }
+  }, [isOpen, defaultRole]);
 
   if (!isOpen) return null;
 
@@ -83,7 +89,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           setError(res.error || 'Failed to register account');
         }
       } else {
-        const res = await login(email, password);
+        const res = await login(email, password, role);
         if (res.success) {
           onClose();
         } else {
@@ -189,8 +195,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               </button>
             </div>
 
-            {/* Action Buttons: Open Console Settings & Quick Demo Customer Fallback */}
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 pt-1">
+            {/* Action Button: Open Console Settings */}
+            <div className="flex items-center gap-2 pt-1">
               <a
                 href="https://console.firebase.google.com/project/burmeal-48966/authentication/settings"
                 target="_blank"
@@ -200,18 +206,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 <span>Add in Firebase Console</span>
                 <ExternalLink className="w-3 h-3" />
               </a>
-              <button
-                type="button"
-                onClick={async () => {
-                  setError(null);
-                  setErrorDetails(null);
-                  await switchDemoRole('CUSTOMER');
-                  onClose();
-                }}
-                className="py-1.5 px-3 bg-stone-100 hover:bg-stone-200 dark:bg-stone-800 dark:hover:bg-stone-700 text-stone-800 dark:text-stone-200 rounded-lg text-xs font-semibold inline-flex items-center justify-center gap-1 transition-colors cursor-pointer"
-              >
-                <span>Demo Customer Login</span>
-              </button>
             </div>
           </div>
         ) : errorDetails ? (
@@ -315,7 +309,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           {isSignUp && (
             <>
               <div>
-                <label className="block text-xs font-medium text-stone-700 mb-1">
+                <label className="block text-xs font-medium text-stone-700 dark:text-stone-300 mb-1">
                   {t.fullName}
                 </label>
                 <div className="relative">
@@ -326,7 +320,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     placeholder="e.g. Daw Khin Sandar"
-                    className="w-full pl-9 pr-3 py-2 text-xs bg-stone-50 border border-stone-200 rounded-lg focus:outline-none focus:border-amber-600"
+                    className="w-full pl-9 pr-3 py-2 text-xs bg-stone-50 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-lg focus:outline-none focus:border-amber-600 text-stone-900 dark:text-stone-100"
                   />
                 </div>
               </div>
@@ -334,7 +328,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               {role === 'SHOP_OWNER' && (
                 <>
                   <div>
-                    <label className="block text-xs font-medium text-stone-700 mb-1">
+                    <label className="block text-xs font-medium text-stone-700 dark:text-stone-300 mb-1">
                       {t.shopName}
                     </label>
                     <div className="relative">
@@ -345,7 +339,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                         value={shopName}
                         onChange={(e) => setShopName(e.target.value)}
                         placeholder="e.g. Mandalay Teahouse"
-                        className="w-full pl-9 pr-3 py-2 text-xs bg-stone-50 border border-stone-200 rounded-lg focus:outline-none focus:border-amber-600"
+                        className="w-full pl-9 pr-3 py-2 text-xs bg-stone-50 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-lg focus:outline-none focus:border-amber-600 text-stone-900 dark:text-stone-100"
                       />
                     </div>
                   </div>
@@ -428,8 +422,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     </div>
                   </div>
 
-                  <p className="text-[11px] text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 p-2 rounded border border-amber-200 dark:border-amber-800/60">
-                    {t.pendingApprovalMsg}
+                  <p className="text-[11px] text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 p-2 rounded border border-emerald-200 dark:border-emerald-800/60">
+                    Your shop dashboard and public storefront will be available right after sign up.
                   </p>
                 </>
               )}
@@ -437,7 +431,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           )}
 
           <div>
-            <label className="block text-xs font-medium text-stone-700 mb-1">{t.email}</label>
+            <label className="block text-xs font-medium text-stone-700 dark:text-stone-300 mb-1">{t.email}</label>
             <div className="relative">
               <Mail className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2" />
               <input
@@ -446,43 +440,50 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="you@example.com"
-                className="w-full pl-9 pr-3 py-2 text-xs bg-stone-50 border border-stone-200 rounded-lg focus:outline-none focus:border-amber-600"
+                className="w-full pl-9 pr-3 py-2 text-xs bg-stone-50 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-lg focus:outline-none focus:border-amber-600 text-stone-900 dark:text-stone-100"
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-stone-700 mb-1">{t.password}</label>
+            <label className="block text-xs font-medium text-stone-700 dark:text-stone-300 mb-1">{t.password}</label>
             <div className="relative">
               <Lock className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2" />
               <input
                 type="password"
                 required
+                minLength={isSignUp ? 6 : undefined}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
-                className="w-full pl-9 pr-3 py-2 text-xs bg-stone-50 border border-stone-200 rounded-lg focus:outline-none focus:border-amber-600"
+                className="w-full pl-9 pr-3 py-2 text-xs bg-stone-50 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-lg focus:outline-none focus:border-amber-600 text-stone-900 dark:text-stone-100"
               />
             </div>
+            {isSignUp && (
+              <p className="text-[10px] text-stone-400 dark:text-stone-500 mt-1">
+                Password must be at least 6 characters.
+              </p>
+            )}
           </div>
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-semibold text-xs rounded-lg transition-colors shadow-xs mt-2 disabled:opacity-50"
+            className="w-full py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-semibold text-xs rounded-lg transition-colors shadow-xs mt-2 disabled:opacity-50 cursor-pointer"
           >
             {loading ? '...' : isSignUp ? t.signUp : t.signIn}
           </button>
         </form>
 
-        <div className="mt-4 pt-3 border-t border-stone-100 text-center">
+        <div className="mt-4 pt-3 border-t border-stone-100 dark:border-stone-800 text-center">
           <button
+            type="button"
             onClick={() => {
               setIsSignUp(!isSignUp);
               setError(null);
               setErrorDetails(null);
             }}
-            className="text-xs text-amber-700 font-semibold hover:underline"
+            className="text-xs text-amber-700 dark:text-amber-400 font-semibold hover:underline cursor-pointer"
           >
             {isSignUp ? t.alreadyAccount : t.dontHaveAccount}
           </button>
