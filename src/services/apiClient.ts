@@ -669,49 +669,77 @@ export const apiClient = {
   },
 
   // Toggle save
-  async toggleSave(itemId: string, token?: string | null): Promise<boolean> {
+  async toggleSave(itemId: string, token?: string | null, desiredState?: boolean): Promise<boolean> {
     try {
       if (token) {
-        await fetch(`/api/menu-items/${itemId}/save`, {
+        const res = await fetch(`/api/menu-items/${itemId}/save`, {
           method: 'POST',
-          headers: { Authorization: `Bearer ${token}` },
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(desiredState !== undefined ? { desiredState } : {}),
         });
+        if (res.ok) {
+          const ct = res.headers.get('content-type') || '';
+          if (ct.includes('application/json')) {
+            const data = await res.json();
+            if (typeof data?.saved === 'boolean') {
+              return data.saved;
+            }
+          }
+        }
       }
     } catch {}
 
     const db = getLocalDb();
     const userId = getUserIdFromToken(token) || 'usr_cust_01';
     const exists = db.savedItems.some((s) => s.customerId === userId && s.itemId === itemId);
-    if (exists) {
+    const nextSaved = desiredState !== undefined ? desiredState : !exists;
+    if (!nextSaved) {
       db.savedItems = db.savedItems.filter((s) => !(s.customerId === userId && s.itemId === itemId));
-    } else {
+    } else if (!exists) {
       db.savedItems.push({ customerId: userId, itemId });
     }
     saveLocalDb(db);
-    return !exists;
+    return nextSaved;
   },
 
   // Toggle follow shop
-  async toggleFollow(shopId: string, token?: string | null): Promise<boolean> {
+  async toggleFollow(shopId: string, token?: string | null, desiredState?: boolean): Promise<boolean> {
     try {
       if (token) {
-        await fetch(`/api/shops/${shopId}/follow`, {
+        const res = await fetch(`/api/shops/${shopId}/follow`, {
           method: 'POST',
-          headers: { Authorization: `Bearer ${token}` },
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(desiredState !== undefined ? { desiredState } : {}),
         });
+        if (res.ok) {
+          const ct = res.headers.get('content-type') || '';
+          if (ct.includes('application/json')) {
+            const data = await res.json();
+            if (typeof data?.followed === 'boolean') {
+              return data.followed;
+            }
+          }
+        }
       }
     } catch {}
 
     const db = getLocalDb();
     const userId = getUserIdFromToken(token) || 'usr_cust_01';
     const exists = db.follows.some((f) => f.customerId === userId && f.shopId === shopId);
-    if (exists) {
+    const nextFollowed = desiredState !== undefined ? desiredState : !exists;
+    if (!nextFollowed) {
       db.follows = db.follows.filter((f) => !(f.customerId === userId && f.shopId === shopId));
-    } else {
+    } else if (!exists) {
       db.follows.push({ customerId: userId, shopId });
     }
     saveLocalDb(db);
-    return !exists;
+    return nextFollowed;
   },
 
   // Auth: Login

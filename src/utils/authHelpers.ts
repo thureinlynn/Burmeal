@@ -108,3 +108,40 @@ export function stripUndefined<T extends Record<string, any>>(obj: T): Partial<T
   }
   return cleaned as Partial<T>;
 }
+
+export interface FirebaseLoginErrorHandling {
+  shouldFallbackToBackend: boolean;
+  userError?: string;
+}
+
+/**
+ * Classifies Firebase Auth email/password sign-in errors so expected credential
+ * mismatches or legacy seeded-account checks fall through cleanly without noisy warnings,
+ * while non-retryable errors surface immediately to the user.
+ */
+export function classifyFirebaseLoginError(code?: string): FirebaseLoginErrorHandling {
+  switch (code) {
+    case 'auth/invalid-email':
+      return {
+        shouldFallbackToBackend: false,
+        userError: 'Please enter a valid email address.',
+      };
+    case 'auth/user-disabled':
+      return {
+        shouldFallbackToBackend: false,
+        userError: 'This account has been disabled.',
+      };
+    case 'auth/too-many-requests':
+      return {
+        shouldFallbackToBackend: false,
+        userError: 'Too many failed sign-in attempts. Please wait a moment and try again.',
+      };
+    case 'auth/invalid-credential':
+    case 'auth/user-not-found':
+    case 'auth/wrong-password':
+    case 'auth/network-request-failed':
+    case 'auth/operation-not-allowed':
+    default:
+      return { shouldFallbackToBackend: true };
+  }
+}

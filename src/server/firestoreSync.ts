@@ -100,7 +100,12 @@ export async function syncUserToFirestore(user: any) {
   }
 }
 
-export async function syncFollowToFirestore(customerId: string, shopId: string, isFollowed: boolean) {
+export async function syncFollowToFirestore(
+  customerId: string,
+  shopId: string,
+  isFollowed: boolean,
+  customerEmail?: string
+) {
   try {
     const followId = `${customerId}_${shopId}`;
     const ref = doc(serverDb, 'follows', followId);
@@ -108,6 +113,7 @@ export async function syncFollowToFirestore(customerId: string, shopId: string, 
       await setDoc(ref, {
         id: followId,
         customerId,
+        customerEmail: customerEmail ? customerEmail.trim().toLowerCase() : '',
         shopId,
         createdAt: new Date().toISOString(),
       });
@@ -119,7 +125,12 @@ export async function syncFollowToFirestore(customerId: string, shopId: string, 
   }
 }
 
-export async function syncSavedItemToFirestore(customerId: string, itemId: string, isSaved: boolean) {
+export async function syncSavedItemToFirestore(
+  customerId: string,
+  itemId: string,
+  isSaved: boolean,
+  customerEmail?: string
+) {
   try {
     const savedId = `${customerId}_${itemId}`;
     const ref = doc(serverDb, 'saved_items', savedId);
@@ -127,6 +138,7 @@ export async function syncSavedItemToFirestore(customerId: string, itemId: strin
       await setDoc(ref, {
         id: savedId,
         customerId,
+        customerEmail: customerEmail ? customerEmail.trim().toLowerCase() : '',
         itemId,
         createdAt: new Date().toISOString(),
       });

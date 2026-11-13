@@ -12,7 +12,11 @@ import {
   updateProfile,
 } from '../firebase';
 import { firestoreService } from '../services/firestoreService';
-import { resolveEffectiveUserRole, buildNewShopForOwner } from '../utils/authHelpers';
+import {
+  resolveEffectiveUserRole,
+  buildNewShopForOwner,
+  classifyFirebaseLoginError,
+} from '../utils/authHelpers';
 
 interface AuthContextType {
   user: User | null;
@@ -234,8 +238,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setToken(effectiveToken);
           return { success: true };
         } catch (fbErr: any) {
-          // Only fall through to backend SQLite login for accounts seeded in SQLite that aren't in Firebase Auth yet
-          console.warn('Firebase email login fallback check:', fbErr?.code || fbErr?.message);
+          const handling = classifyFirebaseLoginError(fbErr?.code);
+          if (!handling.shouldFallbackToBackend) {
+            return { success: false, error: handling.userError || 'Failed to sign in.' };
+          }
+          // Fall through silently to backend SQLite auth for seeded/legacy accounts
         }
       }
 
@@ -341,7 +348,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       return { success: true };
     } catch (fbErr: any) {
-      console.warn('Firebase registration error:', fbErr);
       if (fbErr.code === 'auth/email-already-in-use') {
         return { success: false, error: 'This email is already in use. Please sign in instead.' };
       }

@@ -967,15 +967,19 @@ app.post('/api/shops/:id/follow', (req: Request, res: Response) => {
     if (!user) return res.status(401).json({ error: 'Please log in to follow shops.' });
 
     const shopId = req.params.id;
+    const desiredState = typeof req.body?.desiredState === 'boolean' ? req.body.desiredState : undefined;
     const existing = db.prepare('SELECT 1 FROM follows WHERE customer_id = ? AND shop_id = ?').get(user.id, shopId);
+    const nextFollowed = desiredState !== undefined ? desiredState : !existing;
 
-    if (existing) {
+    if (!nextFollowed) {
       db.prepare('DELETE FROM follows WHERE customer_id = ? AND shop_id = ?').run(user.id, shopId);
-      syncFollowToFirestore(user.id, shopId, false);
+      syncFollowToFirestore(user.id, shopId, false, user.email);
       return res.json({ followed: false });
     } else {
-      db.prepare('INSERT INTO follows (customer_id, shop_id, created_at) VALUES (?, ?, ?)').run(user.id, shopId, new Date().toISOString());
-      syncFollowToFirestore(user.id, shopId, true);
+      if (!existing) {
+        db.prepare('INSERT INTO follows (customer_id, shop_id, created_at) VALUES (?, ?, ?)').run(user.id, shopId, new Date().toISOString());
+      }
+      syncFollowToFirestore(user.id, shopId, true, user.email);
       return res.json({ followed: true });
     }
   } catch (err) {
@@ -991,15 +995,19 @@ app.post('/api/menu-items/:id/save', (req: Request, res: Response) => {
     if (!user) return res.status(401).json({ error: 'Please log in to save items.' });
 
     const itemId = req.params.id;
+    const desiredState = typeof req.body?.desiredState === 'boolean' ? req.body.desiredState : undefined;
     const existing = db.prepare('SELECT 1 FROM saved_items WHERE customer_id = ? AND item_id = ?').get(user.id, itemId);
+    const nextSaved = desiredState !== undefined ? desiredState : !existing;
 
-    if (existing) {
+    if (!nextSaved) {
       db.prepare('DELETE FROM saved_items WHERE customer_id = ? AND item_id = ?').run(user.id, itemId);
-      syncSavedItemToFirestore(user.id, itemId, false);
+      syncSavedItemToFirestore(user.id, itemId, false, user.email);
       return res.json({ saved: false });
     } else {
-      db.prepare('INSERT INTO saved_items (customer_id, item_id, created_at) VALUES (?, ?, ?)').run(user.id, itemId, new Date().toISOString());
-      syncSavedItemToFirestore(user.id, itemId, true);
+      if (!existing) {
+        db.prepare('INSERT INTO saved_items (customer_id, item_id, created_at) VALUES (?, ?, ?)').run(user.id, itemId, new Date().toISOString());
+      }
+      syncSavedItemToFirestore(user.id, itemId, true, user.email);
       return res.json({ saved: true });
     }
   } catch (err) {

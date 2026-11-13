@@ -1674,7 +1674,7 @@ async function syncUserToFirestore(user) {
     console.warn("syncUserToFirestore error:", err);
   }
 }
-async function syncFollowToFirestore(customerId, shopId, isFollowed) {
+async function syncFollowToFirestore(customerId, shopId, isFollowed, customerEmail) {
   try {
     const followId = `${customerId}_${shopId}`;
     const ref = doc2(serverDb, "follows", followId);
@@ -1682,6 +1682,7 @@ async function syncFollowToFirestore(customerId, shopId, isFollowed) {
       await setDoc2(ref, {
         id: followId,
         customerId,
+        customerEmail: customerEmail ? customerEmail.trim().toLowerCase() : "",
         shopId,
         createdAt: (/* @__PURE__ */ new Date()).toISOString()
       });
@@ -1692,7 +1693,7 @@ async function syncFollowToFirestore(customerId, shopId, isFollowed) {
     console.warn("syncFollowToFirestore error:", err);
   }
 }
-async function syncSavedItemToFirestore(customerId, itemId, isSaved) {
+async function syncSavedItemToFirestore(customerId, itemId, isSaved, customerEmail) {
   try {
     const savedId = `${customerId}_${itemId}`;
     const ref = doc2(serverDb, "saved_items", savedId);
@@ -1700,6 +1701,7 @@ async function syncSavedItemToFirestore(customerId, itemId, isSaved) {
       await setDoc2(ref, {
         id: savedId,
         customerId,
+        customerEmail: customerEmail ? customerEmail.trim().toLowerCase() : "",
         itemId,
         createdAt: (/* @__PURE__ */ new Date()).toISOString()
       });
@@ -2521,14 +2523,18 @@ app3.post("/api/shops/:id/follow", (req, res) => {
     const user = getAuthenticatedUser(req);
     if (!user) return res.status(401).json({ error: "Please log in to follow shops." });
     const shopId = req.params.id;
+    const desiredState = typeof req.body?.desiredState === "boolean" ? req.body.desiredState : void 0;
     const existing = db.prepare("SELECT 1 FROM follows WHERE customer_id = ? AND shop_id = ?").get(user.id, shopId);
-    if (existing) {
+    const nextFollowed = desiredState !== void 0 ? desiredState : !existing;
+    if (!nextFollowed) {
       db.prepare("DELETE FROM follows WHERE customer_id = ? AND shop_id = ?").run(user.id, shopId);
-      syncFollowToFirestore(user.id, shopId, false);
+      syncFollowToFirestore(user.id, shopId, false, user.email);
       return res.json({ followed: false });
     } else {
-      db.prepare("INSERT INTO follows (customer_id, shop_id, created_at) VALUES (?, ?, ?)").run(user.id, shopId, (/* @__PURE__ */ new Date()).toISOString());
-      syncFollowToFirestore(user.id, shopId, true);
+      if (!existing) {
+        db.prepare("INSERT INTO follows (customer_id, shop_id, created_at) VALUES (?, ?, ?)").run(user.id, shopId, (/* @__PURE__ */ new Date()).toISOString());
+      }
+      syncFollowToFirestore(user.id, shopId, true, user.email);
       return res.json({ followed: true });
     }
   } catch (err) {
@@ -2541,14 +2547,18 @@ app3.post("/api/menu-items/:id/save", (req, res) => {
     const user = getAuthenticatedUser(req);
     if (!user) return res.status(401).json({ error: "Please log in to save items." });
     const itemId = req.params.id;
+    const desiredState = typeof req.body?.desiredState === "boolean" ? req.body.desiredState : void 0;
     const existing = db.prepare("SELECT 1 FROM saved_items WHERE customer_id = ? AND item_id = ?").get(user.id, itemId);
-    if (existing) {
+    const nextSaved = desiredState !== void 0 ? desiredState : !existing;
+    if (!nextSaved) {
       db.prepare("DELETE FROM saved_items WHERE customer_id = ? AND item_id = ?").run(user.id, itemId);
-      syncSavedItemToFirestore(user.id, itemId, false);
+      syncSavedItemToFirestore(user.id, itemId, false, user.email);
       return res.json({ saved: false });
     } else {
-      db.prepare("INSERT INTO saved_items (customer_id, item_id, created_at) VALUES (?, ?, ?)").run(user.id, itemId, (/* @__PURE__ */ new Date()).toISOString());
-      syncSavedItemToFirestore(user.id, itemId, true);
+      if (!existing) {
+        db.prepare("INSERT INTO saved_items (customer_id, item_id, created_at) VALUES (?, ?, ?)").run(user.id, itemId, (/* @__PURE__ */ new Date()).toISOString());
+      }
+      syncSavedItemToFirestore(user.id, itemId, true, user.email);
       return res.json({ saved: true });
     }
   } catch (err) {

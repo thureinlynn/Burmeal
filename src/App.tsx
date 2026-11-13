@@ -5,6 +5,16 @@ import { useLocation } from './context/LocationContext';
 import { MenuItem, Shop, MenuType } from './types';
 import { apiClient } from './services/apiClient';
 import { firestoreService } from './services/firestoreService';
+import {
+  mergeUniqueIds,
+  mergeUniqueShops,
+  mergeUniqueMenuItems,
+  applyFollowStateToShops,
+  applySaveStateToMenuItems,
+  filterFollowedShops,
+  filterFollowedMenuItems,
+  filterSavedMenuItems,
+} from './utils/userDataHelpers';
 import { Navbar } from './components/Navbar';
 import { BottomNav } from './components/BottomNav';
 import { FilterBar } from './components/FilterBar';
@@ -52,10 +62,16 @@ export default function App() {
   // Data states
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [shops, setShops] = useState<Shop[]>([]);
-  const [allFollowedShops, setAllFollowedShops] = useState<Shop[]>([]);
+  const [allBackendShopsCache, setAllBackendShopsCache] = useState<Shop[]>([]);
+  const [allBackendItemsCache, setAllBackendItemsCache] = useState<MenuItem[]>([]);
+  const [firestoreShopsCache, setFirestoreShopsCache] = useState<Shop[]>([]);
+  const [firestoreItemsCache, setFirestoreItemsCache] = useState<MenuItem[]>([]);
+  const [firestoreFollowedIds, setFirestoreFollowedIds] = useState<string[]>([]);
+  const [firestoreSavedIds, setFirestoreSavedIds] = useState<string[]>([]);
+  const [backendFollowedIds, setBackendFollowedIds] = useState<string[]>([]);
+  const [backendSavedIds, setBackendSavedIds] = useState<string[]>([]);
   const [followingViewMode, setFollowingViewMode] = useState<'SHOPS' | 'DISHES'>('SHOPS');
   const [savedItems, setSavedItems] = useState<MenuItem[]>([]);
-  const [followedCount, setFollowedCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
 
   // Search & Filters
@@ -64,6 +80,56 @@ export default function App() {
   const [isVegetarian, setIsVegetarian] = useState(false);
   const [isHalal, setIsHalal] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState('ALL');
+
+  const isSignedIn = Boolean(user || token);
+
+  // Effective cross-device IDs (Firestore real-time UID/email source of truth + backend session fallback)
+  const effectiveFollowedIds = React.useMemo(
+    () => new Set(mergeUniqueIds(firestoreFollowedIds, backendFollowedIds)),
+    [firestoreFollowedIds, backendFollowedIds]
+  );
+
+  const effectiveSavedIds = React.useMemo(
+    () => new Set(mergeUniqueIds(firestoreSavedIds, backendSavedIds)),
+    [firestoreSavedIds, backendSavedIds]
+  );
+
+  // Subscribe to global Firestore shops & menu_items caches so followed/saved custom shops/items resolve across devices
+  useEffect(() => {
+    const unsubShops = firestoreService.subscribeShops((fsShops) => {
+      setFirestoreShopsCache(fsShops);
+    });
+    const unsubItems = firestoreService.subscribeMenuItems((fsItems) => {
+      setFirestoreItemsCache(fsItems);
+    });
+    return () => {
+      unsubShops();
+      unsubItems();
+    };
+  }, []);
+
+  // Subscribe to Firestore follows & saved_items for the active Firebase UID + normalized email
+  useEffect(() => {
+    if (!user?.id && !user?.email) {
+      setFirestoreFollowedIds([]);
+      setFirestoreSavedIds([]);
+      return;
+    }
+    const unsubFollows = firestoreService.subscribeFollows(
+      user.id || '',
+      (ids) => setFirestoreFollowedIds(ids),
+      user.email
+    );
+    const unsubSaved = firestoreService.subscribeSavedItems(
+      user.id || '',
+      (ids) => setFirestoreSavedIds(ids),
+      user.email
+    );
+    return () => {
+      unsubFollows();
+      unsubSaved();
+    };
+  }, [user?.id, user?.email]);
 
   // Load Shops scoped to user's selected Country & Region
   const loadShops = async () => {
@@ -81,11 +147,11 @@ export default function App() {
     }
   };
 
-  // Load Menu Items scoped to user's selected Country & Region, with strict FOLLOWED feed logic
-  const loadMenuItems = async (feedTypeOverride?: 'FOLLOWED') => {
+  // Load Menu Items scoped to user's selected Country & Region (or selected shop)
+  const loadMenuItems = async () => {
     setIsLoading(true);
     try {
-      const isFollowFeed = currentTab === 'following' || feedTypeOverride === 'FOLLOWED';
+      const isFollowFeed = currentTab === 'following';
       const data = await apiClient.getMenuItems(
         {
           shopId: selectedShopId,
@@ -94,14 +160,12 @@ export default function App() {
           isVegetarian,
           isHalal,
           query: searchQuery.trim(),
-          feedType: isFollowFeed ? 'FOLLOWED' : undefined,
-          country: selectedCountry,
-          regionId: selectedRegionId,
+          country: isFollowFeed || selectedShopId ? undefined : selectedCountry,
+          regionId: isFollowFeed || selectedShopId ? undefined : selectedRegionId,
         },
         token
       );
       setMenuItems(data.items || []);
-      setFollowedCount(data.followedCount || 0);
     } catch (err) {
       console.error('Failed to load menu items', err);
     } finally {
@@ -109,28 +173,42 @@ export default function App() {
     }
   };
 
-  // Load Saved Items
+  // Load Saved Items & full cross-region catalog cache so bookmarked items/followed shops resolve across regions & devices
   const loadSavedItems = async () => {
-    if (!token) {
+    if (!isSignedIn) {
       setSavedItems([]);
+      setBackendSavedIds([]);
       return;
     }
     try {
-      const data = await apiClient.getSavedItems(token);
-      // Guarantee each saved item preserves its genuine shop country currency
-      const enriched = data.map((item) => {
-        const foundShop =
-          shops.find((s) => s.id === item.shopId) ||
-          allFollowedShops.find((s) => s.id === item.shopId);
-        return {
-          ...item,
-          shopCountry: item.shopCountry || item.country || foundShop?.country,
-          shopName: item.shopName || foundShop?.name,
-        };
-      });
-      setSavedItems(enriched);
+      const [backendSaved, allItemsRes] = await Promise.all([
+        token ? apiClient.getSavedItems(token) : Promise.resolve([]),
+        apiClient.getMenuItems({}, token),
+      ]);
+      setSavedItems(backendSaved);
+      setBackendSavedIds(backendSaved.map((i) => i.id));
+      if (allItemsRes?.items) {
+        setAllBackendItemsCache(allItemsRes.items);
+      }
     } catch (err) {
       console.error('Failed to load saved items', err);
+    }
+  };
+
+  const loadFollowedShops = async () => {
+    if (!isSignedIn) {
+      setBackendFollowedIds([]);
+      return;
+    }
+    try {
+      const [backendFollowed, allShops] = await Promise.all([
+        token ? apiClient.getShops({ followedOnly: true }, token) : Promise.resolve([]),
+        apiClient.getShops(null, token),
+      ]);
+      setBackendFollowedIds(backendFollowed.map((s) => s.id));
+      setAllBackendShopsCache(allShops);
+    } catch (err) {
+      console.error('Failed to load followed shops', err);
     }
   };
 
@@ -154,74 +232,83 @@ export default function App() {
     selectedRegionId,
   ]);
 
-  const loadFollowedShops = async () => {
-    if (!token) {
-      setAllFollowedShops([]);
-      return;
-    }
-    try {
-      const data = await apiClient.getShops({ followedOnly: true }, token);
-      setAllFollowedShops(data);
-    } catch (err) {
-      console.error('Failed to load followed shops', err);
-    }
-  };
-
   useEffect(() => {
-    if (currentTab === 'saved') {
-      loadSavedItems();
-    }
-  }, [currentTab, token]);
-
-  useEffect(() => {
-    if (token) {
+    if (isSignedIn) {
       loadFollowedShops();
+      loadSavedItems();
     } else {
-      setAllFollowedShops([]);
+      setBackendFollowedIds([]);
+      setBackendSavedIds([]);
+      setAllBackendShopsCache([]);
+      setAllBackendItemsCache([]);
+      setSavedItems([]);
     }
-  }, [token, currentTab]);
+  }, [token, user?.id, currentTab]);
 
-  // Handle follow toggle
+  // Handle follow toggle (persists to both Firestore and backend SQLite cleanly)
   const handleToggleFollow = async (targetShopId: string) => {
-    if (!token) {
+    if (!isSignedIn) {
       setAuthDefaultRole('CUSTOMER');
       setIsAuthModalOpen(true);
       return;
     }
+    const nextFollowed = !effectiveFollowedIds.has(targetShopId);
+    const updateIds = (prev: string[]) =>
+      nextFollowed ? mergeUniqueIds(prev, [targetShopId]) : prev.filter((id) => id !== targetShopId);
+
+    setFirestoreFollowedIds(updateIds);
+    setBackendFollowedIds(updateIds);
+
     try {
-      const res = await apiClient.toggleFollow(targetShopId, token);
-      if (res) {
-        await loadShops();
-        await loadFollowedShops();
-        await loadMenuItems();
-      }
+      await Promise.all([
+        user?.id
+          ? firestoreService.toggleFollow(user.id, targetShopId, user.email, nextFollowed).catch((fbErr) => {
+              console.warn('Firestore follow sync notice:', fbErr);
+              return nextFollowed;
+            })
+          : Promise.resolve(nextFollowed),
+        token ? apiClient.toggleFollow(targetShopId, token, nextFollowed).catch(() => nextFollowed) : Promise.resolve(nextFollowed),
+      ]);
+      await loadShops();
+      await loadFollowedShops();
     } catch (err) {
       console.error('Follow error:', err);
     }
   };
 
-  // Handle save bookmark toggle
+  // Handle save bookmark toggle (persists to both Firestore and backend SQLite cleanly)
   const handleToggleSave = async (item: MenuItem) => {
-    if (!token) {
+    if (!isSignedIn) {
       setAuthDefaultRole('CUSTOMER');
       setIsAuthModalOpen(true);
       return;
     }
+    const nextSaved = !effectiveSavedIds.has(item.id);
+    const updateIds = (prev: string[]) =>
+      nextSaved ? mergeUniqueIds(prev, [item.id]) : prev.filter((id) => id !== item.id);
+
+    setFirestoreSavedIds(updateIds);
+    setBackendSavedIds(updateIds);
+    setMenuItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, isSaved: nextSaved } : i)));
+    if (selectedItemForDetail && selectedItemForDetail.id === item.id) {
+      setSelectedItemForDetail({
+        ...selectedItemForDetail,
+        isSaved: nextSaved,
+      });
+    }
+
     try {
-      const res = await apiClient.toggleSave(item.id, token);
-      if (res) {
-        setMenuItems((prev) =>
-          prev.map((i) => (i.id === item.id ? { ...i, isSaved: !i.isSaved } : i))
-        );
-        if (selectedItemForDetail && selectedItemForDetail.id === item.id) {
-          setSelectedItemForDetail({
-            ...selectedItemForDetail,
-            isSaved: !selectedItemForDetail.isSaved,
-          });
-        }
-        if (currentTab === 'saved') {
-          loadSavedItems();
-        }
+      await Promise.all([
+        user?.id
+          ? firestoreService.toggleSaveItem(user.id, item.id, user.email, nextSaved).catch((fbErr) => {
+              console.warn('Firestore save sync notice:', fbErr);
+              return nextSaved;
+            })
+          : Promise.resolve(nextSaved),
+        token ? apiClient.toggleSave(item.id, token, nextSaved).catch(() => nextSaved) : Promise.resolve(nextSaved),
+      ]);
+      if (currentTab === 'saved') {
+        await loadSavedItems();
       }
     } catch (err) {
       console.error('Save error:', err);
@@ -388,8 +475,80 @@ export default function App() {
     }
   };
 
-  const activeDetailShop = shops.find((s) => s.id === selectedShopId) || allFollowedShops.find((s) => s.id === selectedShopId);
-  const followedShopsList = allFollowedShops.length > 0 ? allFollowedShops : shops.filter((s) => (s as any).isFollowed);
+  const allKnownShops = React.useMemo(
+    () => mergeUniqueShops(allBackendShopsCache, shops, firestoreShopsCache),
+    [allBackendShopsCache, shops, firestoreShopsCache]
+  );
+
+  const allKnownItems = React.useMemo(
+    () => mergeUniqueMenuItems(allBackendItemsCache, menuItems, firestoreItemsCache, savedItems),
+    [allBackendItemsCache, menuItems, firestoreItemsCache, savedItems]
+  );
+
+  const displayedShops = React.useMemo(
+    () => applyFollowStateToShops(shops, effectiveFollowedIds),
+    [shops, effectiveFollowedIds]
+  );
+
+  const followedShopsList = React.useMemo(
+    () => filterFollowedShops(allKnownShops, effectiveFollowedIds),
+    [allKnownShops, effectiveFollowedIds]
+  );
+
+  const followedRowDishes = React.useMemo(
+    () => filterFollowedMenuItems(allKnownItems, effectiveFollowedIds, effectiveSavedIds),
+    [allKnownItems, effectiveFollowedIds, effectiveSavedIds]
+  );
+
+  const displayedMenuItems = React.useMemo(() => {
+    if (currentTab === 'following') {
+      return filterFollowedMenuItems(allKnownItems, effectiveFollowedIds, effectiveSavedIds, {
+        menuType: selectedMenuType,
+        category: selectedCategory,
+        isVegetarian,
+        isHalal,
+        query: searchQuery,
+      });
+    }
+    if (selectedShopId) {
+      const shopMerged = mergeUniqueMenuItems(
+        menuItems,
+        allKnownItems.filter((m) => m.shopId === selectedShopId)
+      );
+      return applySaveStateToMenuItems(shopMerged, effectiveSavedIds);
+    }
+    return applySaveStateToMenuItems(menuItems, effectiveSavedIds);
+  }, [
+    currentTab,
+    selectedShopId,
+    allKnownItems,
+    menuItems,
+    effectiveFollowedIds,
+    effectiveSavedIds,
+    selectedMenuType,
+    selectedCategory,
+    isVegetarian,
+    isHalal,
+    searchQuery,
+  ]);
+
+  const displayedSavedItems = React.useMemo(
+    () => filterSavedMenuItems(allKnownItems, effectiveSavedIds, allKnownShops),
+    [allKnownItems, effectiveSavedIds, allKnownShops]
+  );
+
+  const activeDetailShop = React.useMemo(() => {
+    if (!selectedShopId) return undefined;
+    const found =
+      displayedShops.find((s) => s.id === selectedShopId) ||
+      followedShopsList.find((s) => s.id === selectedShopId) ||
+      allKnownShops.find((s) => s.id === selectedShopId);
+    if (!found) return undefined;
+    return {
+      ...found,
+      isFollowed: effectiveFollowedIds.has(found.id),
+    };
+  }, [selectedShopId, displayedShops, followedShopsList, allKnownShops, effectiveFollowedIds]);
 
   // Fallback safe owner shop so the dashboard is guaranteed to be fully usable and visible
   const fallbackOwnerShop: Shop = {
@@ -516,7 +675,7 @@ export default function App() {
             {/* Results Header with Current Region Indicator */}
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold text-stone-500 dark:text-stone-400 flex items-center gap-1.5">
-                <span>{menuItems.length} {t.dishes} in {selectedRegionName} {selectedFlag}</span>
+                <span>{displayedMenuItems.length} {t.dishes} in {selectedRegionName} {selectedFlag}</span>
                 {searchQuery && <span>for "{searchQuery}"</span>}
               </span>
               {(selectedMenuType !== 'ALL' || isVegetarian || isHalal || searchQuery || selectedCategory !== 'ALL') && (
@@ -536,7 +695,7 @@ export default function App() {
             </div>
 
             {/* Public Food Items Grid (AT LEAST TWO ITEMS PER ROW IN MOBILE UI!) */}
-            {menuItems.length === 0 ? (
+            {displayedMenuItems.length === 0 ? (
               <div className="bg-white dark:bg-stone-900 rounded-3xl border border-stone-200 dark:border-stone-800 p-12 text-center text-xs text-stone-400 space-y-3">
                 <Store className="w-10 h-10 mx-auto text-stone-300 dark:text-stone-600" />
                 <p className="font-semibold text-stone-700 dark:text-stone-300">
@@ -555,7 +714,7 @@ export default function App() {
               </div>
             ) : (
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-6">
-                {menuItems.map((item) => (
+                {displayedMenuItems.map((item) => (
                   <MenuCard
                     key={item.id}
                     item={item}
@@ -587,7 +746,7 @@ export default function App() {
               </div>
 
               {/* View Switcher: Followed Kitchens vs All Followed Dishes Feed */}
-              {token && followedShopsList.length > 0 && (
+              {isSignedIn && followedShopsList.length > 0 && (
                 <div className="inline-flex p-1 bg-stone-100 dark:bg-stone-850 rounded-2xl border border-stone-200/80 dark:border-stone-800 self-start sm:self-auto shadow-2xs">
                   <button
                     onClick={() => setFollowingViewMode('SHOPS')}
@@ -609,14 +768,14 @@ export default function App() {
                     }`}
                   >
                     <Sparkles className="w-3.5 h-3.5 text-amber-600" />
-                    <span>Dishes Feed ({menuItems.length})</span>
+                    <span>Dishes Feed ({displayedMenuItems.length})</span>
                   </button>
                 </div>
               )}
             </div>
 
             {/* REQUIREMENT 2: Strict Inclusion of ONLY Followed Shops, Strict Exclusion of non-followed shops */}
-            {!token ? (
+            {!isSignedIn ? (
               <div className="bg-white/80 dark:bg-stone-900/80 backdrop-blur-md rounded-3xl border border-stone-200 dark:border-stone-800 p-10 sm:p-14 text-center max-w-lg mx-auto shadow-xs">
                 <div className="w-16 h-16 rounded-2xl bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 flex items-center justify-center mx-auto mb-4">
                   <Heart className="w-8 h-8" />
@@ -678,7 +837,7 @@ export default function App() {
                     <FollowedShopRow
                       key={fShop.id}
                       shop={fShop}
-                      dishes={menuItems}
+                      dishes={followedRowDishes}
                       onSelectShop={(sId) => {
                         setSelectedShopId(sId);
                         setCurrentTab('shop_detail');
@@ -707,7 +866,7 @@ export default function App() {
                 />
 
                 {/* Grid of Dishes STRICTLY from followed shops */}
-                {menuItems.length === 0 ? (
+                {displayedMenuItems.length === 0 ? (
                   <div className="bg-white/80 dark:bg-stone-900/80 backdrop-blur-md rounded-3xl border border-stone-200 dark:border-stone-800 p-10 text-center text-xs text-stone-400 space-y-3">
                     <p className="font-semibold text-stone-700 dark:text-stone-300">
                       No active dishes currently matching filters from your followed shops.
@@ -734,7 +893,7 @@ export default function App() {
                   </div>
                 ) : (
                   <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-6">
-                    {menuItems.map((item) => (
+                    {displayedMenuItems.map((item) => (
                       <MenuCard
                         key={item.id}
                         item={item}
@@ -766,7 +925,7 @@ export default function App() {
               </p>
             </div>
 
-            {!token ? (
+            {!isSignedIn ? (
               <div className="bg-white dark:bg-stone-900 rounded-3xl border border-stone-200 dark:border-stone-800 p-8 text-center max-w-md mx-auto">
                 <p className="text-xs text-stone-600 dark:text-stone-300 mb-3">Please sign in to access your saved items across devices.</p>
                 <button
@@ -776,34 +935,24 @@ export default function App() {
                   {t.signIn}
                 </button>
               </div>
-            ) : savedItems.length === 0 ? (
+            ) : displayedSavedItems.length === 0 ? (
               <div className="bg-white dark:bg-stone-900 rounded-3xl border border-stone-200 dark:border-stone-800 p-12 text-center text-xs text-stone-400">
                 {t.noSavedItems}
               </div>
             ) : (
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-6">
-                {savedItems.map((item) => {
-                  const itemShop =
-                    shops.find((s) => s.id === item.shopId) ||
-                    allFollowedShops.find((s) => s.id === item.shopId);
-                  const enrichedItem = {
-                    ...item,
-                    shopCountry: item.shopCountry || item.country || itemShop?.country,
-                    shopName: item.shopName || itemShop?.name,
-                  };
-                  return (
-                    <MenuCard
-                      key={item.id}
-                      item={enrichedItem}
-                      onToggleSave={handleToggleSave}
-                      onSelectItem={(it) => setSelectedItemForDetail({ ...it, ...enrichedItem })}
-                      onSelectShop={(sId) => {
-                        setSelectedShopId(sId);
-                        setCurrentTab('shop_detail');
-                      }}
-                    />
-                  );
-                })}
+                {displayedSavedItems.map((item) => (
+                  <MenuCard
+                    key={item.id}
+                    item={item}
+                    onToggleSave={handleToggleSave}
+                    onSelectItem={(it) => setSelectedItemForDetail(it)}
+                    onSelectShop={(sId) => {
+                      setSelectedShopId(sId);
+                      setCurrentTab('shop_detail');
+                    }}
+                  />
+                ))}
               </div>
             )}
           </div>
@@ -842,7 +991,7 @@ export default function App() {
               </button>
             </div>
 
-            {shops.length === 0 ? (
+            {displayedShops.length === 0 ? (
               <div className="bg-white dark:bg-stone-900 rounded-3xl border border-stone-200 dark:border-stone-800 p-12 text-center text-xs text-stone-400 space-y-3">
                 <Store className="w-10 h-10 mx-auto text-stone-300 dark:text-stone-600" />
                 <p className="font-semibold text-stone-700 dark:text-stone-300">
@@ -860,7 +1009,7 @@ export default function App() {
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-                {shops.map((shop) => (
+                {displayedShops.map((shop) => (
                   <ShopCard
                     key={shop.id}
                     shop={shop}
@@ -880,7 +1029,7 @@ export default function App() {
         {(currentTab === 'shop_detail' || (selectedShopId && currentTab !== 'admin')) && activeDetailShop && (
           <ShopProfileView
             shop={activeDetailShop}
-            menuItems={menuItems.filter((m) => m.shopId === activeDetailShop.id)}
+            menuItems={displayedMenuItems.filter((m) => m.shopId === activeDetailShop.id)}
             onBack={() => {
               setSelectedShopId(null);
               setCurrentTab('feed');
@@ -894,7 +1043,7 @@ export default function App() {
         {/* ================= VIEW 8: ADMIN APPROVAL PANEL ================= */}
         {currentTab === 'admin' && user?.role === 'ADMIN' && (
           <AdminPanel
-            shops={shops}
+            shops={displayedShops}
             onUpdateStatus={handleAdminStatusUpdate}
             onRefresh={() => {
               loadShops();
@@ -917,11 +1066,11 @@ export default function App() {
           selectedItemForDetail
             ? {
                 ...selectedItemForDetail,
+                isSaved: effectiveSavedIds.has(selectedItemForDetail.id),
                 shopCountry:
                   selectedItemForDetail.shopCountry ||
                   selectedItemForDetail.country ||
-                  shops.find((s) => s.id === selectedItemForDetail.shopId)?.country ||
-                  allFollowedShops.find((s) => s.id === selectedItemForDetail.shopId)?.country,
+                  allKnownShops.find((s) => s.id === selectedItemForDetail.shopId)?.country,
               }
             : null
         }

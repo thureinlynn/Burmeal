@@ -1,6 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { resolveEffectiveUserRole, buildNewShopForOwner, stripUndefined } from './authHelpers';
+import {
+  resolveEffectiveUserRole,
+  buildNewShopForOwner,
+  stripUndefined,
+  classifyFirebaseLoginError,
+} from './authHelpers';
 import { Shop, User } from '../types';
 
 const baseUser: User = {
@@ -78,4 +83,20 @@ test('stripUndefined removes undefined fields without dropping falsy values', ()
   assert.equal(cleaned.price, 0);
   assert.equal(cleaned.isHalal, false);
   assert.equal(cleaned.specialDate, null);
+});
+
+test('classifyFirebaseLoginError falls back silently on credential errors and blocks invalid-email/rate-limit', () => {
+  assert.deepEqual(classifyFirebaseLoginError('auth/invalid-credential'), {
+    shouldFallbackToBackend: true,
+  });
+  assert.deepEqual(classifyFirebaseLoginError('auth/user-not-found'), {
+    shouldFallbackToBackend: true,
+  });
+  const invalidEmail = classifyFirebaseLoginError('auth/invalid-email');
+  assert.equal(invalidEmail.shouldFallbackToBackend, false);
+  assert.ok(invalidEmail.userError?.includes('valid email'));
+
+  const rateLimited = classifyFirebaseLoginError('auth/too-many-requests');
+  assert.equal(rateLimited.shouldFallbackToBackend, false);
+  assert.ok(rateLimited.userError?.includes('Too many'));
 });
