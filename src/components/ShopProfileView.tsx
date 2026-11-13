@@ -3,7 +3,7 @@ import { Shop, MenuItem, MenuType } from '../types';
 import { useLanguage } from '../context/LanguageContext';
 import { buildContactLinks } from '../utils/filter';
 import { getCountryFlag } from '../utils/countries';
-import { resolveCoverDesign, pickRandomFoodCoverDesign, buildShopCoverSeed } from '../utils/coverDesigns';
+import { resolveCoverDesign, getCountryCoverDesign } from '../utils/coverDesigns';
 import { MenuCard } from './MenuCard';
 import {
   MapPin,
@@ -38,14 +38,13 @@ export const ShopProfileView: React.FC<ShopProfileViewProps> = ({
 }) => {
   const { t } = useLanguage();
   const [selectedMenuType, setSelectedMenuType] = useState<MenuType | 'ALL'>('ALL');
-  const coverSeed = buildShopCoverSeed(shop.id, shop.name);
   const [coverSrc, setCoverSrc] = useState<string>(() =>
-    resolveCoverDesign(shop.coverImage, coverSeed)
+    resolveCoverDesign(shop.coverImage, shop.country, shop.region)
   );
 
   useEffect(() => {
-    setCoverSrc(resolveCoverDesign(shop.coverImage, coverSeed));
-  }, [coverSeed, shop.coverImage]);
+    setCoverSrc(resolveCoverDesign(shop.coverImage, shop.country, shop.region));
+  }, [shop.coverImage, shop.country, shop.region]);
 
   const contact = buildContactLinks({
     whatsappPhone: shop.whatsappPhone,
@@ -84,7 +83,7 @@ export const ShopProfileView: React.FC<ShopProfileViewProps> = ({
             alt={shop.name}
             className="w-full h-full object-cover opacity-85"
             referrerPolicy="no-referrer"
-            onError={() => setCoverSrc((prev) => pickRandomFoodCoverDesign(prev))}
+            onError={() => setCoverSrc(getCountryCoverDesign(shop.country, shop.region))}
           />
           <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/35 to-transparent" />
 

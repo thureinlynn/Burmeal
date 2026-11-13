@@ -1,70 +1,64 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  COUNTRY_COVER_DESIGNS,
   DEFAULT_PLACEHOLDER_COVER,
-  GENERATED_FOOD_COVER_DESIGNS,
-  buildShopCoverSeed,
+  getCountryCoverDesign,
   isDefaultCoverImage,
-  pickRandomFoodCoverDesign,
-  pickSeededFoodCoverDesign,
+  resolveCountryCode,
   resolveCoverDesign,
 } from './coverDesigns.ts';
 
-test('isDefaultCoverImage detects empty, whitespace, and legacy placeholder covers', () => {
+test('isDefaultCoverImage detects empty, legacy hero spread, and removed food covers', () => {
   assert.equal(isDefaultCoverImage(undefined), true);
   assert.equal(isDefaultCoverImage(''), true);
   assert.equal(isDefaultCoverImage('   '), true);
   assert.equal(isDefaultCoverImage(DEFAULT_PLACEHOLDER_COVER), true);
+  assert.equal(isDefaultCoverImage('/src/assets/images/food_cover_kitchen_1794568119889.jpg'), true);
   assert.equal(isDefaultCoverImage('/custom/shop-banner.jpg'), false);
 });
 
-test('pickRandomFoodCoverDesign returns a valid food cover design and respects excludeUrl', () => {
-  const first = pickRandomFoodCoverDesign(undefined, () => 0);
-  assert.equal(first, GENERATED_FOOD_COVER_DESIGNS[0]);
-
-  const excluded = pickRandomFoodCoverDesign(GENERATED_FOOD_COVER_DESIGNS[0], () => 0);
-  assert.notEqual(excluded, GENERATED_FOOD_COVER_DESIGNS[0]);
-  assert.equal(GENERATED_FOOD_COVER_DESIGNS.includes(excluded), true);
-});
-
-test('pickSeededFoodCoverDesign is consistent and distributes top shops without adjacent collisions', () => {
-  const sampleShops: Array<[string, string]> = [
-    ['shop_02', 'Golden Rangoon Coconut Kitchen'],
-    ['shop_r1_2', 'Bogyoke Market Tea & Noodle House'],
-    ['shop_r1_3', 'Shwedagon Vista Curry House'],
-    ['shop_r1_4', 'Inya Lake Burmese Kitchen'],
-    ['shop_r1_5', 'Downtown 19th Street Grill & Thoke'],
-    ['shop_r1_6', 'Sanchaung Heritage Breakfast Corner'],
-    ['shop_r1_7', 'Pansodan Art & Teahouse'],
-    ['shop_r1_8', 'Chinatown Heritage Dim Sum & Mohinga'],
-    ['shop_r1_9', 'Hledan Junction Street Eats'],
-    ['shop_r1_10', 'Kandawgyi Palace Spice Kitchen'],
-    ['shop_r1_11', 'Yankin Noodle Lounge'],
-    ['shop_01', 'Mandalay Morning Teahouse'],
-  ];
-
-  const seeds = sampleShops.map(([id, name]) => buildShopCoverSeed(id, name));
-  const picks = seeds.map((s) => pickSeededFoodCoverDesign(s));
-
-  assert.equal(picks[0], pickSeededFoodCoverDesign(seeds[0]));
-  for (let i = 1; i < picks.length; i++) {
-    assert.notEqual(picks[i], picks[i - 1], `Adjacent shops at ${i - 1} and ${i} collided`);
+test('COUNTRY_COVER_DESIGNS maps each of the 10 supported regions/countries to a unique flat design asset', () => {
+  const values = Object.values(COUNTRY_COVER_DESIGNS);
+  assert.equal(values.length, 10);
+  assert.equal(new Set(values).size, 10);
+  for (const path of values) {
+    assert.match(path, /^\/src\/assets\/images\/country_cover_[a-z]{2}_\d+\.jpg$/);
   }
-
-  const unique = new Set(picks);
-  assert.equal(unique.size, GENERATED_FOOD_COVER_DESIGNS.length);
 });
 
-test('resolveCoverDesign replaces default cover consistently for a shopSeed and preserves custom covers', () => {
-  const custom = 'https://example.com/my-kitchen.jpg';
-  assert.equal(resolveCoverDesign(custom, 'shop_02', () => 0.4), custom);
+test('resolveCountryCode and getCountryCoverDesign resolve countries, aliases, and region fallbacks', () => {
+  assert.equal(resolveCountryCode('Myanmar'), 'MM');
+  assert.equal(resolveCountryCode('Thailand'), 'TH');
+  assert.equal(resolveCountryCode('Singapore'), 'SG');
+  assert.equal(resolveCountryCode('Malaysia'), 'MY');
+  assert.equal(resolveCountryCode('Japan'), 'JP');
+  assert.equal(resolveCountryCode('United States'), 'US');
+  assert.equal(resolveCountryCode('European Union'), 'EU');
+  assert.equal(resolveCountryCode('Germany'), 'EU');
+  assert.equal(resolveCountryCode('United Kingdom'), 'GB');
+  assert.equal(resolveCountryCode('UK'), 'GB');
+  assert.equal(resolveCountryCode('South Korea'), 'KR');
+  assert.equal(resolveCountryCode('Australia'), 'AU');
+  assert.equal(resolveCountryCode(undefined, 'JP-TYO'), 'JP');
+  assert.equal(getCountryCoverDesign('Japan'), COUNTRY_COVER_DESIGNS.JP);
+  assert.equal(getCountryCoverDesign('Unknown Country'), COUNTRY_COVER_DESIGNS.MM);
+});
 
-  const seed = buildShopCoverSeed('shop_02', 'Golden Rangoon Coconut Kitchen');
-  const fromSeed = resolveCoverDesign(DEFAULT_PLACEHOLDER_COVER, seed);
-  assert.equal(GENERATED_FOOD_COVER_DESIGNS.includes(fromSeed), true);
-  assert.notEqual(fromSeed, DEFAULT_PLACEHOLDER_COVER);
-  assert.equal(resolveCoverDesign(DEFAULT_PLACEHOLDER_COVER, seed), fromSeed);
+test('resolveCoverDesign applies country flat design for default covers and preserves custom covers', () => {
+  const custom = 'https://example.com/custom-shop.jpg';
+  assert.equal(resolveCoverDesign(custom, 'Thailand', 'Bangkok'), custom);
 
-  const generatedRandom = resolveCoverDesign(DEFAULT_PLACEHOLDER_COVER, undefined, () => 0.6);
-  assert.equal(GENERATED_FOOD_COVER_DESIGNS.includes(generatedRandom), true);
+  assert.equal(
+    resolveCoverDesign(DEFAULT_PLACEHOLDER_COVER, 'Thailand', 'Bangkok'),
+    COUNTRY_COVER_DESIGNS.TH
+  );
+  assert.equal(
+    resolveCoverDesign(DEFAULT_PLACEHOLDER_COVER, 'Myanmar', 'Yangon Region'),
+    COUNTRY_COVER_DESIGNS.MM
+  );
+  assert.equal(
+    resolveCoverDesign('/src/assets/images/food_cover_wok_1794568120622.jpg', 'Japan', 'Tokyo'),
+    COUNTRY_COVER_DESIGNS.JP
+  );
 });

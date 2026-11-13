@@ -2599,7 +2599,7 @@ async function startServer() {
   const isProduction = process.env.NODE_ENV === "production";
   if (!isProduction) {
     const vite = await createViteServer({
-      server: { middlewareMode: true, hmr: false },
+      server: { middlewareMode: true, hmr: false, ws: false },
       appType: "spa"
     });
     app3.use(vite.middlewares);
