@@ -1211,6 +1211,9 @@ function initDb() {
       city TEXT,
       region TEXT,
       country TEXT,
+      profile_image_url TEXT,
+      latitude REAL,
+      longitude REAL,
       facebook_url TEXT,
       whatsapp_phone TEXT,
       viber_phone TEXT,
@@ -1269,6 +1272,15 @@ function initDb() {
     }
     if (!columnNames.includes("country")) {
       db.prepare("ALTER TABLE shops ADD COLUMN country TEXT").run();
+    }
+    if (!columnNames.includes("profile_image_url")) {
+      db.prepare("ALTER TABLE shops ADD COLUMN profile_image_url TEXT").run();
+    }
+    if (!columnNames.includes("latitude")) {
+      db.prepare("ALTER TABLE shops ADD COLUMN latitude REAL").run();
+    }
+    if (!columnNames.includes("longitude")) {
+      db.prepare("ALTER TABLE shops ADD COLUMN longitude REAL").run();
     }
     const now = (/* @__PURE__ */ new Date()).toISOString();
     const salt = bcrypt.genSaltSync(10);
@@ -1586,31 +1598,37 @@ var serverDb = getFirestore2(app2);
 async function syncShopToFirestore(shop) {
   try {
     const ref = doc2(serverDb, "shops", shop.id);
-    await setDoc2(
-      ref,
-      {
-        id: shop.id,
-        ownerId: shop.ownerId || shop.owner_id,
-        name: shop.name,
-        bio: shop.bio || "",
-        coverImage: shop.coverImage || shop.cover_image || "",
-        avatarImage: shop.avatarImage || shop.avatar_image || "",
-        status: shop.status || "APPROVED",
-        cuisineType: shop.cuisineType || shop.cuisine_type || "Burmese Cuisine",
-        locationArea: shop.locationArea || shop.location_area || "",
-        address: shop.address || "",
-        city: shop.city || "",
-        region: shop.region || "",
-        country: shop.country || "",
-        facebookUrl: shop.facebookUrl || shop.facebook_url || "",
-        whatsappPhone: shop.whatsappPhone || shop.whatsapp_phone || "",
-        viberPhone: shop.viberPhone || shop.viber_phone || "",
-        lineId: shop.lineId || shop.line_id || "",
-        phoneNumber: shop.phoneNumber || shop.phone_number || "",
-        createdAt: shop.createdAt || shop.created_at || (/* @__PURE__ */ new Date()).toISOString()
-      },
-      { merge: true }
-    );
+    const lat = shop.latitude ?? null;
+    const lng = shop.longitude ?? null;
+    const payload = {
+      id: shop.id,
+      ownerId: shop.ownerId || shop.owner_id,
+      name: shop.name,
+      bio: shop.bio || "",
+      coverImage: shop.coverImage || shop.cover_image || "",
+      avatarImage: shop.avatarImage || shop.avatar_image || "",
+      profileImageUrl: shop.profileImageUrl || shop.profile_image_url || "",
+      status: shop.status || "APPROVED",
+      cuisineType: shop.cuisineType || shop.cuisine_type || "Burmese Cuisine",
+      locationArea: shop.locationArea || shop.location_area || "",
+      address: shop.address || "",
+      city: shop.city || "",
+      region: shop.region || "",
+      country: shop.country || "",
+      facebookUrl: shop.facebookUrl || shop.facebook_url || "",
+      whatsappPhone: shop.whatsappPhone || shop.whatsapp_phone || "",
+      viberPhone: shop.viberPhone || shop.viber_phone || "",
+      lineId: shop.lineId || shop.line_id || "",
+      phoneNumber: shop.phoneNumber || shop.phone_number || "",
+      createdAt: shop.createdAt || shop.created_at || (/* @__PURE__ */ new Date()).toISOString()
+    };
+    if (typeof lat === "number" && Number.isFinite(lat)) {
+      payload.latitude = lat;
+    }
+    if (typeof lng === "number" && Number.isFinite(lng)) {
+      payload.longitude = lng;
+    }
+    await setDoc2(ref, payload, { merge: true });
   } catch (err) {
     console.warn("syncShopToFirestore error:", err);
   }
@@ -1972,8 +1990,8 @@ app3.post("/api/auth/firebase-sync", (req, res) => {
       const existingShop = db.prepare("SELECT id FROM shops WHERE id = ?").get(incomingShop.id);
       if (!existingShop) {
         db.prepare(`
-          INSERT INTO shops (id, owner_id, name, bio, cover_image, avatar_image, status, cuisine_type, location_area, address, city, region, country, created_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          INSERT INTO shops (id, owner_id, name, bio, cover_image, avatar_image, profile_image_url, status, cuisine_type, location_area, address, city, region, country, latitude, longitude, created_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `).run(
           incomingShop.id,
           effectiveUserId,
@@ -1981,6 +1999,7 @@ app3.post("/api/auth/firebase-sync", (req, res) => {
           incomingShop.bio || "",
           incomingShop.coverImage || "/src/assets/images/burmeal_hero_spread_1793906769541.jpg",
           incomingShop.avatarImage || "",
+          incomingShop.profileImageUrl || "",
           incomingShop.status || "APPROVED",
           incomingShop.cuisineType || "Burmese Cuisine",
           incomingShop.locationArea || "Downtown",
@@ -1988,6 +2007,8 @@ app3.post("/api/auth/firebase-sync", (req, res) => {
           incomingShop.city || "Yangon",
           incomingShop.region || "Yangon Region",
           incomingShop.country || "Myanmar",
+          typeof incomingShop.latitude === "number" ? incomingShop.latitude : null,
+          typeof incomingShop.longitude === "number" ? incomingShop.longitude : null,
           incomingShop.createdAt || now
         );
       }
@@ -2132,6 +2153,7 @@ app3.get("/api/shops", (req, res) => {
       bio: s.bio,
       coverImage: s.cover_image,
       avatarImage: s.avatar_image,
+      profileImageUrl: s.profile_image_url || void 0,
       status: s.status,
       cuisineType: s.cuisine_type,
       locationArea: s.location_area,
@@ -2139,6 +2161,8 @@ app3.get("/api/shops", (req, res) => {
       city: s.city,
       region: s.region,
       country: s.country,
+      latitude: typeof s.latitude === "number" ? s.latitude : void 0,
+      longitude: typeof s.longitude === "number" ? s.longitude : void 0,
       facebookUrl: s.facebook_url,
       whatsappPhone: s.whatsapp_phone,
       viberPhone: s.viber_phone,
@@ -2182,6 +2206,7 @@ app3.get("/api/shops/:id", (req, res) => {
       bio: shop.bio,
       coverImage: shop.cover_image,
       avatarImage: shop.avatar_image,
+      profileImageUrl: shop.profile_image_url || void 0,
       status: shop.status,
       cuisineType: shop.cuisine_type,
       locationArea: shop.location_area,
@@ -2189,6 +2214,8 @@ app3.get("/api/shops/:id", (req, res) => {
       city: shop.city,
       region: shop.region,
       country: shop.country,
+      latitude: typeof shop.latitude === "number" ? shop.latitude : void 0,
+      longitude: typeof shop.longitude === "number" ? shop.longitude : void 0,
       facebookUrl: shop.facebook_url,
       whatsappPhone: shop.whatsapp_phone,
       viberPhone: shop.viber_phone,
@@ -2218,22 +2245,28 @@ app3.put("/api/shops/:id", (req, res) => {
       bio,
       coverImage,
       avatarImage,
+      profileImageUrl,
       cuisineType,
       locationArea,
       address,
       city,
       region,
       country,
+      latitude,
+      longitude,
       facebookUrl,
       whatsappPhone,
       viberPhone,
       lineId,
       phoneNumber
     } = req.body;
+    const nextLat = latitude === null ? null : typeof latitude === "number" && Number.isFinite(latitude) ? latitude : shop.latitude;
+    const nextLng = longitude === null ? null : typeof longitude === "number" && Number.isFinite(longitude) ? longitude : shop.longitude;
     db.prepare(`
       UPDATE shops
-      SET name = ?, bio = ?, cover_image = ?, avatar_image = ?,
+      SET name = ?, bio = ?, cover_image = ?, avatar_image = ?, profile_image_url = ?,
           cuisine_type = ?, location_area = ?, address = ?, city = ?, region = ?, country = ?,
+          latitude = ?, longitude = ?,
           facebook_url = ?, whatsapp_phone = ?, viber_phone = ?, line_id = ?, phone_number = ?
       WHERE id = ?
     `).run(
@@ -2241,12 +2274,15 @@ app3.put("/api/shops/:id", (req, res) => {
       bio || shop.bio,
       coverImage || shop.cover_image,
       avatarImage || shop.avatar_image,
+      profileImageUrl !== void 0 ? profileImageUrl : shop.profile_image_url,
       cuisineType || shop.cuisine_type,
       locationArea || shop.location_area,
       address !== void 0 ? address : shop.address,
       city !== void 0 ? city : shop.city,
       region !== void 0 ? region : shop.region,
       country !== void 0 ? country : shop.country,
+      nextLat,
+      nextLng,
       facebookUrl !== void 0 ? facebookUrl : shop.facebook_url,
       whatsappPhone !== void 0 ? whatsappPhone : shop.whatsapp_phone,
       viberPhone !== void 0 ? viberPhone : shop.viber_phone,

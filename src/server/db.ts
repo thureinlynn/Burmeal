@@ -49,6 +49,9 @@ export function initDb() {
       city TEXT,
       region TEXT,
       country TEXT,
+      profile_image_url TEXT,
+      latitude REAL,
+      longitude REAL,
       facebook_url TEXT,
       whatsapp_phone TEXT,
       viber_phone TEXT,
@@ -109,6 +112,15 @@ export function initDb() {
     }
     if (!columnNames.includes('country')) {
       db.prepare('ALTER TABLE shops ADD COLUMN country TEXT').run();
+    }
+    if (!columnNames.includes('profile_image_url')) {
+      db.prepare('ALTER TABLE shops ADD COLUMN profile_image_url TEXT').run();
+    }
+    if (!columnNames.includes('latitude')) {
+      db.prepare('ALTER TABLE shops ADD COLUMN latitude REAL').run();
+    }
+    if (!columnNames.includes('longitude')) {
+      db.prepare('ALTER TABLE shops ADD COLUMN longitude REAL').run();
     }
     // Backfill international shops for Thailand and Singapore
     const now = new Date().toISOString();

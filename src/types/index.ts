@@ -21,6 +21,7 @@ export interface Shop {
   bio: string;
   coverImage: string;
   avatarImage: string;
+  profileImageUrl?: string;
   status: ShopApprovalStatus;
   cuisineType: string;
   locationArea: string;
@@ -29,6 +30,8 @@ export interface Shop {
   city?: string;
   region?: string;
   country?: string; // e.g. "Myanmar", "Thailand", "Singapore", "United States", "United Kingdom", "Japan"
+  latitude?: number;
+  longitude?: number;
   // Contact & Direct ordering links
   facebookUrl?: string;
   whatsappPhone?: string; // e.g. "95912345678" -> https://wa.me/95912345678

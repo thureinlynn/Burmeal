@@ -5,6 +5,9 @@ import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { COUNTRIES, getCountryFlag, getCurrencyForCountry } from '../utils/countries';
+import { uploadShopProfilePicture } from '../services/supabaseClient';
+import { getShopProfileImage } from '../utils/shopLocationHelpers';
+import { ShopLocationPicker } from './ShopLocationPicker';
 import {
   LayoutDashboard,
   UtensilsCrossed,
@@ -37,6 +40,8 @@ import {
   Image as ImageIcon,
   User,
   Sparkles,
+  Upload,
+  Loader2,
 } from 'lucide-react';
 
 interface ShopDashboardProps {
@@ -201,6 +206,12 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
   const [country, setCountry] = useState(shop.country || 'Myanmar');
   const [coverImage, setCoverImage] = useState(shop.coverImage);
   const [avatarImage, setAvatarImage] = useState(shop.avatarImage);
+  const [profileImageUrl, setProfileImageUrl] = useState(shop.profileImageUrl || '');
+  const [latitude, setLatitude] = useState<number | undefined>(shop.latitude);
+  const [longitude, setLongitude] = useState<number | undefined>(shop.longitude);
+  const [isUploadingProfilePic, setIsUploadingProfilePic] = useState(false);
+  const [profileUploadError, setProfileUploadError] = useState('');
+  const [profileUploadSuccess, setProfileUploadSuccess] = useState('');
   const [facebookUrl, setFacebookUrl] = useState(shop.facebookUrl || '');
   const [whatsappPhone, setWhatsappPhone] = useState(shop.whatsappPhone || '');
   const [viberPhone, setViberPhone] = useState(shop.viberPhone || '');
@@ -221,6 +232,9 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
     setCountry(shop.country || 'Myanmar');
     setCoverImage(shop.coverImage);
     setAvatarImage(shop.avatarImage);
+    setProfileImageUrl(shop.profileImageUrl || '');
+    setLatitude(shop.latitude);
+    setLongitude(shop.longitude);
     setFacebookUrl(shop.facebookUrl || '');
     setWhatsappPhone(shop.whatsappPhone || '');
     setViberPhone(shop.viberPhone || '');
@@ -302,8 +316,35 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
     }
   };
 
+  const handleProfilePictureUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+
+    setProfileUploadError('');
+    setProfileUploadSuccess('');
+    setIsUploadingProfilePic(true);
+    try {
+      const uid = user?.id || shop.ownerId || shop.id;
+      const publicUrl = await uploadShopProfilePicture(file, uid);
+      setProfileImageUrl(publicUrl);
+      setAvatarImage(publicUrl);
+      await onUpdateShopProfile({
+        profileImageUrl: publicUrl,
+        avatarImage: publicUrl,
+      });
+      setProfileUploadSuccess('Shop profile picture uploaded and saved!');
+      setTimeout(() => setProfileUploadSuccess(''), 3500);
+    } catch (err: any) {
+      setProfileUploadError(err?.message || 'Failed to upload profile picture.');
+    } finally {
+      setIsUploadingProfilePic(false);
+    }
+  };
+
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
+    const effectiveProfileUrl = profileImageUrl.trim() || avatarImage.trim();
     await onUpdateShopProfile({
       name: shopName,
       bio,
@@ -315,7 +356,10 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
       region,
       country,
       coverImage,
-      avatarImage,
+      avatarImage: effectiveProfileUrl,
+      profileImageUrl: profileImageUrl.trim(),
+      latitude: (latitude ?? null) as any,
+      longitude: (longitude ?? null) as any,
       facebookUrl,
       whatsappPhone,
       viberPhone,
@@ -347,7 +391,7 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
           <div className="flex items-center gap-3.5">
           <img
-            src={shop.avatarImage}
+            src={getShopProfileImage(shop)}
             alt={shop.name}
             className="w-12 h-12 rounded-xl object-cover border border-stone-200 dark:border-stone-700 bg-stone-100"
             referrerPolicy="no-referrer"
@@ -1363,7 +1407,71 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
                 />
               </div>
 
-              {/* Photos */}
+              {/* Shop Profile Picture Upload (Supabase Storage + Firestore) */}
+              <div className="rounded-2xl border border-stone-200 dark:border-stone-700 bg-stone-50/70 dark:bg-stone-850/60 p-4 space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div className="flex items-center gap-3.5">
+                    <img
+                      src={profileImageUrl || avatarImage}
+                      alt={shopName || shop.name}
+                      referrerPolicy="no-referrer"
+                      className="w-16 h-16 rounded-2xl object-cover border-2 border-white dark:border-stone-700 shadow-xs bg-stone-200 shrink-0"
+                    />
+                    <div>
+                      <h3 className="text-xs font-bold text-stone-900 dark:text-stone-100 flex items-center gap-1.5">
+                        <ImageIcon className="w-3.5 h-3.5 text-amber-600" />
+                        <span>Shop Profile Picture</span>
+                      </h3>
+                      <p className="text-[11px] text-stone-500 dark:text-stone-400 mt-0.5">
+                        Upload a kitchen logo or portrait photo (JPG, PNG, WEBP, max 5 MB). Stored in Supabase Storage &amp; synced to your public storefront.
+                      </p>
+                    </div>
+                  </div>
+
+                  <label
+                    className={`inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-colors shrink-0 shadow-xs ${
+                      isUploadingProfilePic
+                        ? 'bg-stone-300 dark:bg-stone-700 text-stone-600 cursor-wait'
+                        : 'bg-stone-900 hover:bg-amber-600 dark:bg-stone-100 dark:text-stone-900 dark:hover:bg-amber-500 dark:hover:text-white text-white cursor-pointer'
+                    }`}
+                  >
+                    {isUploadingProfilePic ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        <span>Uploading...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="w-3.5 h-3.5" />
+                        <span>Upload Profile Picture</span>
+                      </>
+                    )}
+                    <input
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp,image/gif"
+                      disabled={isUploadingProfilePic}
+                      onChange={handleProfilePictureUpload}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
+
+                {profileUploadSuccess && (
+                  <div className="p-2.5 bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 text-xs rounded-xl flex items-center gap-2">
+                    <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span>{profileUploadSuccess}</span>
+                  </div>
+                )}
+
+                {profileUploadError && (
+                  <div className="p-2.5 bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300 text-xs rounded-xl flex items-start gap-2">
+                    <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                    <span>{profileUploadError}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Photos (Fallback / Direct URLs) */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-stone-700 dark:text-stone-300 mb-1">
@@ -1378,12 +1486,15 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-stone-700 dark:text-stone-300 mb-1">
-                    Avatar Image URL
+                    Profile / Avatar Image URL
                   </label>
                   <input
                     type="text"
-                    value={avatarImage}
-                    onChange={(e) => setAvatarImage(e.target.value)}
+                    value={profileImageUrl || avatarImage}
+                    onChange={(e) => {
+                      setProfileImageUrl(e.target.value);
+                      setAvatarImage(e.target.value);
+                    }}
                     className="w-full text-xs px-3 py-2 bg-stone-50 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-lg focus:outline-none focus:border-amber-600 text-stone-900 dark:text-stone-100"
                   />
                 </div>
@@ -1460,6 +1571,20 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
                       onChange={(e) => setAddress(e.target.value)}
                       placeholder="e.g. 78th Street, Between 26th & 27th"
                       className="w-full text-xs px-3 py-2 bg-stone-50 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-lg focus:outline-none focus:border-amber-600 text-stone-900 dark:text-stone-100"
+                    />
+                  </div>
+
+                  <div className="md:col-span-2">
+                    <ShopLocationPicker
+                      latitude={latitude}
+                      longitude={longitude}
+                      country={country}
+                      city={city}
+                      shopName={shopName}
+                      onChange={(lat, lng) => {
+                        setLatitude(lat);
+                        setLongitude(lng);
+                      }}
                     />
                   </div>
                 </div>

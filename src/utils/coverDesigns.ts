@@ -2,7 +2,7 @@ export const DEFAULT_PLACEHOLDER_COVER = '/src/assets/images/burmeal_hero_spread
 
 export type SupportedCountryCode = 'MM' | 'TH' | 'SG' | 'MY' | 'JP' | 'US' | 'EU' | 'GB' | 'KR' | 'AU';
 
-export const COUNTRY_COVER_DESIGNS: Record<SupportedCountryCode, string> = {
+export const LOCAL_COUNTRY_COVER_DESIGNS: Record<SupportedCountryCode, string> = {
   MM: '/src/assets/images/country_cover_mm_1794569770146.jpg',
   TH: '/src/assets/images/country_cover_th_1794569770140.jpg',
   SG: '/src/assets/images/country_cover_sg_1794569771078.jpg',
@@ -13,6 +13,22 @@ export const COUNTRY_COVER_DESIGNS: Record<SupportedCountryCode, string> = {
   GB: '/src/assets/images/country_cover_gb_1794569773653.jpg',
   KR: '/src/assets/images/country_cover_kr_1794569773040.jpg',
   AU: '/src/assets/images/country_cover_au_1794569773335.jpg',
+};
+
+export const SUPABASE_REGIONAL_COVER_BASE =
+  'https://oiyejybkorjvxsispjkg.supabase.co/storage/v1/object/public/shop-profiles/regional-covers';
+
+export const COUNTRY_COVER_DESIGNS: Record<SupportedCountryCode, string> = {
+  MM: `${SUPABASE_REGIONAL_COVER_BASE}/country_cover_mm_1794569770146.jpg`,
+  TH: `${SUPABASE_REGIONAL_COVER_BASE}/country_cover_th_1794569770140.jpg`,
+  SG: `${SUPABASE_REGIONAL_COVER_BASE}/country_cover_sg_1794569771078.jpg`,
+  MY: `${SUPABASE_REGIONAL_COVER_BASE}/country_cover_my_1794569771214.jpg`,
+  JP: `${SUPABASE_REGIONAL_COVER_BASE}/country_cover_jp_1794569772155.jpg`,
+  US: `${SUPABASE_REGIONAL_COVER_BASE}/country_cover_us_1794569770931.jpg`,
+  EU: `${SUPABASE_REGIONAL_COVER_BASE}/country_cover_eu_1794569772778.jpg`,
+  GB: `${SUPABASE_REGIONAL_COVER_BASE}/country_cover_gb_1794569773653.jpg`,
+  KR: `${SUPABASE_REGIONAL_COVER_BASE}/country_cover_kr_1794569773040.jpg`,
+  AU: `${SUPABASE_REGIONAL_COVER_BASE}/country_cover_au_1794569773335.jpg`,
 };
 
 const COUNTRY_NAME_TO_CODE: Array<[RegExp, SupportedCountryCode]> = [
@@ -67,12 +83,18 @@ export function getCountryCoverDesign(country?: string | null, region?: string |
   return COUNTRY_COVER_DESIGNS[code];
 }
 
+export function getLocalCountryCoverDesign(country?: string | null, region?: string | null): string {
+  const code = resolveCountryCode(country, region);
+  return LOCAL_COUNTRY_COVER_DESIGNS[code];
+}
+
 export function isDefaultCoverImage(url?: string | null): boolean {
   if (!url || !url.trim()) return true;
   const trimmed = url.trim();
   return (
     trimmed === DEFAULT_PLACEHOLDER_COVER ||
-    trimmed.includes('/src/assets/images/food_cover_')
+    trimmed.includes('/src/assets/images/food_cover_') ||
+    trimmed.includes('/src/assets/images/country_cover_')
   );
 }
 

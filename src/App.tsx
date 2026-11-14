@@ -73,6 +73,7 @@ export default function App() {
   const [followingViewMode, setFollowingViewMode] = useState<'SHOPS' | 'DISHES'>('SHOPS');
   const [savedItems, setSavedItems] = useState<MenuItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [gmpQuotaExceeded, setGmpQuotaExceeded] = useState(false);
 
   // Search & Filters
   const [searchQuery, setSearchQuery] = useState('');
@@ -82,6 +83,12 @@ export default function App() {
   const [selectedCategory, setSelectedCategory] = useState('ALL');
 
   const isSignedIn = Boolean(user || token);
+
+  useEffect(() => {
+    const onQuotaExceeded = () => setGmpQuotaExceeded(true);
+    window.addEventListener('gmp-quota-exceeded', onQuotaExceeded);
+    return () => window.removeEventListener('gmp-quota-exceeded', onQuotaExceeded);
+  }, []);
 
   // Effective cross-device IDs (Firestore real-time UID/email source of truth + backend session fallback)
   const effectiveFollowedIds = React.useMemo(
@@ -394,6 +401,7 @@ export default function App() {
     const targetId = ownerShop?.id || shopId;
     if (!targetId) return;
     try {
+      setOwnerShop((prev) => (prev ? { ...prev, ...data } : prev));
       await apiClient.updateShop(targetId, data, token).catch(() => null);
       await firestoreService.updateShop(targetId, data).catch((fbErr) => {
         console.warn('Direct Firestore shop update notice:', fbErr);
@@ -599,6 +607,22 @@ export default function App() {
 
   return (
     <div className="min-h-screen flex flex-col bg-[#FAFAF9] dark:bg-stone-950 text-stone-900 dark:text-stone-100 transition-colors pb-20 md:pb-8">
+      {gmpQuotaExceeded && (
+        <div className="bg-amber-50 border-b border-amber-200 text-amber-900 px-4 py-2.5 text-xs md:text-sm text-center sticky top-0 z-50 shadow-sm">
+          <span>
+            Google Maps Platform quota reached. If you are the app owner, visit{' '}
+            <a
+              href="https://developers.google.com/maps/ai/ai-studio?utm_campaign=gmp_mcp_codeassist_v1_aistudio#quota_exceeded_errors"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline font-semibold text-amber-950 hover:text-amber-800"
+            >
+              maps developer site
+            </a>{' '}
+            for instructions to update your account.
+          </span>
+        </div>
+      )}
       {/* Top Navbar */}
       <Navbar
         currentTab={currentTab}

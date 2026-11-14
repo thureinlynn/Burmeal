@@ -5,6 +5,7 @@ import { buildContactLinks, formatPrice } from '../utils/filter';
 import { getCountryFlag } from '../utils/countries';
 import { useLanguage } from '../context/LanguageContext';
 import { resolveCoverDesign, getCountryCoverDesign } from '../utils/coverDesigns';
+import { getShopProfileImage } from '../utils/shopLocationHelpers';
 
 interface FollowedShopRowProps {
   shop: Shop;
@@ -68,7 +69,7 @@ export const FollowedShopRow: React.FC<FollowedShopRowProps> = ({
 
             {/* Avatar overlay */}
             <img
-              src={shop.avatarImage}
+              src={getShopProfileImage(shop)}
               alt={shop.name}
               referrerPolicy="no-referrer"
               className="absolute bottom-1.5 right-1.5 w-6 h-6 sm:w-7 sm:h-7 rounded-full border border-white/90 shadow-xs object-cover bg-stone-200"

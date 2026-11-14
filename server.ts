@@ -321,8 +321,8 @@ app.post('/api/auth/firebase-sync', (req: Request, res: Response) => {
       const existingShop = db.prepare('SELECT id FROM shops WHERE id = ?').get(incomingShop.id) as any;
       if (!existingShop) {
         db.prepare(`
-          INSERT INTO shops (id, owner_id, name, bio, cover_image, avatar_image, status, cuisine_type, location_area, address, city, region, country, created_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          INSERT INTO shops (id, owner_id, name, bio, cover_image, avatar_image, profile_image_url, status, cuisine_type, location_area, address, city, region, country, latitude, longitude, created_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `).run(
           incomingShop.id,
           effectiveUserId,
@@ -330,6 +330,7 @@ app.post('/api/auth/firebase-sync', (req: Request, res: Response) => {
           incomingShop.bio || '',
           incomingShop.coverImage || '/src/assets/images/burmeal_hero_spread_1793906769541.jpg',
           incomingShop.avatarImage || '',
+          incomingShop.profileImageUrl || '',
           incomingShop.status || 'APPROVED',
           incomingShop.cuisineType || 'Burmese Cuisine',
           incomingShop.locationArea || 'Downtown',
@@ -337,6 +338,8 @@ app.post('/api/auth/firebase-sync', (req: Request, res: Response) => {
           incomingShop.city || 'Yangon',
           incomingShop.region || 'Yangon Region',
           incomingShop.country || 'Myanmar',
+          typeof incomingShop.latitude === 'number' ? incomingShop.latitude : null,
+          typeof incomingShop.longitude === 'number' ? incomingShop.longitude : null,
           incomingShop.createdAt || now
         );
       }
@@ -505,6 +508,7 @@ app.get('/api/shops', (req: Request, res: Response) => {
       bio: s.bio,
       coverImage: s.cover_image,
       avatarImage: s.avatar_image,
+      profileImageUrl: s.profile_image_url || undefined,
       status: s.status,
       cuisineType: s.cuisine_type,
       locationArea: s.location_area,
@@ -512,6 +516,8 @@ app.get('/api/shops', (req: Request, res: Response) => {
       city: s.city,
       region: s.region,
       country: s.country,
+      latitude: typeof s.latitude === 'number' ? s.latitude : undefined,
+      longitude: typeof s.longitude === 'number' ? s.longitude : undefined,
       facebookUrl: s.facebook_url,
       whatsappPhone: s.whatsapp_phone,
       viberPhone: s.viber_phone,
@@ -561,6 +567,7 @@ app.get('/api/shops/:id', (req: Request, res: Response) => {
       bio: shop.bio,
       coverImage: shop.cover_image,
       avatarImage: shop.avatar_image,
+      profileImageUrl: shop.profile_image_url || undefined,
       status: shop.status,
       cuisineType: shop.cuisine_type,
       locationArea: shop.location_area,
@@ -568,6 +575,8 @@ app.get('/api/shops/:id', (req: Request, res: Response) => {
       city: shop.city,
       region: shop.region,
       country: shop.country,
+      latitude: typeof shop.latitude === 'number' ? shop.latitude : undefined,
+      longitude: typeof shop.longitude === 'number' ? shop.longitude : undefined,
       facebookUrl: shop.facebook_url,
       whatsappPhone: shop.whatsapp_phone,
       viberPhone: shop.viber_phone,
@@ -602,12 +611,15 @@ app.put('/api/shops/:id', (req: Request, res: Response) => {
       bio,
       coverImage,
       avatarImage,
+      profileImageUrl,
       cuisineType,
       locationArea,
       address,
       city,
       region,
       country,
+      latitude,
+      longitude,
       facebookUrl,
       whatsappPhone,
       viberPhone,
@@ -615,10 +627,24 @@ app.put('/api/shops/:id', (req: Request, res: Response) => {
       phoneNumber,
     } = req.body;
 
+    const nextLat =
+      latitude === null
+        ? null
+        : typeof latitude === 'number' && Number.isFinite(latitude)
+        ? latitude
+        : shop.latitude;
+    const nextLng =
+      longitude === null
+        ? null
+        : typeof longitude === 'number' && Number.isFinite(longitude)
+        ? longitude
+        : shop.longitude;
+
     db.prepare(`
       UPDATE shops
-      SET name = ?, bio = ?, cover_image = ?, avatar_image = ?,
+      SET name = ?, bio = ?, cover_image = ?, avatar_image = ?, profile_image_url = ?,
           cuisine_type = ?, location_area = ?, address = ?, city = ?, region = ?, country = ?,
+          latitude = ?, longitude = ?,
           facebook_url = ?, whatsapp_phone = ?, viber_phone = ?, line_id = ?, phone_number = ?
       WHERE id = ?
     `).run(
@@ -626,12 +652,15 @@ app.put('/api/shops/:id', (req: Request, res: Response) => {
       bio || shop.bio,
       coverImage || shop.cover_image,
       avatarImage || shop.avatar_image,
+      profileImageUrl !== undefined ? profileImageUrl : shop.profile_image_url,
       cuisineType || shop.cuisine_type,
       locationArea || shop.location_area,
       address !== undefined ? address : shop.address,
       city !== undefined ? city : shop.city,
       region !== undefined ? region : shop.region,
       country !== undefined ? country : shop.country,
+      nextLat,
+      nextLng,
       facebookUrl !== undefined ? facebookUrl : shop.facebook_url,
       whatsappPhone !== undefined ? whatsappPhone : shop.whatsapp_phone,
       viberPhone !== undefined ? viberPhone : shop.viber_phone,

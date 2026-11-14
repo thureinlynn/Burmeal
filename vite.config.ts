@@ -1,7 +1,7 @@
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
-import { defineConfig, type Plugin } from 'vite';
+import { defineConfig, loadEnv, type Plugin } from 'vite';
 
 function disableHmrWebSocketPlugin(): Plugin {
   let hmrDisabled = false;
@@ -31,9 +31,22 @@ function disableHmrWebSocketPlugin(): Plugin {
   };
 }
 
-export default defineConfig(() => {
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), '');
+  const googleMapsApiKey =
+    env.VITE_GOOGLE_MAPS_API_KEY ||
+    env.GOOGLE_MAPS_API_KEY ||
+    process.env.VITE_GOOGLE_MAPS_API_KEY ||
+    process.env.GOOGLE_MAPS_API_KEY ||
+    '';
+
   return {
     plugins: [react(), tailwindcss(), disableHmrWebSocketPlugin()],
+    define: googleMapsApiKey
+      ? {
+          'import.meta.env.VITE_GOOGLE_MAPS_API_KEY': JSON.stringify(googleMapsApiKey),
+        }
+      : {},
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),

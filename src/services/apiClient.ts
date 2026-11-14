@@ -139,7 +139,10 @@ function saveLocalDb(state: DbState) {
         s.bio !== base.bio ||
         s.coverImage !== base.coverImage ||
         s.avatarImage !== base.avatarImage ||
+        s.profileImageUrl !== base.profileImageUrl ||
         s.address !== base.address ||
+        s.latitude !== base.latitude ||
+        s.longitude !== base.longitude ||
         s.phoneNumber !== base.phoneNumber ||
         s.facebookUrl !== base.facebookUrl ||
         s.whatsappPhone !== base.whatsappPhone ||

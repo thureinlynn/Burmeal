@@ -8,31 +8,37 @@ export const serverDb = getFirestore(app);
 export async function syncShopToFirestore(shop: any) {
   try {
     const ref = doc(serverDb, 'shops', shop.id);
-    await setDoc(
-      ref,
-      {
-        id: shop.id,
-        ownerId: shop.ownerId || shop.owner_id,
-        name: shop.name,
-        bio: shop.bio || '',
-        coverImage: shop.coverImage || shop.cover_image || '',
-        avatarImage: shop.avatarImage || shop.avatar_image || '',
-        status: shop.status || 'APPROVED',
-        cuisineType: shop.cuisineType || shop.cuisine_type || 'Burmese Cuisine',
-        locationArea: shop.locationArea || shop.location_area || '',
-        address: shop.address || '',
-        city: shop.city || '',
-        region: shop.region || '',
-        country: shop.country || '',
-        facebookUrl: shop.facebookUrl || shop.facebook_url || '',
-        whatsappPhone: shop.whatsappPhone || shop.whatsapp_phone || '',
-        viberPhone: shop.viberPhone || shop.viber_phone || '',
-        lineId: shop.lineId || shop.line_id || '',
-        phoneNumber: shop.phoneNumber || shop.phone_number || '',
-        createdAt: shop.createdAt || shop.created_at || new Date().toISOString(),
-      },
-      { merge: true }
-    );
+    const lat = shop.latitude ?? null;
+    const lng = shop.longitude ?? null;
+    const payload: Record<string, any> = {
+      id: shop.id,
+      ownerId: shop.ownerId || shop.owner_id,
+      name: shop.name,
+      bio: shop.bio || '',
+      coverImage: shop.coverImage || shop.cover_image || '',
+      avatarImage: shop.avatarImage || shop.avatar_image || '',
+      profileImageUrl: shop.profileImageUrl || shop.profile_image_url || '',
+      status: shop.status || 'APPROVED',
+      cuisineType: shop.cuisineType || shop.cuisine_type || 'Burmese Cuisine',
+      locationArea: shop.locationArea || shop.location_area || '',
+      address: shop.address || '',
+      city: shop.city || '',
+      region: shop.region || '',
+      country: shop.country || '',
+      facebookUrl: shop.facebookUrl || shop.facebook_url || '',
+      whatsappPhone: shop.whatsappPhone || shop.whatsapp_phone || '',
+      viberPhone: shop.viberPhone || shop.viber_phone || '',
+      lineId: shop.lineId || shop.line_id || '',
+      phoneNumber: shop.phoneNumber || shop.phone_number || '',
+      createdAt: shop.createdAt || shop.created_at || new Date().toISOString(),
+    };
+    if (typeof lat === 'number' && Number.isFinite(lat)) {
+      payload.latitude = lat;
+    }
+    if (typeof lng === 'number' && Number.isFinite(lng)) {
+      payload.longitude = lng;
+    }
+    await setDoc(ref, payload, { merge: true });
   } catch (err) {
     console.warn('syncShopToFirestore error:', err);
   }

@@ -3,7 +3,12 @@ import { Shop, MenuItem, MenuType } from '../types';
 import { useLanguage } from '../context/LanguageContext';
 import { buildContactLinks } from '../utils/filter';
 import { getCountryFlag } from '../utils/countries';
-import { resolveCoverDesign, getCountryCoverDesign } from '../utils/coverDesigns';
+import { resolveCoverDesign, getLocalCountryCoverDesign } from '../utils/coverDesigns';
+import {
+  buildGoogleMapsDirectionsUrl,
+  getShopProfileImage,
+  hasValidCoordinates,
+} from '../utils/shopLocationHelpers';
 import { MenuCard } from './MenuCard';
 import {
   MapPin,
@@ -61,6 +66,9 @@ export const ShopProfileView: React.FC<ShopProfileViewProps> = ({
   });
 
   const countryFlag = getCountryFlag(shop.country);
+  const profileImageSrc = getShopProfileImage(shop);
+  const directionsUrl = buildGoogleMapsDirectionsUrl(shop);
+  const hasPinnedCoords = hasValidCoordinates(shop.latitude, shop.longitude);
 
   return (
     <div className="space-y-6">
@@ -83,7 +91,10 @@ export const ShopProfileView: React.FC<ShopProfileViewProps> = ({
             alt={shop.name}
             className="w-full h-full object-cover opacity-85"
             referrerPolicy="no-referrer"
-            onError={() => setCoverSrc(getCountryCoverDesign(shop.country, shop.region))}
+            onError={() => {
+              const fallback = getLocalCountryCoverDesign(shop.country, shop.region);
+              if (coverSrc !== fallback) setCoverSrc(fallback);
+            }}
           />
           <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/35 to-transparent" />
 
@@ -105,7 +116,7 @@ export const ShopProfileView: React.FC<ShopProfileViewProps> = ({
           {/* Bottom Title & Details */}
           <div className="absolute bottom-4 left-4 right-4 flex items-end gap-3 text-white">
             <img
-              src={shop.avatarImage}
+              src={profileImageSrc}
               alt={shop.name}
               className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl border-2 border-white object-cover bg-stone-800 shadow-md shrink-0"
               referrerPolicy="no-referrer"
@@ -117,8 +128,8 @@ export const ShopProfileView: React.FC<ShopProfileViewProps> = ({
               <h1 className="text-xl sm:text-3xl font-bold font-display text-white truncate">
                 {shop.name}
               </h1>
-              <div className="flex items-center gap-2 text-xs text-stone-200 mt-0.5 flex-wrap">
-                <span className="flex items-center gap-1 truncate font-medium">
+              <div className="flex items-center gap-x-2 gap-y-0.5 text-xs text-stone-200 mt-0.5 flex-wrap">
+                <span className="flex items-center flex-wrap gap-x-1 font-medium max-w-full">
                   <span className="text-sm" role="img" aria-label={shop.country || 'Country'}>
                     {countryFlag}
                   </span>
@@ -139,7 +150,7 @@ export const ShopProfileView: React.FC<ShopProfileViewProps> = ({
             {shop.bio}
           </p>
 
-          {/* Location & Address Display with Country and Flag */}
+          {/* Location & Address Display with Country, Flag, and Direction Button */}
           <div className="p-3.5 bg-white dark:bg-stone-800 rounded-xl border border-stone-200 dark:border-stone-700 text-xs text-stone-600 dark:text-stone-300 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
             <div className="flex items-start gap-2.5">
               <div className="w-8 h-8 rounded-lg bg-amber-50 dark:bg-amber-950/50 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
@@ -153,18 +164,37 @@ export const ShopProfileView: React.FC<ShopProfileViewProps> = ({
                 <p className="text-[11px] text-stone-500 dark:text-stone-400 mt-0.5">
                   {[shop.city, shop.region, shop.country].filter(Boolean).join(', ')}
                 </p>
+                {hasPinnedCoords && (
+                  <p className="text-[10px] font-mono text-emerald-700 dark:text-emerald-400 mt-0.5">
+                    Map Pin: {Number(shop.latitude).toFixed(5)}, {Number(shop.longitude).toFixed(5)}
+                  </p>
+                )}
               </div>
             </div>
 
-            {shop.phoneNumber && (
-              <a
-                href={`tel:${shop.phoneNumber}`}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-stone-100 dark:bg-stone-700 hover:bg-stone-200 text-stone-800 dark:text-stone-200 text-xs font-semibold rounded-lg self-end sm:self-auto transition-colors"
-              >
-                <Phone className="w-3.5 h-3.5" />
-                <span>{shop.phoneNumber}</span>
-              </a>
-            )}
+            <div className="flex items-center gap-2 self-end sm:self-auto flex-wrap">
+              {directionsUrl && (
+                <a
+                  href={directionsUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-lg transition-colors shadow-xs"
+                >
+                  <Navigation className="w-3.5 h-3.5" />
+                  <span>Direction</span>
+                </a>
+              )}
+
+              {shop.phoneNumber && (
+                <a
+                  href={`tel:${shop.phoneNumber}`}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-stone-100 dark:bg-stone-700 hover:bg-stone-200 text-stone-800 dark:text-stone-200 text-xs font-semibold rounded-lg transition-colors"
+                >
+                  <Phone className="w-3.5 h-3.5" />
+                  <span>{shop.phoneNumber}</span>
+                </a>
+              )}
+            </div>
           </div>
 
           {/* Direct Contact & Kitchen Pick-Up Insight Banner */}

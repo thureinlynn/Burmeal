@@ -4,6 +4,7 @@ import { Store, MessageCircle, Heart, MapPin } from 'lucide-react';
 import { buildContactLinks } from '../utils/filter';
 import { getCountryFlag } from '../utils/countries';
 import { resolveCoverDesign, getCountryCoverDesign } from '../utils/coverDesigns';
+import { getShopProfileImage } from '../utils/shopLocationHelpers';
 import { useLanguage } from '../context/LanguageContext';
 
 interface ShopCardProps {
@@ -68,13 +69,23 @@ export const ShopCard: React.FC<ShopCardProps> = ({ shop, onFollowToggle, onSele
       <div className="p-4 flex-1 flex flex-col justify-between">
         <div>
           <div className="flex items-start justify-between gap-2 mb-2">
-            <div className="cursor-pointer" onClick={() => onSelectShop(shop.id)}>
-              <h3 className="font-bold text-base text-stone-900 dark:text-stone-100 group-hover:text-amber-700 dark:group-hover:text-amber-400 transition-colors line-clamp-1">
-                {shop.name}
-              </h3>
-              <p className="text-xs text-amber-700 dark:text-amber-400 font-medium">
-                {shop.cuisineType}
-              </p>
+            <div className="cursor-pointer flex items-center gap-2.5 min-w-0" onClick={() => onSelectShop(shop.id)}>
+              {getShopProfileImage(shop) && (
+                <img
+                  src={getShopProfileImage(shop)}
+                  alt={shop.name}
+                  referrerPolicy="no-referrer"
+                  className="w-9 h-9 rounded-lg object-cover border border-stone-200 dark:border-stone-700 bg-stone-100 shrink-0"
+                />
+              )}
+              <div className="min-w-0">
+                <h3 className="font-bold text-base text-stone-900 dark:text-stone-100 group-hover:text-amber-700 dark:group-hover:text-amber-400 transition-colors line-clamp-1">
+                  {shop.name}
+                </h3>
+                <p className="text-xs text-amber-700 dark:text-amber-400 font-medium truncate">
+                  {shop.cuisineType}
+                </p>
+              </div>
             </div>
 
             {onFollowToggle && (
