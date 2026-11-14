@@ -338,16 +338,21 @@ export default function App() {
     try {
       let resolvedShop: Shop | null = null;
       if (shopId) {
-        resolvedShop = await firestoreService.getShopById(shopId);
+        const [fsShop, apiShop] = await Promise.all([
+          firestoreService.getShopById(shopId).catch(() => null),
+          apiClient.getShop(shopId, token).catch(() => null),
+        ]);
+        if (fsShop && apiShop) {
+          resolvedShop = { ...apiShop, ...fsShop };
+        } else {
+          resolvedShop = fsShop || apiShop;
+        }
       }
       if (!resolvedShop && user.id) {
         resolvedShop = await firestoreService.getShopByOwnerId(user.id);
       }
       if (!resolvedShop && user.email) {
         resolvedShop = await firestoreService.getShopByOwnerEmail(user.email);
-      }
-      if (!resolvedShop && shopId) {
-        resolvedShop = await apiClient.getShop(shopId, token);
       }
       if (!resolvedShop) {
         const allShops = await apiClient.getShops(null, token);
@@ -402,10 +407,18 @@ export default function App() {
     if (!targetId) return;
     try {
       setOwnerShop((prev) => (prev ? { ...prev, ...data } : prev));
-      await apiClient.updateShop(targetId, data, token).catch(() => null);
-      await firestoreService.updateShop(targetId, data).catch((fbErr) => {
-        console.warn('Direct Firestore shop update notice:', fbErr);
-      });
+      setShops((prev) => prev.map((s) => (s.id === targetId ? { ...s, ...data } : s)));
+      setFirestoreShopsCache((prev) =>
+        prev.map((s) => (s.id === targetId ? { ...s, ...data } : s))
+      );
+
+      await Promise.all([
+        apiClient.updateShop(targetId, data, token).catch(() => null),
+        firestoreService.updateShop(targetId, data).catch((fbErr) => {
+          console.warn('Direct Firestore shop update notice:', fbErr);
+        }),
+      ]);
+
       await loadOwnerData();
       await loadShops();
     } catch (err) {
@@ -493,10 +506,14 @@ export default function App() {
     [allBackendItemsCache, menuItems, firestoreItemsCache, savedItems]
   );
 
-  const displayedShops = React.useMemo(
-    () => applyFollowStateToShops(shops, effectiveFollowedIds),
-    [shops, effectiveFollowedIds]
-  );
+  const displayedShops = React.useMemo(() => {
+    const fsMap = new Map(firestoreShopsCache.map((s) => [s.id, s]));
+    const merged = shops.map((s) => {
+      const fs = fsMap.get(s.id);
+      return fs ? { ...s, ...fs } : s;
+    });
+    return applyFollowStateToShops(merged, effectiveFollowedIds);
+  }, [shops, firestoreShopsCache, effectiveFollowedIds]);
 
   const followedShopsList = React.useMemo(
     () => filterFollowedShops(allKnownShops, effectiveFollowedIds),

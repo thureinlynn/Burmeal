@@ -5,8 +5,13 @@ import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { COUNTRIES, getCountryFlag, getCurrencyForCountry } from '../utils/countries';
-import { uploadShopProfilePicture } from '../services/supabaseClient';
-import { getShopProfileImage } from '../utils/shopLocationHelpers';
+import { removeShopProfilePicture, uploadShopProfilePicture } from '../services/supabaseClient';
+import { getShopProfileImage, normalizeExternalImageUrl } from '../utils/shopLocationHelpers';
+import {
+  getLocalCountryCoverDesign,
+  isDefaultCoverImage,
+  resolveCoverDesign,
+} from '../utils/coverDesigns';
 import { ShopLocationPicker } from './ShopLocationPicker';
 import {
   LayoutDashboard,
@@ -96,24 +101,12 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
   // Tab 1 Weekly Matrix interactive filter day
   const [selectedMatrixDay, setSelectedMatrixDay] = useState<string | null>(null);
 
-  // Tab 1 Quick Cover Image Uploader state
-  const [quickCoverUrl, setQuickCoverUrl] = useState(shop.coverImage);
+  // Cover image quick-apply state in Shop Info
   const [isUpdatingCover, setIsUpdatingCover] = useState(false);
   const [coverUpdateSuccess, setCoverUpdateSuccess] = useState(false);
-
-  const handleQuickCoverUpdate = async () => {
-    if (!quickCoverUrl.trim()) return;
-    setIsUpdatingCover(true);
-    try {
-      await onUpdateShopProfile({ coverImage: quickCoverUrl });
-      setCoverUpdateSuccess(true);
-      setTimeout(() => setCoverUpdateSuccess(false), 2500);
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setIsUpdatingCover(false);
-    }
-  };
+  const [coverPreviewError, setCoverPreviewError] = useState(false);
+  const [profilePreviewError, setProfilePreviewError] = useState(false);
+  const [headerAvatarError, setHeaderAvatarError] = useState(false);
 
   // Tab 4 Password Reset state
   const [currentPassword, setCurrentPassword] = useState('');
@@ -204,7 +197,9 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
   const [city, setCity] = useState(shop.city || '');
   const [region, setRegion] = useState(shop.region || '');
   const [country, setCountry] = useState(shop.country || 'Myanmar');
-  const [coverImage, setCoverImage] = useState(shop.coverImage);
+  const [coverImage, setCoverImage] = useState(
+    isDefaultCoverImage(shop.coverImage) ? '' : shop.coverImage
+  );
   const [avatarImage, setAvatarImage] = useState(shop.avatarImage);
   const [profileImageUrl, setProfileImageUrl] = useState(shop.profileImageUrl || '');
   const [latitude, setLatitude] = useState<number | undefined>(shop.latitude);
@@ -230,9 +225,12 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
     setCity(shop.city || '');
     setRegion(shop.region || '');
     setCountry(shop.country || 'Myanmar');
-    setCoverImage(shop.coverImage);
+    setCoverImage(isDefaultCoverImage(shop.coverImage) ? '' : shop.coverImage);
     setAvatarImage(shop.avatarImage);
     setProfileImageUrl(shop.profileImageUrl || '');
+    setCoverPreviewError(false);
+    setProfilePreviewError(false);
+    setHeaderAvatarError(false);
     setLatitude(shop.latitude);
     setLongitude(shop.longitude);
     setFacebookUrl(shop.facebookUrl || '');
@@ -323,6 +321,7 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
 
     setProfileUploadError('');
     setProfileUploadSuccess('');
+    setProfilePreviewError(false);
     setIsUploadingProfilePic(true);
     try {
       const uid = user?.id || shop.ownerId || shop.id;
@@ -342,9 +341,53 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
     }
   };
 
+  const handleRemoveProfilePicture = async () => {
+    const urlsToClean = [profileImageUrl, avatarImage].filter(Boolean);
+    setProfileUploadError('');
+    setProfileUploadSuccess('');
+    setIsUploadingProfilePic(true);
+    try {
+      await Promise.all(urlsToClean.map((u) => removeShopProfilePicture(u)));
+      setProfileImageUrl('');
+      setAvatarImage('');
+      setProfilePreviewError(false);
+      await onUpdateShopProfile({
+        profileImageUrl: '',
+        avatarImage: '',
+      });
+      setProfileUploadSuccess('Shop profile picture removed.');
+      setTimeout(() => setProfileUploadSuccess(''), 3500);
+    } catch (err: any) {
+      setProfileUploadError(err?.message || 'Failed to remove profile picture.');
+    } finally {
+      setIsUploadingProfilePic(false);
+    }
+  };
+
+  const handleApplyCoverUrl = async (nextRaw?: string) => {
+    const normalizedCover = normalizeExternalImageUrl(nextRaw !== undefined ? nextRaw : coverImage);
+    setCoverImage(normalizedCover);
+    setCoverPreviewError(false);
+    setIsUpdatingCover(true);
+    try {
+      await onUpdateShopProfile({ coverImage: normalizedCover });
+      setCoverUpdateSuccess(true);
+      setTimeout(() => setCoverUpdateSuccess(false), 2500);
+    } catch (err) {
+      console.error('Cover update error:', err);
+    } finally {
+      setIsUpdatingCover(false);
+    }
+  };
+
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
-    const effectiveProfileUrl = profileImageUrl.trim() || avatarImage.trim();
+    const normalizedCoverUrl = normalizeExternalImageUrl(coverImage);
+    const normalizedProfileUrl =
+      normalizeExternalImageUrl(profileImageUrl) || normalizeExternalImageUrl(avatarImage);
+    setCoverImage(normalizedCoverUrl);
+    setProfileImageUrl(normalizedProfileUrl);
+    setAvatarImage(normalizedProfileUrl);
     await onUpdateShopProfile({
       name: shopName,
       bio,
@@ -355,9 +398,9 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
       city,
       region,
       country,
-      coverImage,
-      avatarImage: effectiveProfileUrl,
-      profileImageUrl: profileImageUrl.trim(),
+      coverImage: normalizedCoverUrl,
+      avatarImage: normalizedProfileUrl,
+      profileImageUrl: normalizedProfileUrl,
       latitude: (latitude ?? null) as any,
       longitude: (longitude ?? null) as any,
       facebookUrl,
@@ -390,12 +433,19 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
       <div className="bg-white dark:bg-stone-900 rounded-2xl border border-stone-200 dark:border-stone-800 p-4 sm:p-5 shadow-xs transition-colors">
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
           <div className="flex items-center gap-3.5">
-          <img
-            src={getShopProfileImage(shop)}
-            alt={shop.name}
-            className="w-12 h-12 rounded-xl object-cover border border-stone-200 dark:border-stone-700 bg-stone-100"
-            referrerPolicy="no-referrer"
-          />
+          {getShopProfileImage(shop) && !headerAvatarError ? (
+            <img
+              src={getShopProfileImage(shop)}
+              alt={shop.name}
+              onError={() => setHeaderAvatarError(true)}
+              className="w-12 h-12 rounded-xl object-cover border border-stone-200 dark:border-stone-700 bg-stone-100 shrink-0"
+              referrerPolicy="no-referrer"
+            />
+          ) : (
+            <div className="w-12 h-12 rounded-xl border border-stone-200 dark:border-stone-700 bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+              <Store className="w-6 h-6" />
+            </div>
+          )}
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-xl sm:text-2xl font-bold font-display text-stone-900 dark:text-stone-100">{shop.name}</h1>
@@ -1407,53 +1457,98 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
                 />
               </div>
 
-              {/* Shop Profile Picture Upload (Supabase Storage + Firestore) */}
+              {/* Shop Profile Picture Upload / URL / Remove */}
               <div className="rounded-2xl border border-stone-200 dark:border-stone-700 bg-stone-50/70 dark:bg-stone-850/60 p-4 space-y-3">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <div className="flex items-center gap-3.5">
-                    <img
-                      src={profileImageUrl || avatarImage}
-                      alt={shopName || shop.name}
-                      referrerPolicy="no-referrer"
-                      className="w-16 h-16 rounded-2xl object-cover border-2 border-white dark:border-stone-700 shadow-xs bg-stone-200 shrink-0"
-                    />
+                    {normalizeExternalImageUrl(profileImageUrl || avatarImage) && !profilePreviewError ? (
+                      <img
+                        src={normalizeExternalImageUrl(profileImageUrl || avatarImage)}
+                        alt={shopName || shop.name}
+                        referrerPolicy="no-referrer"
+                        onError={() => setProfilePreviewError(true)}
+                        className="w-16 h-16 rounded-2xl object-cover border-2 border-white dark:border-stone-700 shadow-xs bg-stone-200 shrink-0"
+                      />
+                    ) : (
+                      <div className="w-16 h-16 rounded-2xl border-2 border-white dark:border-stone-700 shadow-xs bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+                        <Store className="w-7 h-7" />
+                      </div>
+                    )}
                     <div>
                       <h3 className="text-xs font-bold text-stone-900 dark:text-stone-100 flex items-center gap-1.5">
                         <ImageIcon className="w-3.5 h-3.5 text-amber-600" />
-                        <span>Shop Profile Picture</span>
+                        <span>Shop Profile Picture / Logo</span>
                       </h3>
                       <p className="text-[11px] text-stone-500 dark:text-stone-400 mt-0.5">
-                        Upload a kitchen logo or portrait photo (JPG, PNG, WEBP, max 5 MB). Stored in Supabase Storage &amp; synced to your public storefront.
+                        Upload a kitchen logo (JPG, PNG, WEBP, max 5 MB) or paste an image link below. Stored in Supabase Storage &amp; synced to your public storefront.
                       </p>
                     </div>
                   </div>
 
-                  <label
-                    className={`inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-colors shrink-0 shadow-xs ${
-                      isUploadingProfilePic
-                        ? 'bg-stone-300 dark:bg-stone-700 text-stone-600 cursor-wait'
-                        : 'bg-stone-900 hover:bg-amber-600 dark:bg-stone-100 dark:text-stone-900 dark:hover:bg-amber-500 dark:hover:text-white text-white cursor-pointer'
-                    }`}
-                  >
-                    {isUploadingProfilePic ? (
-                      <>
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                        <span>Uploading...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Upload className="w-3.5 h-3.5" />
-                        <span>Upload Profile Picture</span>
-                      </>
+                  <div className="flex items-center gap-2 shrink-0 flex-wrap">
+                    <label
+                      className={`inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-colors shrink-0 shadow-xs ${
+                        isUploadingProfilePic
+                          ? 'bg-stone-300 dark:bg-stone-700 text-stone-600 cursor-wait'
+                          : 'bg-stone-900 hover:bg-amber-600 dark:bg-stone-100 dark:text-stone-900 dark:hover:bg-amber-500 dark:hover:text-white text-white cursor-pointer'
+                      }`}
+                    >
+                      {isUploadingProfilePic ? (
+                        <>
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          <span>Updating...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Upload className="w-3.5 h-3.5" />
+                          <span>Upload Profile Picture</span>
+                        </>
+                      )}
+                      <input
+                        type="file"
+                        accept="image/png,image/jpeg,image/webp,image/gif"
+                        disabled={isUploadingProfilePic}
+                        onChange={handleProfilePictureUpload}
+                        className="hidden"
+                      />
+                    </label>
+
+                    {Boolean((profileImageUrl || avatarImage || '').trim()) && (
+                      <button
+                        type="button"
+                        onClick={handleRemoveProfilePicture}
+                        disabled={isUploadingProfilePic}
+                        className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold border border-rose-200 dark:border-rose-800 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 dark:hover:bg-rose-900/60 text-rose-700 dark:text-rose-300 transition-colors shrink-0 disabled:opacity-50"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>Remove</span>
+                      </button>
                     )}
-                    <input
-                      type="file"
-                      accept="image/png,image/jpeg,image/webp,image/gif"
-                      disabled={isUploadingProfilePic}
-                      onChange={handleProfilePictureUpload}
-                      className="hidden"
-                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-stone-700 dark:text-stone-300 mb-1">
+                    Profile / Logo Image URL
                   </label>
+                  <input
+                    type="text"
+                    value={profileImageUrl || avatarImage}
+                    onChange={(e) => {
+                      setProfilePreviewError(false);
+                      setProfileUploadError('');
+                      setProfileImageUrl(e.target.value);
+                      setAvatarImage(e.target.value);
+                    }}
+                    placeholder="Paste logo/profile image URL link from any website (or upload above)"
+                    className="w-full text-xs px-3 py-2 bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-lg focus:outline-none focus:border-amber-600 text-stone-900 dark:text-stone-100"
+                  />
+                  {profilePreviewError && Boolean((profileImageUrl || avatarImage || '').trim()) && (
+                    <p className="text-[11px] text-amber-700 dark:text-amber-400 mt-1 flex items-center gap-1">
+                      <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                      <span>Could not load image from this URL. Ensure it is a direct image address.</span>
+                    </p>
+                  )}
                 </div>
 
                 {profileUploadSuccess && (
@@ -1471,32 +1566,81 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
                 )}
               </div>
 
-              {/* Photos (Fallback / Direct URLs) */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Cover Image URL + Live Preview */}
+              <div className="rounded-2xl border border-stone-200 dark:border-stone-700 bg-stone-50/70 dark:bg-stone-850/60 p-4 space-y-3">
+                <div className="relative h-28 sm:h-36 w-full rounded-xl overflow-hidden bg-stone-200 dark:bg-stone-800 border border-stone-200 dark:border-stone-700">
+                  <img
+                    src={
+                      coverPreviewError
+                        ? getLocalCountryCoverDesign(country, region)
+                        : resolveCoverDesign(coverImage, country, region)
+                    }
+                    alt={`${shopName || shop.name} cover preview`}
+                    referrerPolicy="no-referrer"
+                    onError={() => setCoverPreviewError(true)}
+                    className="w-full h-full object-cover"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent" />
+                  <span className="absolute bottom-2 left-2.5 text-[10px] font-bold px-2.5 py-0.5 rounded-md bg-black/60 text-white backdrop-blur-xs">
+                    {normalizeExternalImageUrl(coverImage) && !coverPreviewError
+                      ? 'Custom Cover Image'
+                      : `Regional Cover (${country || 'Myanmar'})`}
+                  </span>
+                </div>
+
                 <div>
                   <label className="block text-xs font-semibold text-stone-700 dark:text-stone-300 mb-1">
                     Cover Image URL
                   </label>
-                  <input
-                    type="text"
-                    value={coverImage}
-                    onChange={(e) => setCoverImage(e.target.value)}
-                    className="w-full text-xs px-3 py-2 bg-stone-50 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-lg focus:outline-none focus:border-amber-600 text-stone-900 dark:text-stone-100"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-stone-700 dark:text-stone-300 mb-1">
-                    Profile / Avatar Image URL
-                  </label>
-                  <input
-                    type="text"
-                    value={profileImageUrl || avatarImage}
-                    onChange={(e) => {
-                      setProfileImageUrl(e.target.value);
-                      setAvatarImage(e.target.value);
-                    }}
-                    className="w-full text-xs px-3 py-2 bg-stone-50 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-lg focus:outline-none focus:border-amber-600 text-stone-900 dark:text-stone-100"
-                  />
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <input
+                      type="text"
+                      value={coverImage}
+                      onChange={(e) => {
+                        setCoverPreviewError(false);
+                        setCoverImage(e.target.value);
+                      }}
+                      placeholder="Paste copied image address from another website (blank = regional cover)"
+                      className="flex-1 text-xs px-3 py-2 bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-lg focus:outline-none focus:border-amber-600 text-stone-900 dark:text-stone-100"
+                    />
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => handleApplyCoverUrl(coverImage)}
+                        disabled={isUpdatingCover}
+                        className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-bold bg-stone-900 hover:bg-amber-600 dark:bg-stone-100 dark:text-stone-900 dark:hover:bg-amber-500 dark:hover:text-white text-white transition-colors disabled:opacity-50"
+                      >
+                        {isUpdatingCover ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                        <span>Apply Cover</span>
+                      </button>
+                      {Boolean(coverImage.trim()) && (
+                        <button
+                          type="button"
+                          onClick={() => handleApplyCoverUrl('')}
+                          disabled={isUpdatingCover}
+                          className="inline-flex items-center justify-center gap-1 px-3 py-2 rounded-lg text-xs font-semibold border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-stone-700 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-700 transition-colors"
+                        >
+                          <span>Reset</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {coverPreviewError && Boolean(coverImage.trim()) && (
+                    <p className="text-[11px] text-amber-700 dark:text-amber-400 mt-1.5 flex items-center gap-1">
+                      <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                      <span>
+                        Could not load this image URL (the website may block hotlinking or it is not a direct image link). Showing regional fallback.
+                      </span>
+                    </p>
+                  )}
+
+                  {coverUpdateSuccess && (
+                    <div className="mt-2 p-2 bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 text-xs rounded-lg flex items-center gap-1.5">
+                      <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                      <span>Shop cover image updated!</span>
+                    </div>
+                  )}
                 </div>
               </div>
 

@@ -1,5 +1,9 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import { buildSupabaseProfilePath, validateProfileImageFile } from '../utils/shopLocationHelpers';
+import {
+  buildSupabaseProfilePath,
+  extractSupabaseStoragePath,
+  validateProfileImageFile,
+} from '../utils/shopLocationHelpers';
 
 export const DEFAULT_SUPABASE_URL = 'https://oiyejybkorjvxsispjkg.supabase.co';
 export const DEFAULT_SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_SC_QZXfTRt-ifQ1DCyT2TQ_hXsQe32t';
@@ -70,4 +74,19 @@ export async function uploadShopProfilePicture(file: File, uid: string): Promise
   }
 
   return data.publicUrl;
+}
+
+export async function removeShopProfilePicture(url?: string | null): Promise<void> {
+  const path = extractSupabaseStoragePath(url, SHOP_PROFILES_BUCKET);
+  if (!path) return;
+
+  const client = getSupabaseClient();
+  if (!client) return;
+
+  try {
+    await client.storage.from(SHOP_PROFILES_BUCKET).remove([path]);
+  } catch (err) {
+    // Non-fatal: bucket RLS may forbid public client delete, still allow clearing profile URL in DB
+    console.warn('Supabase storage remove notice:', err);
+  }
 }

@@ -3,7 +3,7 @@ import { Shop } from '../types';
 import { Store, MessageCircle, Heart, MapPin } from 'lucide-react';
 import { buildContactLinks } from '../utils/filter';
 import { getCountryFlag } from '../utils/countries';
-import { resolveCoverDesign, getCountryCoverDesign } from '../utils/coverDesigns';
+import { resolveCoverDesign, getLocalCountryCoverDesign } from '../utils/coverDesigns';
 import { getShopProfileImage } from '../utils/shopLocationHelpers';
 import { useLanguage } from '../context/LanguageContext';
 
@@ -25,13 +25,19 @@ export const ShopCard: React.FC<ShopCardProps> = ({ shop, onFollowToggle, onSele
   });
 
   const countryFlag = getCountryFlag(shop.country);
+  const profileImageSrc = getShopProfileImage(shop);
   const [coverSrc, setCoverSrc] = useState<string>(() =>
     resolveCoverDesign(shop.coverImage, shop.country, shop.region)
   );
+  const [profileImgFailed, setProfileImgFailed] = useState(false);
 
   useEffect(() => {
     setCoverSrc(resolveCoverDesign(shop.coverImage, shop.country, shop.region));
   }, [shop.coverImage, shop.country, shop.region]);
+
+  useEffect(() => {
+    setProfileImgFailed(false);
+  }, [profileImageSrc]);
 
   return (
     <div className="bg-white dark:bg-stone-900 rounded-2xl border border-stone-200 dark:border-stone-800 overflow-hidden hover:border-amber-400 dark:hover:border-amber-500 hover:shadow-md transition-all flex flex-col group">
@@ -41,7 +47,10 @@ export const ShopCard: React.FC<ShopCardProps> = ({ shop, onFollowToggle, onSele
           src={coverSrc}
           alt={shop.name}
           referrerPolicy="no-referrer"
-          onError={() => setCoverSrc(getCountryCoverDesign(shop.country, shop.region))}
+          onError={() => {
+            const fallback = getLocalCountryCoverDesign(shop.country, shop.region);
+            if (coverSrc !== fallback) setCoverSrc(fallback);
+          }}
           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
@@ -70,13 +79,18 @@ export const ShopCard: React.FC<ShopCardProps> = ({ shop, onFollowToggle, onSele
         <div>
           <div className="flex items-start justify-between gap-2 mb-2">
             <div className="cursor-pointer flex items-center gap-2.5 min-w-0" onClick={() => onSelectShop(shop.id)}>
-              {getShopProfileImage(shop) && (
+              {profileImageSrc && !profileImgFailed ? (
                 <img
-                  src={getShopProfileImage(shop)}
+                  src={profileImageSrc}
                   alt={shop.name}
                   referrerPolicy="no-referrer"
+                  onError={() => setProfileImgFailed(true)}
                   className="w-9 h-9 rounded-lg object-cover border border-stone-200 dark:border-stone-700 bg-stone-100 shrink-0"
                 />
+              ) : (
+                <div className="w-9 h-9 rounded-lg border border-stone-200 dark:border-stone-700 bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+                  <Store className="w-4 h-4" />
+                </div>
               )}
               <div className="min-w-0">
                 <h3 className="font-bold text-base text-stone-900 dark:text-stone-100 group-hover:text-amber-700 dark:group-hover:text-amber-400 transition-colors line-clamp-1">

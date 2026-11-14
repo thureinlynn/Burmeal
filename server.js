@@ -1735,7 +1735,7 @@ async function syncSavedItemToFirestore(customerId, itemId, isSaved, customerEma
 initDb();
 var app3 = express();
 var PORT = 3e3;
-app3.use(express.json());
+app3.use(express.json({ limit: "10mb" }));
 function getAuthenticatedUser(req) {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
@@ -2231,7 +2231,7 @@ app3.get("/api/shops/:id", (req, res) => {
     return res.status(500).json({ error: "Failed to fetch shop details" });
   }
 });
-app3.put("/api/shops/:id", (req, res) => {
+app3.put("/api/shops/:id", async (req, res) => {
   try {
     const user = getAuthenticatedUser(req);
     if (!user) return res.status(401).json({ error: "Unauthorized" });
@@ -2272,8 +2272,8 @@ app3.put("/api/shops/:id", (req, res) => {
     `).run(
       name || shop.name,
       bio || shop.bio,
-      coverImage || shop.cover_image,
-      avatarImage || shop.avatar_image,
+      coverImage !== void 0 ? coverImage : shop.cover_image,
+      avatarImage !== void 0 ? avatarImage : shop.avatar_image,
       profileImageUrl !== void 0 ? profileImageUrl : shop.profile_image_url,
       cuisineType || shop.cuisine_type,
       locationArea || shop.location_area,
@@ -2291,7 +2291,7 @@ app3.put("/api/shops/:id", (req, res) => {
       req.params.id
     );
     const updatedShop = db.prepare("SELECT * FROM shops WHERE id = ?").get(req.params.id);
-    if (updatedShop) syncShopToFirestore(updatedShop);
+    if (updatedShop) await syncShopToFirestore(updatedShop);
     return res.json({ success: true, message: "Shop profile updated successfully." });
   } catch (err) {
     console.error("Error updating shop:", err);

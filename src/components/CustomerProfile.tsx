@@ -3,6 +3,7 @@ import { User, Shop } from '../types';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
 import { User as UserIcon, Mail, ShieldCheck, Heart, LogOut, ArrowRight, Store } from 'lucide-react';
+import { getShopProfileImage } from '../utils/shopLocationHelpers';
 
 interface CustomerProfileProps {
   user: User | null;
@@ -84,31 +85,40 @@ export const CustomerProfile: React.FC<CustomerProfileProps> = ({
           </div>
         ) : (
           <div className="divide-y divide-stone-100">
-            {followedShops.map((shop) => (
-              <div
-                key={shop.id}
-                onClick={() => onSelectShop(shop.id)}
-                className="p-3.5 flex items-center justify-between hover:bg-stone-50 transition-colors cursor-pointer"
-              >
-                <div className="flex items-center gap-3">
-                  <img
-                    src={shop.avatarImage}
-                    alt={shop.name}
-                    className="w-10 h-10 rounded-xl object-cover border border-stone-200 bg-stone-100"
-                    referrerPolicy="no-referrer"
-                  />
-                  <div>
-                    <h3 className="font-bold text-xs sm:text-sm text-stone-900">{shop.name}</h3>
-                    <p className="text-[11px] text-stone-500">{shop.locationArea}</p>
+            {followedShops.map((shop) => {
+              const profileImg = getShopProfileImage(shop);
+              return (
+                <div
+                  key={shop.id}
+                  onClick={() => onSelectShop(shop.id)}
+                  className="p-3.5 flex items-center justify-between hover:bg-stone-50 transition-colors cursor-pointer"
+                >
+                  <div className="flex items-center gap-3">
+                    {profileImg ? (
+                      <img
+                        src={profileImg}
+                        alt={shop.name}
+                        className="w-10 h-10 rounded-xl object-cover border border-stone-200 bg-stone-100"
+                        referrerPolicy="no-referrer"
+                      />
+                    ) : (
+                      <div className="w-10 h-10 rounded-xl border border-stone-200 bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
+                        <Store className="w-5 h-5" />
+                      </div>
+                    )}
+                    <div>
+                      <h3 className="font-bold text-xs sm:text-sm text-stone-900">{shop.name}</h3>
+                      <p className="text-[11px] text-stone-500">{shop.locationArea}</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 text-xs text-amber-700 font-semibold">
+                    <span>{t.viewShopProfile}</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
                   </div>
                 </div>
-
-                <div className="flex items-center gap-2 text-xs text-amber-700 font-semibold">
-                  <span>{t.viewShopProfile}</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

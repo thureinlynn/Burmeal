@@ -4,7 +4,7 @@ import { Heart, MapPin, Store, ArrowRight, MessageCircle, Phone, Clock, Utensils
 import { buildContactLinks, formatPrice } from '../utils/filter';
 import { getCountryFlag } from '../utils/countries';
 import { useLanguage } from '../context/LanguageContext';
-import { resolveCoverDesign, getCountryCoverDesign } from '../utils/coverDesigns';
+import { resolveCoverDesign, getLocalCountryCoverDesign } from '../utils/coverDesigns';
 import { getShopProfileImage } from '../utils/shopLocationHelpers';
 
 interface FollowedShopRowProps {
@@ -24,12 +24,19 @@ export const FollowedShopRow: React.FC<FollowedShopRowProps> = ({
 }) => {
   const { t } = useLanguage();
   const flag = getCountryFlag(shop.country);
+  const profileImageSrc = getShopProfileImage(shop);
   const [coverSrc, setCoverSrc] = React.useState<string>(() =>
     resolveCoverDesign(shop.coverImage, shop.country, shop.region)
   );
+  const [profileImgFailed, setProfileImgFailed] = React.useState(false);
+
   React.useEffect(() => {
     setCoverSrc(resolveCoverDesign(shop.coverImage, shop.country, shop.region));
   }, [shop.coverImage, shop.country, shop.region]);
+
+  React.useEffect(() => {
+    setProfileImgFailed(false);
+  }, [profileImageSrc]);
 
   const contact = buildContactLinks({
     whatsappPhone: shop.whatsappPhone,
@@ -57,7 +64,10 @@ export const FollowedShopRow: React.FC<FollowedShopRowProps> = ({
               src={coverSrc}
               alt={shop.name}
               referrerPolicy="no-referrer"
-              onError={() => setCoverSrc(getCountryCoverDesign(shop.country, shop.region))}
+              onError={() => {
+                const fallback = getLocalCountryCoverDesign(shop.country, shop.region);
+                if (coverSrc !== fallback) setCoverSrc(fallback);
+              }}
               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
             />
             <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/20" />
@@ -68,12 +78,19 @@ export const FollowedShopRow: React.FC<FollowedShopRowProps> = ({
             </span>
 
             {/* Avatar overlay */}
-            <img
-              src={getShopProfileImage(shop)}
-              alt={shop.name}
-              referrerPolicy="no-referrer"
-              className="absolute bottom-1.5 right-1.5 w-6 h-6 sm:w-7 sm:h-7 rounded-full border border-white/90 shadow-xs object-cover bg-stone-200"
-            />
+            {profileImageSrc && !profileImgFailed ? (
+              <img
+                src={profileImageSrc}
+                alt={shop.name}
+                referrerPolicy="no-referrer"
+                onError={() => setProfileImgFailed(true)}
+                className="absolute bottom-1.5 right-1.5 w-6 h-6 sm:w-7 sm:h-7 rounded-full border border-white/90 shadow-xs object-cover bg-stone-200"
+              />
+            ) : (
+              <div className="absolute bottom-1.5 right-1.5 w-6 h-6 sm:w-7 sm:h-7 rounded-full border border-white/90 shadow-xs bg-amber-600 text-white flex items-center justify-center">
+                <Store className="w-3.5 h-3.5" />
+              </div>
+            )}
           </div>
 
           {/* Name & Metadata */}

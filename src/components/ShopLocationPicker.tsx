@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   APIProvider,
   Map as GoogleMap,
@@ -8,12 +8,10 @@ import {
   APILoadingStatus,
   type MapMouseEvent,
 } from '@vis.gl/react-google-maps';
-import { MapPin, LocateFixed, RotateCcw, ExternalLink, AlertTriangle } from 'lucide-react';
+import { MapPin, LocateFixed, RotateCcw, AlertTriangle } from 'lucide-react';
 import {
   getDefaultCenterForCountry,
   hasValidCoordinates,
-  parseCoordinateInput,
-  buildGoogleMapsDirectionsUrl,
 } from '../utils/shopLocationHelpers';
 
 interface ShopLocationPickerProps {
@@ -46,7 +44,7 @@ const MapCanvas: React.FC<{
         <AlertTriangle className="w-6 h-6 text-amber-600 mb-2" />
         <p className="text-xs font-bold">Interactive Google Map could not load right now</p>
         <p className="text-[11px] text-amber-800/80 dark:text-amber-300/80 mt-1 max-w-md">
-          You can still use "Use Current Location" or enter exact latitude and longitude coordinates below so your storefront Direction button works.
+          You can still use "Use Current Location" above so your storefront Direction button works.
         </p>
       </div>
     );
@@ -121,32 +119,8 @@ export const ShopLocationPicker: React.FC<ShopLocationPickerProps> = ({
     ? { lat: Number(latitude), lng: Number(longitude) }
     : fallbackCenter;
 
-  const [latText, setLatText] = useState(hasPin ? String(latitude) : '');
-  const [lngText, setLngText] = useState(hasPin ? String(longitude) : '');
   const [geoStatus, setGeoStatus] = useState<string>('');
   const [isLocating, setIsLocating] = useState(false);
-
-  useEffect(() => {
-    if (hasValidCoordinates(latitude, longitude)) {
-      setLatText(String(latitude));
-      setLngText(String(longitude));
-    } else {
-      setLatText('');
-      setLngText('');
-    }
-  }, [latitude, longitude]);
-
-  const handleCoordinateChange = (nextLatRaw: string, nextLngRaw: string) => {
-    setLatText(nextLatRaw);
-    setLngText(nextLngRaw);
-    const parsedLat = parseCoordinateInput(nextLatRaw, 'lat');
-    const parsedLng = parseCoordinateInput(nextLngRaw, 'lng');
-    if (parsedLat !== undefined && parsedLng !== undefined) {
-      onChange(parsedLat, parsedLng);
-    } else if (!nextLatRaw.trim() && !nextLngRaw.trim()) {
-      onChange(undefined, undefined);
-    }
-  };
 
   const handleUseCurrentLocation = () => {
     if (!navigator.geolocation) {
@@ -160,9 +134,7 @@ export const ShopLocationPicker: React.FC<ShopLocationPickerProps> = ({
         const lat = Number(pos.coords.latitude.toFixed(6));
         const lng = Number(pos.coords.longitude.toFixed(6));
         onChange(lat, lng);
-        setLatText(String(lat));
-        setLngText(String(lng));
-        setGeoStatus('Pinned your current GPS coordinates.');
+        setGeoStatus('Pinned your current GPS location.');
         setIsLocating(false);
       },
       (err) => {
@@ -174,15 +146,9 @@ export const ShopLocationPicker: React.FC<ShopLocationPickerProps> = ({
   };
 
   const handleClearPin = () => {
-    setLatText('');
-    setLngText('');
     setGeoStatus('');
     onChange(undefined, undefined);
   };
-
-  const previewDirectionsUrl = hasPin
-    ? buildGoogleMapsDirectionsUrl({ latitude, longitude })
-    : null;
 
   return (
     <div className="space-y-3 rounded-2xl border border-stone-200 dark:border-stone-700 bg-stone-50/70 dark:bg-stone-850/60 p-4">
@@ -243,72 +209,15 @@ export const ShopLocationPicker: React.FC<ShopLocationPickerProps> = ({
               Google Maps API key not detected in runtime environment
             </p>
             <p className="text-[11px] text-stone-500 dark:text-stone-400 mt-1 max-w-md">
-              Use "Use Current Location" or enter latitude and longitude coordinates below to power your storefront Direction button.
+              Use "Use Current Location" above to set your shop pin for the storefront Direction button.
             </p>
           </div>
         )}
       </div>
 
-      {/* Coordinate Readout & Manual Entry */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <div>
-          <label
-            htmlFor="shop-location-latitude"
-            className="block text-[11px] font-semibold text-stone-600 dark:text-stone-400 mb-1"
-          >
-            Latitude
-          </label>
-          <input
-            id="shop-location-latitude"
-            type="text"
-            inputMode="decimal"
-            value={latText}
-            onChange={(e) => handleCoordinateChange(e.target.value, lngText)}
-            placeholder={String(fallbackCenter.lat)}
-            className="w-full text-xs px-3 py-1.5 bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-lg focus:outline-none focus:border-amber-600 text-stone-900 dark:text-stone-100 font-mono"
-          />
-        </div>
-        <div>
-          <label
-            htmlFor="shop-location-longitude"
-            className="block text-[11px] font-semibold text-stone-600 dark:text-stone-400 mb-1"
-          >
-            Longitude
-          </label>
-          <input
-            id="shop-location-longitude"
-            type="text"
-            inputMode="decimal"
-            value={lngText}
-            onChange={(e) => handleCoordinateChange(latText, e.target.value)}
-            placeholder={String(fallbackCenter.lng)}
-            className="w-full text-xs px-3 py-1.5 bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-lg focus:outline-none focus:border-amber-600 text-stone-900 dark:text-stone-100 font-mono"
-          />
-        </div>
-      </div>
-
       {geoStatus && (
         <p className="text-[11px] font-medium text-amber-700 dark:text-amber-400">{geoStatus}</p>
       )}
-
-      <div className="flex items-center justify-between gap-2 text-[11px] text-stone-500 dark:text-stone-400 pt-1">
-        <span>
-          {hasPin
-            ? `Pinned coordinates: ${Number(latitude).toFixed(6)}, ${Number(longitude).toFixed(6)}`
-            : 'No map pin selected yet — storefront Direction button will fall back to your street address.'}
-        </span>
-        {previewDirectionsUrl && (
-          <a
-            href={previewDirectionsUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 font-semibold text-amber-700 dark:text-amber-400 hover:underline shrink-0"
-          >
-            <span>Test Direction</span>
-            <ExternalLink className="w-3 h-3" />
-          </a>
-        )}
-      </div>
     </div>
   );
 };

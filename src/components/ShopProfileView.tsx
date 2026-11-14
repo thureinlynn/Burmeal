@@ -46,10 +46,17 @@ export const ShopProfileView: React.FC<ShopProfileViewProps> = ({
   const [coverSrc, setCoverSrc] = useState<string>(() =>
     resolveCoverDesign(shop.coverImage, shop.country, shop.region)
   );
+  const [profileImgFailed, setProfileImgFailed] = useState(false);
+
+  const profileImageSrc = getShopProfileImage(shop);
 
   useEffect(() => {
     setCoverSrc(resolveCoverDesign(shop.coverImage, shop.country, shop.region));
   }, [shop.coverImage, shop.country, shop.region]);
+
+  useEffect(() => {
+    setProfileImgFailed(false);
+  }, [profileImageSrc]);
 
   const contact = buildContactLinks({
     whatsappPhone: shop.whatsappPhone,
@@ -66,7 +73,6 @@ export const ShopProfileView: React.FC<ShopProfileViewProps> = ({
   });
 
   const countryFlag = getCountryFlag(shop.country);
-  const profileImageSrc = getShopProfileImage(shop);
   const directionsUrl = buildGoogleMapsDirectionsUrl(shop);
   const hasPinnedCoords = hasValidCoordinates(shop.latitude, shop.longitude);
 
@@ -115,12 +121,19 @@ export const ShopProfileView: React.FC<ShopProfileViewProps> = ({
 
           {/* Bottom Title & Details */}
           <div className="absolute bottom-4 left-4 right-4 flex items-end gap-3 text-white">
-            <img
-              src={profileImageSrc}
-              alt={shop.name}
-              className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl border-2 border-white object-cover bg-stone-800 shadow-md shrink-0"
-              referrerPolicy="no-referrer"
-            />
+            {profileImageSrc && !profileImgFailed ? (
+              <img
+                src={profileImageSrc}
+                alt={shop.name}
+                onError={() => setProfileImgFailed(true)}
+                className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl border-2 border-white object-cover bg-stone-800 shadow-md shrink-0"
+                referrerPolicy="no-referrer"
+              />
+            ) : (
+              <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl border-2 border-white/90 bg-amber-600/90 text-white flex items-center justify-center shadow-md shrink-0">
+                <Store className="w-7 h-7" />
+              </div>
+            )}
             <div className="flex-1 min-w-0">
               <span className="text-[11px] font-semibold text-amber-300 uppercase tracking-widest block truncate">
                 {shop.cuisineType}

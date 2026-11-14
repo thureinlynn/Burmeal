@@ -1,3 +1,5 @@
+import { normalizeExternalImageUrl } from './shopLocationHelpers';
+
 export const DEFAULT_PLACEHOLDER_COVER = '/src/assets/images/burmeal_hero_spread_1793906769541.jpg';
 
 export type SupportedCountryCode = 'MM' | 'TH' | 'SG' | 'MY' | 'JP' | 'US' | 'EU' | 'GB' | 'KR' | 'AU';
@@ -94,7 +96,8 @@ export function isDefaultCoverImage(url?: string | null): boolean {
   return (
     trimmed === DEFAULT_PLACEHOLDER_COVER ||
     trimmed.includes('/src/assets/images/food_cover_') ||
-    trimmed.includes('/src/assets/images/country_cover_')
+    trimmed.includes('/src/assets/images/country_cover_') ||
+    trimmed.startsWith(`${SUPABASE_REGIONAL_COVER_BASE}/`)
   );
 }
 
@@ -103,8 +106,9 @@ export function resolveCoverDesign(
   country?: string | null,
   region?: string | null
 ): string {
-  if (!isDefaultCoverImage(coverImage)) {
-    return (coverImage as string).trim();
+  const normalized = normalizeExternalImageUrl(coverImage);
+  if (!isDefaultCoverImage(normalized)) {
+    return normalized;
   }
   return getCountryCoverDesign(country, region);
 }

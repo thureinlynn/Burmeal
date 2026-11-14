@@ -18,7 +18,7 @@ initDb();
 const app = express();
 const PORT = 3000;
 
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
 
 // Helper to authenticate request token
 function getAuthenticatedUser(req: Request) {
@@ -594,7 +594,7 @@ app.get('/api/shops/:id', (req: Request, res: Response) => {
 });
 
 // 7. Update Shop Profile (Shop Owner only)
-app.put('/api/shops/:id', (req: Request, res: Response) => {
+app.put('/api/shops/:id', async (req: Request, res: Response) => {
   try {
     const user = getAuthenticatedUser(req);
     if (!user) return res.status(401).json({ error: 'Unauthorized' });
@@ -650,8 +650,8 @@ app.put('/api/shops/:id', (req: Request, res: Response) => {
     `).run(
       name || shop.name,
       bio || shop.bio,
-      coverImage || shop.cover_image,
-      avatarImage || shop.avatar_image,
+      coverImage !== undefined ? coverImage : shop.cover_image,
+      avatarImage !== undefined ? avatarImage : shop.avatar_image,
       profileImageUrl !== undefined ? profileImageUrl : shop.profile_image_url,
       cuisineType || shop.cuisine_type,
       locationArea || shop.location_area,
@@ -670,7 +670,7 @@ app.put('/api/shops/:id', (req: Request, res: Response) => {
     );
 
     const updatedShop = db.prepare('SELECT * FROM shops WHERE id = ?').get(req.params.id);
-    if (updatedShop) syncShopToFirestore(updatedShop);
+    if (updatedShop) await syncShopToFirestore(updatedShop);
 
     return res.json({ success: true, message: 'Shop profile updated successfully.' });
   } catch (err) {

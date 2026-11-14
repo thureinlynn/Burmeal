@@ -6,6 +6,8 @@ import {
   getDefaultCenterForCountry,
   buildGoogleMapsDirectionsUrl,
   getShopProfileImage,
+  normalizeExternalImageUrl,
+  extractSupabaseStoragePath,
   buildSupabaseProfilePath,
   validateProfileImageFile,
 } from './shopLocationHelpers';
@@ -73,6 +75,54 @@ test('getShopProfileImage prefers Supabase profileImageUrl over avatarImage', ()
     }),
     'https://api.dicebear.com/7.x/identicon/svg?seed=shop'
   );
+
+  assert.equal(
+    getShopProfileImage({
+      profileImageUrl: '',
+      avatarImage: '',
+    }),
+    ''
+  );
+});
+
+test('normalizeExternalImageUrl cleans external website addresses, unwraps Google/NextJS links, and blocks unsafe schemes', () => {
+  assert.equal(
+    normalizeExternalImageUrl('  "https://example.com/photo.jpg"  '),
+    'https://example.com/photo.jpg'
+  );
+  assert.equal(
+    normalizeExternalImageUrl('//cdn.example.com/banner.webp'),
+    'https://cdn.example.com/banner.webp'
+  );
+  assert.equal(
+    normalizeExternalImageUrl(
+      'https://www.google.com/imgres?imgurl=https%3A%2F%2Fupload.wikimedia.org%2Fdish.jpg&tbnid=123'
+    ),
+    'https://upload.wikimedia.org/dish.jpg'
+  );
+  assert.equal(
+    normalizeExternalImageUrl(
+      'https://foodsite.com/_next/image?url=https%3A%2F%2Fimages.foodsite.com%2Fhero.png&w=1200'
+    ),
+    'https://images.foodsite.com/hero.png'
+  );
+  assert.equal(normalizeExternalImageUrl('javascript:alert(1)'), '');
+});
+
+test('extractSupabaseStoragePath extracts user-uploaded profile paths and protects regional covers', () => {
+  assert.equal(
+    extractSupabaseStoragePath(
+      'https://oiyejybkorjvxsispjkg.supabase.co/storage/v1/object/public/shop-profiles/public/usr_owner_04-1700000.png?t=123'
+    ),
+    'public/usr_owner_04-1700000.png'
+  );
+  assert.equal(
+    extractSupabaseStoragePath(
+      'https://oiyejybkorjvxsispjkg.supabase.co/storage/v1/object/public/shop-profiles/regional-covers/country_cover_th_1794569770140.jpg'
+    ),
+    null
+  );
+  assert.equal(extractSupabaseStoragePath('https://example.com/avatar.png'), null);
 });
 
 test('buildSupabaseProfilePath formats public/${uid}-${timestamp}.${ext} safely', () => {

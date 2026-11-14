@@ -109,10 +109,85 @@ export function getShopProfileImage(shop: {
   profileImageUrl?: string | null;
   avatarImage?: string | null;
 }): string {
-  const uploaded = typeof shop.profileImageUrl === 'string' ? shop.profileImageUrl.trim() : '';
+  const uploaded = normalizeExternalImageUrl(shop.profileImageUrl);
   if (uploaded) return uploaded;
-  const avatar = typeof shop.avatarImage === 'string' ? shop.avatarImage.trim() : '';
+  const avatar = normalizeExternalImageUrl(shop.avatarImage);
   return avatar;
+}
+
+export function normalizeExternalImageUrl(raw?: string | null): string {
+  if (typeof raw !== 'string') return '';
+  let trimmed = raw.trim();
+  if (!trimmed) return '';
+
+  // Strip accidental surrounding quotes
+  if (
+    (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+    (trimmed.startsWith("'") && trimmed.endsWith("'"))
+  ) {
+    trimmed = trimmed.slice(1, -1).trim();
+  }
+  if (!trimmed) return '';
+
+  // Block unsafe schemes
+  if (/^(javascript|vbscript|file):/i.test(trimmed)) {
+    return '';
+  }
+
+  // Convert protocol-relative URLs (//cdn.example.com/...) to https://
+  if (trimmed.startsWith('//')) {
+    trimmed = `https:${trimmed}`;
+  }
+
+  // Unwrap Google Images redirect links (imgres?imgurl=... or url?url=...) and Next.js proxy URLs
+  if (/^https?:\/\//i.test(trimmed)) {
+    try {
+      const parsed = new URL(trimmed);
+      const host = parsed.hostname.toLowerCase();
+      if (host.includes('google.') && (parsed.pathname === '/imgres' || parsed.pathname === '/url')) {
+        const inner =
+          parsed.searchParams.get('imgurl') ||
+          parsed.searchParams.get('url') ||
+          parsed.searchParams.get('q');
+        if (inner && /^https?:\/\//i.test(inner.trim())) {
+          return inner.trim();
+        }
+      }
+      if (parsed.pathname === '/_next/image') {
+        const inner = parsed.searchParams.get('url');
+        if (inner && /^https?:\/\//i.test(inner.trim())) {
+          return inner.trim();
+        }
+      }
+    } catch {
+      // Keep original trimmed string if URL constructor rejects unusual characters
+    }
+  }
+
+  return trimmed;
+}
+
+export function extractSupabaseStoragePath(
+  url?: string | null,
+  bucket = 'shop-profiles'
+): string | null {
+  const clean = normalizeExternalImageUrl(url);
+  if (!clean || !clean.includes('/storage/v1/object/public/')) return null;
+
+  const marker = `/storage/v1/object/public/${bucket}/`;
+  const idx = clean.indexOf(marker);
+  if (idx === -1) return null;
+
+  const rawPath = clean.slice(idx + marker.length).split('?')[0].trim();
+  if (!rawPath || rawPath.startsWith('regional-covers/')) {
+    return null;
+  }
+
+  try {
+    return decodeURIComponent(rawPath);
+  } catch {
+    return rawPath;
+  }
 }
 
 const MIME_TO_EXT: Record<string, string> = {

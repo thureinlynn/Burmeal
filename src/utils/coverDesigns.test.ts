@@ -67,4 +67,13 @@ test('resolveCoverDesign applies Supabase regional flat design for default cover
     resolveCoverDesign('/src/assets/images/food_cover_wok_1794568120622.jpg', 'Japan', 'Tokyo'),
     COUNTRY_COVER_DESIGNS.JP
   );
+  assert.equal(isDefaultCoverImage(COUNTRY_COVER_DESIGNS.TH), true);
+  assert.equal(
+    resolveCoverDesign(
+      'https://www.google.com/imgres?imgurl=https%3A%2F%2Fcdn.example.com%2Fmy-cover.jpg',
+      'Thailand',
+      'Bangkok'
+    ),
+    'https://cdn.example.com/my-cover.jpg'
+  );
 });
