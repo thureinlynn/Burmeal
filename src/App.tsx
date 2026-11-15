@@ -17,6 +17,7 @@ import {
   filterFollowedMenuItems,
   filterSavedMenuItems,
 } from './utils/userDataHelpers';
+import { parseShareTargetFromSearch } from './utils/shareHelpers';
 import { Navbar } from './components/Navbar';
 import { BottomNav } from './components/BottomNav';
 import { FilterBar } from './components/FilterBar';
@@ -48,6 +49,7 @@ export default function App() {
     selectedRegionId,
     selectedRegionName,
     selectedFlag,
+    hasChosenLocation,
     isLocationModalOpen,
     openLocationModal,
     closeLocationModal,
@@ -92,6 +94,84 @@ export default function App() {
     window.addEventListener('gmp-quota-exceeded', onQuotaExceeded);
     return () => window.removeEventListener('gmp-quota-exceeded', onQuotaExceeded);
   }, []);
+
+  // Resolve shared deep links (?item=<id> or ?shop=<id>) across all regions
+  const pendingShareRef = React.useRef<{ itemId?: string; shopId?: string }>(
+    typeof window !== 'undefined' ? parseShareTargetFromSearch(window.location.search) : {}
+  );
+  const fetchedShareCatalogRef = React.useRef(false);
+
+  useEffect(() => {
+    const target = pendingShareRef.current;
+    if (!target.shopId && !target.itemId) return;
+
+    const clearShareParams = () => {
+      pendingShareRef.current = {};
+      if (typeof window !== 'undefined') {
+        try {
+          const url = new URL(window.location.href);
+          url.searchParams.delete('item');
+          url.searchParams.delete('shop');
+          window.history.replaceState({}, '', url.pathname + url.search + url.hash);
+        } catch {
+          // ignore
+        }
+      }
+    };
+
+    const allShopsPool = mergeUniqueShops(shops, allBackendShopsCache, firestoreShopsCache);
+    const allItemsPool = mergeUniqueMenuItems(menuItems, allBackendItemsCache, firestoreItemsCache);
+
+    if (target.shopId) {
+      const matchedShop = allShopsPool.find((s) => s.id === target.shopId);
+      if (matchedShop) {
+        setSelectedShopId(matchedShop.id);
+        setCurrentTab('shop_detail');
+        clearShareParams();
+        return;
+      }
+    }
+
+    if (target.itemId) {
+      const matchedItem = allItemsPool.find((i) => i.id === target.itemId);
+      if (matchedItem) {
+        setSelectedItemForDetail(matchedItem);
+        clearShareParams();
+        return;
+      }
+    }
+
+    if (!fetchedShareCatalogRef.current) {
+      fetchedShareCatalogRef.current = true;
+      (async () => {
+        try {
+          if (target.shopId) {
+            const fetchedShop = await apiClient.getShop(target.shopId, token).catch(() => null);
+            if (fetchedShop) {
+              setAllBackendShopsCache((prev) => mergeUniqueShops(prev, [fetchedShop]));
+              setSelectedShopId(fetchedShop.id);
+              setCurrentTab('shop_detail');
+              clearShareParams();
+              return;
+            }
+          }
+          if (target.itemId) {
+            const res = await apiClient.getMenuItems({}, token).catch(() => null);
+            if (res?.items?.length) {
+              setAllBackendItemsCache((prev) => mergeUniqueMenuItems(prev, res.items));
+              const hit = res.items.find((i) => i.id === target.itemId);
+              if (hit) {
+                setSelectedItemForDetail(hit);
+                clearShareParams();
+              }
+            }
+          }
+        } catch {
+          // Ignore deep-link resolution errors cleanly
+        }
+      })();
+    }
+  }, [shops, allBackendShopsCache, firestoreShopsCache, menuItems, allBackendItemsCache, firestoreItemsCache, token]);
 
   // Effective cross-device IDs (Firestore real-time UID/email source of truth + backend session fallback)
   const effectiveFollowedIds = React.useMemo(
@@ -1189,7 +1269,8 @@ export default function App() {
       <LocationModal
         isOpen={isLocationModalOpen}
         onClose={closeLocationModal}
-        canDismiss={Boolean(selectedCountry)}
+        canDismiss={hasChosenLocation}
+        isFirstTime={!hasChosenLocation}
       />
 
       <OfflineIndicator />

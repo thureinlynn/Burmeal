@@ -5,6 +5,8 @@ import { buildContactLinks } from '../utils/filter';
 import { getCountryFlag } from '../utils/countries';
 import { resolveCoverDesign, getLocalCountryCoverDesign } from '../utils/coverDesigns';
 import { getShopProfileImage } from '../utils/shopLocationHelpers';
+import { buildShopSharePayload } from '../utils/shareHelpers';
+import { ShareButton } from './ShareButton';
 import { useLanguage } from '../context/LanguageContext';
 
 interface ShopCardProps {
@@ -102,19 +104,32 @@ export const ShopCard: React.FC<ShopCardProps> = ({ shop, onFollowToggle, onSele
               </div>
             </div>
 
-            {onFollowToggle && (
-              <button
-                onClick={() => onFollowToggle(shop.id)}
-                className={`p-2 rounded-xl border transition-colors shrink-0 ${
-                  (shop as any).isFollowed
-                    ? 'bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-800 text-rose-600'
-                    : 'bg-stone-50 dark:bg-stone-800 border-stone-200 dark:border-stone-700 text-stone-500 hover:text-stone-900 dark:hover:text-stone-200'
-                }`}
-                title={(shop as any).isFollowed ? 'Unfollow shop' : 'Follow shop for daily updates'}
-              >
-                <Heart className={`w-4 h-4 ${(shop as any).isFollowed ? 'fill-current text-rose-500' : ''}`} />
-              </button>
-            )}
+            <div className="flex items-center gap-1.5 shrink-0">
+              <ShareButton
+                variant="icon-box"
+                ariaLabel={`Share ${shop.name}`}
+                getPayload={() =>
+                  buildShopSharePayload(
+                    { id: shop.id, name: shop.name, city: shop.city, country: shop.country },
+                    typeof window !== 'undefined' ? window.location.href : 'https://burmeal.app/'
+                  )
+                }
+              />
+
+              {onFollowToggle && (
+                <button
+                  onClick={() => onFollowToggle(shop.id)}
+                  className={`p-2 rounded-xl border transition-colors shrink-0 ${
+                    (shop as any).isFollowed
+                      ? 'bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-800 text-rose-600'
+                      : 'bg-stone-50 dark:bg-stone-800 border-stone-200 dark:border-stone-700 text-stone-500 hover:text-stone-900 dark:hover:text-stone-200'
+                  }`}
+                  title={(shop as any).isFollowed ? 'Unfollow shop' : 'Follow shop for daily updates'}
+                >
+                  <Heart className={`w-4 h-4 ${(shop as any).isFollowed ? 'fill-current text-rose-500' : ''}`} />
+                </button>
+              )}
+            </div>
           </div>
 
           <p className="text-xs text-stone-600 dark:text-stone-400 line-clamp-2 leading-relaxed mb-3">

@@ -1,5 +1,7 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState } from 'react';
 import { COUNTRIES, REGIONS, RegionOption } from '../utils/countries';
+import { shouldForceRegionOnboarding } from '../utils/locationOnboardingHelpers';
+import { parseShareTargetFromSearch } from '../utils/shareHelpers';
 
 export type { RegionOption };
 export { REGIONS };
@@ -9,6 +11,7 @@ interface LocationContextType {
   selectedRegionId: string; // e.g. "MM-YGN" or "MM-ALL"
   selectedRegionName: string;
   selectedFlag: string;
+  hasChosenLocation: boolean;
   isLocationModalOpen: boolean;
   openLocationModal: () => void;
   closeLocationModal: () => void;
@@ -17,20 +20,36 @@ interface LocationContextType {
 
 const LocationContext = createContext<LocationContextType | undefined>(undefined);
 
+const hasInitialDeepLink = () => {
+  if (typeof window === 'undefined') return false;
+  const target = parseShareTargetFromSearch(window.location.search);
+  return Boolean(target.itemId || target.shopId);
+};
+
+const getInitialSearch = () => (typeof window !== 'undefined' ? window.location.search : '');
+
 export const LocationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // Check if user has previously chosen a location
   const [selectedCountry, setSelectedCountry] = useState<string>(() => {
-    return localStorage.getItem('burmeal_country') || '';
+    return localStorage.getItem('burmeal_country') || (hasInitialDeepLink() ? 'Myanmar' : '');
   });
 
   const [selectedRegionId, setSelectedRegionId] = useState<string>(() => {
-    return localStorage.getItem('burmeal_region_id') || '';
+    return localStorage.getItem('burmeal_region_id') || (hasInitialDeepLink() ? 'MM-ALL' : '');
   });
 
-  // Prompt onboarding modal if not set
+  const [hasChosenLocation, setHasChosenLocation] = useState<boolean>(() => {
+    const c = localStorage.getItem('burmeal_country');
+    const r = localStorage.getItem('burmeal_region_id');
+    return Boolean(c?.trim() && r?.trim());
+  });
+
+  // Enforce onboarding alert + country/region selection for first-time users (skip when arriving via shared deep link)
   const [isLocationModalOpen, setIsLocationModalOpen] = useState<boolean>(() => {
-    const hasChosen = localStorage.getItem('burmeal_country');
-    return !hasChosen; // Force onboarding modal if no location chosen
+    return shouldForceRegionOnboarding(
+      localStorage.getItem('burmeal_country'),
+      localStorage.getItem('burmeal_region_id'),
+      getInitialSearch()
+    );
   });
 
   const setLocation = (countryName: string, regionId?: string) => {
@@ -42,25 +61,25 @@ export const LocationProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
     let rId = regionId;
     if (!rId) {
-      // Pick first matching region for this country
       const firstReg = REGIONS.find((r) => r.countryName.toLowerCase() === cName.toLowerCase() || r.countryCode === cCode);
       rId = firstReg ? firstReg.id : `${cCode}-ALL`;
     }
 
     setSelectedCountry(cName);
     setSelectedRegionId(rId);
+    setHasChosenLocation(true);
     localStorage.setItem('burmeal_country', cName);
     localStorage.setItem('burmeal_region_id', rId);
     setIsLocationModalOpen(false);
   };
 
   const openLocationModal = () => setIsLocationModalOpen(true);
+
   const closeLocationModal = () => {
-    // If no country has been selected yet, default to Myanmar so user is never stuck
-    if (!selectedCountry) {
-      setLocation('Myanmar', 'MM-ALL');
+    // Only allow dismissing without confirmation if the user has already chosen a location once
+    if (hasChosenLocation || hasInitialDeepLink()) {
+      setIsLocationModalOpen(false);
     }
-    setIsLocationModalOpen(false);
   };
 
   // Derive region display name and flag
@@ -75,6 +94,7 @@ export const LocationProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         selectedRegionId: selectedRegionId || 'MM-ALL',
         selectedRegionName,
         selectedFlag,
+        hasChosenLocation,
         isLocationModalOpen,
         openLocationModal,
         closeLocationModal,

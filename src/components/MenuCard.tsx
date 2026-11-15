@@ -6,6 +6,8 @@ import { useLocation } from '../context/LocationContext';
 import { Bookmark, Leaf, ShieldCheck, Store, ArrowRight, Calendar, Clock } from 'lucide-react';
 
 import { getCountryFlag } from '../utils/countries';
+import { buildItemSharePayload } from '../utils/shareHelpers';
+import { ShareButton } from './ShareButton';
 
 interface MenuCardProps {
   item: MenuItem;
@@ -66,22 +68,35 @@ export const MenuCard: React.FC<MenuCardProps> = ({
           )}
         </div>
 
-        {/* Bookmark button */}
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onToggleSave(item);
-          }}
-          className={`absolute top-2 right-2 p-1.5 sm:p-2 rounded-full backdrop-blur transition-all ${
-            item.isSaved
-              ? 'bg-amber-500 text-white shadow-sm'
-              : 'bg-black/35 text-white hover:bg-black/60'
-          }`}
-          title={item.isSaved ? t.saved : t.saveItem}
-          aria-label={`Save ${item.title}`}
-        >
-          <Bookmark className={`w-3.5 h-3.5 ${item.isSaved ? 'fill-current' : ''}`} />
-        </button>
+        {/* Share & Bookmark buttons */}
+        <div className="absolute top-2 right-2 flex items-center gap-1.5">
+          <ShareButton
+            variant="icon-overlay"
+            ariaLabel={`Share ${item.title}`}
+            getPayload={() =>
+              buildItemSharePayload(
+                { id: item.id, title: item.title, shopName: item.shopName },
+                typeof window !== 'undefined' ? window.location.href : 'https://burmeal.app/'
+              )
+            }
+          />
+
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleSave(item);
+            }}
+            className={`p-1.5 sm:p-2 rounded-full backdrop-blur transition-all ${
+              item.isSaved
+                ? 'bg-amber-500 text-white shadow-sm'
+                : 'bg-black/35 text-white hover:bg-black/60'
+            }`}
+            title={item.isSaved ? t.saved : t.saveItem}
+            aria-label={`Save ${item.title}`}
+          >
+            <Bookmark className={`w-3.5 h-3.5 ${item.isSaved ? 'fill-current' : ''}`} />
+          </button>
+        </div>
 
         {/* Menu Type & Price Pill */}
         <div className="absolute bottom-2 left-2 right-2 flex items-center justify-between pointer-events-none">

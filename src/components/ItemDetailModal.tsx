@@ -4,6 +4,8 @@ import { formatPrice } from '../utils/filter';
 import { useLanguage } from '../context/LanguageContext';
 import { useLocation } from '../context/LocationContext';
 import { getCountryFlag } from '../utils/countries';
+import { buildItemSharePayload } from '../utils/shareHelpers';
+import { ShareButton } from './ShareButton';
 import { X, Bookmark, Store, Leaf, ShieldCheck, Calendar, Clock, ArrowRight } from 'lucide-react';
 
 interface ItemDetailModalProps {
@@ -143,11 +145,11 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
           </div>
         </div>
 
-        {/* Footer actions: Save item + Prominent Visit Shop Profile */}
-        <div className="p-4 border-t border-stone-200 bg-stone-50/80 flex items-center gap-3">
+        {/* Footer actions: Save item + Share item + Prominent Visit Shop Profile */}
+        <div className="p-4 border-t border-stone-200 bg-stone-50/80 flex items-center gap-2.5 flex-wrap">
           <button
             onClick={() => onToggleSave(item)}
-            className={`flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl border text-xs font-semibold transition-colors ${
+            className={`flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-xl border text-xs font-semibold transition-colors cursor-pointer ${
               item.isSaved
                 ? 'bg-amber-50 border-amber-300 text-amber-800'
                 : 'bg-white border-stone-200 text-stone-700 hover:bg-stone-50'
@@ -157,12 +159,23 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
             <span>{item.isSaved ? t.saved : t.saveItem}</span>
           </button>
 
+          <ShareButton
+            variant="button"
+            ariaLabel={`Share ${item.title}`}
+            getPayload={() =>
+              buildItemSharePayload(
+                { id: item.id, title: item.title, shopName: item.shopName },
+                typeof window !== 'undefined' ? window.location.href : 'https://burmeal.app/'
+              )
+            }
+          />
+
           <button
             onClick={() => {
               onClose();
               onVisitShop(item.shopId);
             }}
-            className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold shadow-xs transition-colors"
+            className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold shadow-xs transition-colors cursor-pointer min-w-[170px]"
           >
             <Store className="w-4 h-4" />
             <span>{t.viewShopProfile} & {t.contactShop}</span>

@@ -9,6 +9,8 @@ import {
   getShopProfileImage,
   hasValidCoordinates,
 } from '../utils/shopLocationHelpers';
+import { buildShopSharePayload } from '../utils/shareHelpers';
+import { ShareButton } from './ShareButton';
 import { MenuCard } from './MenuCard';
 import {
   MapPin,
@@ -104,8 +106,18 @@ export const ShopProfileView: React.FC<ShopProfileViewProps> = ({
           />
           <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/35 to-transparent" />
 
-          {/* Follow button in top right */}
-          <div className="absolute top-4 right-4 z-10">
+          {/* Share & Follow buttons in top right */}
+          <div className="absolute top-4 right-4 z-10 flex items-center gap-2">
+            <ShareButton
+              variant="banner-button"
+              ariaLabel={`Share ${shop.name}`}
+              getPayload={() =>
+                buildShopSharePayload(
+                  { id: shop.id, name: shop.name, city: shop.city, country: shop.country },
+                  typeof window !== 'undefined' ? window.location.href : 'https://burmeal.app/'
+                )
+              }
+            />
             <button
               onClick={() => onFollowToggle(shop.id)}
               className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all shadow-md backdrop-blur ${
