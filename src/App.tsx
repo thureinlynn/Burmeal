@@ -18,6 +18,8 @@ import {
   filterSavedMenuItems,
 } from './utils/userDataHelpers';
 import { parseShareTargetFromSearch } from './utils/shareHelpers';
+import { buildNewShopForOwner } from './utils/authHelpers';
+import { COUNTRIES, getDefaultRegionNameForCountry } from './utils/countries';
 import { Navbar } from './components/Navbar';
 import { BottomNav } from './components/BottomNav';
 import { FilterBar } from './components/FilterBar';
@@ -501,16 +503,53 @@ export default function App() {
   }, [user, user?.role, shopId, token]);
 
   // Shop Owner handlers
+  const [newOwnerShopName, setNewOwnerShopName] = useState('');
+  const [newOwnerCuisine, setNewOwnerCuisine] = useState('Traditional Burmese Cuisine');
+  const [newOwnerCountry, setNewOwnerCountry] = useState(selectedCountry || 'Myanmar');
+  const [newOwnerRegion, setNewOwnerRegion] = useState(
+    selectedRegionName && !selectedRegionName.startsWith('All ')
+      ? selectedRegionName
+      : getDefaultRegionNameForCountry(selectedCountry || 'Myanmar') || 'Yangon Region'
+  );
+  const [newOwnerCity, setNewOwnerCity] = useState('');
+  const [newOwnerAddress, setNewOwnerAddress] = useState('');
+  const [isCreatingOwnerShop, setIsCreatingOwnerShop] = useState(false);
+
+  const handleCreateOwnerShop = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user?.id || !newOwnerShopName.trim()) return;
+    setIsCreatingOwnerShop(true);
+    try {
+      const createdShop = buildNewShopForOwner(user.id, user.email || '', {
+        name: user.name,
+        shopName: newOwnerShopName.trim(),
+        cuisineType: newOwnerCuisine.trim() || 'Traditional Burmese Cuisine',
+        city: newOwnerCity.trim() || newOwnerRegion,
+        region: newOwnerRegion.trim() || 'Yangon Region',
+        country: newOwnerCountry || 'Myanmar',
+        address: newOwnerAddress.trim(),
+      });
+      await firestoreService.createShop(createdShop);
+      await apiClient.syncFirebaseAccount(user, createdShop).catch(() => {});
+      setOwnerShop(createdShop);
+      setFirestoreShopsCache((prev) => mergeUniqueShops([createdShop], prev));
+      await Promise.all([loadOwnerData(), loadShops()]);
+    } catch (err) {
+      console.error('Create owner shop error:', err);
+    } finally {
+      setIsCreatingOwnerShop(false);
+    }
+  };
+
   const handleUpdateShopProfile = async (data: Partial<Shop>) => {
     const targetId = ownerShop?.id || shopId;
-    if (!targetId) return;
-    const baseShop = ownerShop || resolvedOwnerShop;
+    if (!targetId || !ownerShop) return;
     const updatedOnlineShop: Shop = {
-      ...baseShop,
+      ...ownerShop,
       ...data,
       id: targetId,
-      ownerId: user?.id || baseShop.ownerId,
-      ownerEmail: (user?.email || baseShop.ownerEmail || '').trim().toLowerCase(),
+      ownerId: user?.id || ownerShop.ownerId,
+      ownerEmail: (user?.email || ownerShop.ownerEmail || '').trim().toLowerCase(),
     };
     try {
       setOwnerShop(updatedOnlineShop);
@@ -708,36 +747,7 @@ export default function App() {
     };
   }, [selectedShopId, displayedShops, followedShopsList, allKnownShops, effectiveFollowedIds]);
 
-  // Fallback safe owner shop so the dashboard is guaranteed to be fully usable and visible
-  const fallbackOwnerShop: Shop = {
-    id: shopId || 'shop_01',
-    ownerId: user?.id || 'usr_owner_01',
-    ownerEmail: user?.email || 'mandalay@burmeal.com',
-    name: user?.name ? user.name.replace(/\s*Host\s*$/i, '') : 'Mandalay Morning Teahouse',
-    bio: 'Authentic Burmese culinary kitchen bringing traditional regional recipes to food lovers.',
-    coverImage: '/src/assets/images/burmeal_hero_spread_1793906769541.jpg',
-    avatarImage: user?.avatarUrl || 'https://api.dicebear.com/7.x/identicon/svg?seed=mandalay',
-    status: 'APPROVED',
-    cuisineType: 'Traditional Burmese Kitchen',
-    locationArea: 'Downtown Heritage District',
-    address: '78th Street, Between 26th & 27th',
-    city: 'Mandalay',
-    region: 'Mandalay Region',
-    country: 'Myanmar',
-    facebookUrl: 'https://facebook.com/burmeal',
-    whatsappPhone: '9592001000',
-    viberPhone: '9592001000',
-    lineId: '@burmeal',
-    phoneNumber: '+95 9 200 1000',
-    isOpen: true,
-    operatingHours: '7:00 AM - 8:30 PM',
-    createdAt: new Date().toISOString(),
-    followerCount: 28,
-    itemCount: 11,
-    isFollowed: false,
-  };
-
-  const resolvedOwnerShop = ownerShop || fallbackOwnerShop;
+  // Real owner shop resolved from Firestore / SQLite (never falls back to mock shop data)
 
   // Strict Role Segregation: enforce shop tabs for SHOP_OWNER and reset protected tabs on logout
   useEffect(() => {
@@ -796,9 +806,126 @@ export default function App() {
             <div className="bg-white dark:bg-stone-900 rounded-3xl border border-stone-200 dark:border-stone-800 p-12 text-center text-xs text-stone-500 dark:text-stone-400">
               Loading your shop dashboard...
             </div>
+          ) : !ownerShop ? (
+            <div className="max-w-xl mx-auto bg-white dark:bg-stone-900 rounded-3xl border border-stone-200 dark:border-stone-800 p-6 sm:p-8 shadow-xs space-y-5">
+              <div className="flex items-center gap-3">
+                <div className="w-11 h-11 rounded-2xl bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+                  <Store className="w-6 h-6" />
+                </div>
+                <div>
+                  <h1 className="text-lg sm:text-xl font-bold font-display text-stone-900 dark:text-stone-100">
+                    Set Up Your Real Shop Profile
+                  </h1>
+                  <p className="text-xs text-stone-500 dark:text-stone-400">
+                    Create your live storefront to start publishing real dishes for customers.
+                  </p>
+                </div>
+              </div>
+
+              <form onSubmit={handleCreateOwnerShop} className="space-y-3.5 text-xs">
+                <div>
+                  <label className="block font-semibold text-stone-700 dark:text-stone-300 mb-1">
+                    Shop Name *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={newOwnerShopName}
+                    onChange={(e) => setNewOwnerShopName(e.target.value)}
+                    placeholder="e.g. Yangon Home Kitchen"
+                    className="w-full px-3 py-2 bg-stone-50 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-xl focus:outline-none focus:border-amber-600 text-stone-900 dark:text-stone-100"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-semibold text-stone-700 dark:text-stone-300 mb-1">
+                      Cuisine Style *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={newOwnerCuisine}
+                      onChange={(e) => setNewOwnerCuisine(e.target.value)}
+                      className="w-full px-3 py-2 bg-stone-50 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-xl focus:outline-none focus:border-amber-600 text-stone-900 dark:text-stone-100"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-semibold text-stone-700 dark:text-stone-300 mb-1">
+                      Country *
+                    </label>
+                    <select
+                      value={newOwnerCountry}
+                      onChange={(e) => {
+                        const next = e.target.value;
+                        setNewOwnerCountry(next);
+                        setNewOwnerRegion(getDefaultRegionNameForCountry(next) || next);
+                      }}
+                      className="w-full px-3 py-2 bg-stone-50 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-xl focus:outline-none focus:border-amber-600 text-stone-900 dark:text-stone-100"
+                    >
+                      {COUNTRIES.map((c) => (
+                        <option key={c.code} value={c.name}>
+                          {c.flag} {c.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-semibold text-stone-700 dark:text-stone-300 mb-1">
+                      City *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={newOwnerCity}
+                      onChange={(e) => setNewOwnerCity(e.target.value)}
+                      placeholder="e.g. Yangon, Indianapolis"
+                      className="w-full px-3 py-2 bg-stone-50 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-xl focus:outline-none focus:border-amber-600 text-stone-900 dark:text-stone-100"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-semibold text-stone-700 dark:text-stone-300 mb-1">
+                      State / Region *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={newOwnerRegion}
+                      onChange={(e) => setNewOwnerRegion(e.target.value)}
+                      placeholder="e.g. Yangon Region"
+                      className="w-full px-3 py-2 bg-stone-50 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-xl focus:outline-none focus:border-amber-600 text-stone-900 dark:text-stone-100"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-stone-700 dark:text-stone-300 mb-1">
+                    Street Address
+                  </label>
+                  <input
+                    type="text"
+                    value={newOwnerAddress}
+                    onChange={(e) => setNewOwnerAddress(e.target.value)}
+                    placeholder="Kitchen street address or neighborhood"
+                    className="w-full px-3 py-2 bg-stone-50 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-xl focus:outline-none focus:border-amber-600 text-stone-900 dark:text-stone-100"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={isCreatingOwnerShop}
+                  className="w-full py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl shadow-xs transition-colors disabled:opacity-50 cursor-pointer"
+                >
+                  {isCreatingOwnerShop ? 'Creating Storefront...' : 'Create Storefront & Open Dashboard'}
+                </button>
+              </form>
+            </div>
           ) : currentTab === 'shop_detail' ? (
             <ShopProfileView
-              shop={resolvedOwnerShop}
+              shop={ownerShop}
               menuItems={ownerMenuItems}
               onBack={() => {
                 setSelectedShopId(null);
@@ -810,7 +937,7 @@ export default function App() {
             />
           ) : (
             <ShopDashboard
-              shop={resolvedOwnerShop}
+              shop={ownerShop}
               menuItems={ownerMenuItems}
               activeSubTab={
                 (['shop_overview', 'shop_menus', 'shop_profile', 'shop_settings'].includes(currentTab)
@@ -872,21 +999,35 @@ export default function App() {
 
             {/* Public Food Items Grid (AT LEAST TWO ITEMS PER ROW IN MOBILE UI!) */}
             {displayedMenuItems.length === 0 ? (
-              <div className="bg-white dark:bg-stone-900 rounded-3xl border border-stone-200 dark:border-stone-800 p-12 text-center text-xs text-stone-400 space-y-3">
+              <div className="bg-white dark:bg-stone-900 rounded-3xl border border-stone-200 dark:border-stone-800 p-10 sm:p-12 text-center text-xs text-stone-400 space-y-3">
                 <Store className="w-10 h-10 mx-auto text-stone-300 dark:text-stone-600" />
-                <p className="font-semibold text-stone-700 dark:text-stone-300">
-                  {t.noDishesFound} in {selectedRegionName}
+                <p className="font-semibold text-sm text-stone-700 dark:text-stone-300">
+                  {selectedRegionName} — {t.noDishesFound}
                 </p>
-                <p className="text-[11px] text-stone-400 max-w-sm mx-auto">
-                  Try switching your location region or resetting dietary filters to explore dining spots nearby.
+                <p className="text-[11px] text-stone-500 dark:text-stone-400 max-w-sm mx-auto leading-relaxed">
+                  Only real kitchens and dishes published by shop owners appear here. Switch regions to explore other areas or register your own kitchen.
                 </p>
-                <button
-                  onClick={openLocationModal}
-                  className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl shadow-xs transition-transform active:scale-95 inline-flex items-center gap-1.5"
-                >
-                  <MapPin className="w-3.5 h-3.5" />
-                  <span>Change Region</span>
-                </button>
+                <div className="flex flex-wrap items-center justify-center gap-2.5 pt-1">
+                  <button
+                    onClick={openLocationModal}
+                    className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl shadow-xs transition-transform active:scale-95 inline-flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <MapPin className="w-3.5 h-3.5" />
+                    <span>Change Region</span>
+                  </button>
+                  {!isSignedIn && (
+                    <button
+                      onClick={() => {
+                        setAuthDefaultRole('SHOP_OWNER');
+                        setIsAuthModalOpen(true);
+                      }}
+                      className="px-4 py-2 bg-stone-100 hover:bg-stone-200 dark:bg-stone-800 dark:hover:bg-stone-700 text-stone-800 dark:text-stone-200 font-bold text-xs rounded-xl border border-stone-200 dark:border-stone-700 transition-transform active:scale-95 inline-flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <Store className="w-3.5 h-3.5 text-amber-600" />
+                      <span>Register Your Kitchen</span>
+                    </button>
+                  )}
+                </div>
               </div>
             ) : (
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-6">
@@ -1168,20 +1309,35 @@ export default function App() {
             </div>
 
             {displayedShops.length === 0 ? (
-              <div className="bg-white dark:bg-stone-900 rounded-3xl border border-stone-200 dark:border-stone-800 p-12 text-center text-xs text-stone-400 space-y-3">
+              <div className="bg-white dark:bg-stone-900 rounded-3xl border border-stone-200 dark:border-stone-800 p-10 sm:p-12 text-center text-xs text-stone-400 space-y-3">
                 <Store className="w-10 h-10 mx-auto text-stone-300 dark:text-stone-600" />
-                <p className="font-semibold text-stone-700 dark:text-stone-300">
+                <p className="font-semibold text-sm text-stone-700 dark:text-stone-300">
                   No shops registered yet in {selectedRegionName}
                 </p>
-                <p className="text-[11px] text-stone-400 max-w-sm mx-auto">
+                <p className="text-[11px] text-stone-500 dark:text-stone-400 max-w-sm mx-auto leading-relaxed">
                   Switch your location or register your own shop to be the first kitchen featured in this area.
                 </p>
-                <button
-                  onClick={openLocationModal}
-                  className="px-4 py-2 bg-amber-600 text-white font-bold text-xs rounded-xl shadow-xs"
-                >
-                  Switch Region
-                </button>
+                <div className="flex flex-wrap items-center justify-center gap-2.5 pt-1">
+                  <button
+                    onClick={openLocationModal}
+                    className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl shadow-xs transition-transform active:scale-95 inline-flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <MapPin className="w-3.5 h-3.5" />
+                    <span>Switch Region</span>
+                  </button>
+                  {!isSignedIn && (
+                    <button
+                      onClick={() => {
+                        setAuthDefaultRole('SHOP_OWNER');
+                        setIsAuthModalOpen(true);
+                      }}
+                      className="px-4 py-2 bg-stone-100 hover:bg-stone-200 dark:bg-stone-800 dark:hover:bg-stone-700 text-stone-800 dark:text-stone-200 font-bold text-xs rounded-xl border border-stone-200 dark:border-stone-700 transition-transform active:scale-95 inline-flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <Store className="w-3.5 h-3.5 text-amber-600" />
+                      <span>Register Your Kitchen</span>
+                    </button>
+                  )}
+                </div>
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">

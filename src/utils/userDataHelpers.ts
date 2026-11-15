@@ -1,5 +1,6 @@
 import { MenuItem, MenuType, Shop } from '../types';
 import { filterMenuItems, matchesRegionFilter } from './filter';
+import { filterOutSeededMockMenuItems, filterOutSeededMockShops } from './mockCleanup';
 
 export function mergeUniqueIds(...lists: Array<Iterable<string> | undefined | null>): string[] {
   const seen = new Set<string>();
@@ -68,7 +69,7 @@ export function buildDisplayedShops(
   });
 
   // Firestore overrides matching SQLite shop records so online edits always take precedence
-  const merged = mergeUniqueShops(backendShops, fsInRegion);
+  const merged = filterOutSeededMockShops(mergeUniqueShops(backendShops, fsInRegion));
   const itemCounts = new Map<string, number>();
   for (const item of allItems) {
     if (item?.shopId) {
@@ -157,7 +158,7 @@ export function buildDisplayedMenuItems(
   });
 
   // Firestore overrides SQLite items for same ID so online edits win across all devices
-  const merged = mergeUniqueMenuItems(backendItems, filteredFsItems);
+  const merged = filterOutSeededMockMenuItems(mergeUniqueMenuItems(backendItems, filteredFsItems));
   return applySaveStateToMenuItems(merged, savedIds);
 }
 

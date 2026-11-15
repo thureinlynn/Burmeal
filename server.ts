@@ -92,7 +92,7 @@ app.post('/api/auth/register', (req: Request, res: Response) => {
         'Welcome to our kitchen! We specialize in traditional family recipes and daily specials.',
         '/src/assets/images/burmeal_hero_spread_1793906769541.jpg',
         avatarUrl,
-        'PENDING', // Needs admin approval
+        'APPROVED', // Available immediately for real users
         cuisineType || 'Burmese Cuisine',
         locationArea || (city ? `${city}, ${country || 'Myanmar'}` : 'Downtown Heritage District'),
         address || 'Main Road',
@@ -1178,13 +1178,13 @@ app.get('/api/saved-items', (req: Request, res: Response) => {
   }
 });
 
-// Seed Script Trigger Endpoint (convenient seed reset or check)
+// Admin health check endpoint (mock seeding removed; real user data only)
 app.post('/api/admin/seed', (req: Request, res: Response) => {
   const user = getAuthenticatedUser(req);
   if (!user || user.role !== 'ADMIN') {
     return res.status(403).json({ error: 'Admin only' });
   }
-  return res.json({ success: true, message: 'Database verified and seeded.' });
+  return res.json({ success: true, message: 'Live database active (mock seeding disabled).' });
 });
 
 // SEO & Search Engine Endpoints

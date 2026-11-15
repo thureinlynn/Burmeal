@@ -190,3 +190,51 @@ test('applySaveStateToMenuItems and filterSavedMenuItems preserve saved items an
   assert.equal(savedList[0].shopCountry, 'Japan');
   assert.equal(savedList[0].isSaved, true);
 });
+
+test('buildDisplayedShops and buildDisplayedMenuItems exclude legacy seeded mock shops and dishes', () => {
+  const mixedShops: Shop[] = [
+    {
+      ...shops[0],
+      id: 'shop_04',
+      name: 'Siam Burmese Street Food & Sweets',
+      country: 'Thailand',
+    },
+    {
+      ...shops[0],
+      id: 'shop_1794666546622_3j0y',
+      name: 'Little Myanmar',
+      country: 'United States',
+    },
+  ];
+  const usShops = buildDisplayedShops([], mixedShops, new Set(), {
+    country: 'United States',
+    regionId: 'US-ALL',
+  });
+  assert.equal(usShops.length, 1);
+  assert.equal(usShops[0].id, 'shop_1794666546622_3j0y');
+
+  const thBackendShops = buildDisplayedShops([mixedShops[0]], [], new Set(), {
+    country: 'Thailand',
+    regionId: 'TH-ALL',
+  });
+  assert.equal(thBackendShops.length, 0);
+
+  const thFsShops = buildDisplayedShops([], mixedShops, new Set(), {
+    country: 'Thailand',
+    regionId: 'TH-ALL',
+  });
+  assert.equal(thFsShops.length, 0);
+
+  const mixedItems: MenuItem[] = [
+    { ...items[0], id: 'item_shop_04_1', shopId: 'shop_04', shopCountry: 'Thailand' },
+    {
+      ...items[0],
+      id: 'item_1794668262639',
+      shopId: 'shop_1794666546622_3j0y',
+      shopCountry: 'United States',
+    },
+  ];
+  const visibleItems = buildDisplayedMenuItems(mixedItems, [], mixedShops, new Set(), {});
+  assert.equal(visibleItems.length, 1);
+  assert.equal(visibleItems[0].id, 'item_1794668262639');
+});

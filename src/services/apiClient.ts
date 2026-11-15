@@ -1,9 +1,10 @@
 import { User, Shop, MenuItem, MenuType } from '../types/index';
-import { generateAllMockShops, generateAllMockMenuItems, generateMockOwners } from '../utils/mockDataGenerator';
 import { matchesRegionFilter } from '../utils/filter';
 
 const TOKEN_KEY = 'burmeal_token';
 const SHOP_ID_KEY = 'burmeal_shop_id';
+const REAL_DELTA_KEY = 'burmeal_real_delta_v1';
+const LEGACY_MOCK_DELTA_KEY = 'burmeal_delta_v3';
 
 interface DbState {
   users: User[];
@@ -13,32 +14,9 @@ interface DbState {
   savedItems: { customerId: string; itemId: string }[];
 }
 
-const BASE_MOCK_SHOPS: Shop[] = generateAllMockShops();
-const INITIAL_SHOPS: Shop[] = BASE_MOCK_SHOPS;
-
-const BASE_MOCK_MENU_ITEMS: MenuItem[] = generateAllMockMenuItems(BASE_MOCK_SHOPS);
-const INITIAL_MENU_ITEMS: MenuItem[] = BASE_MOCK_MENU_ITEMS;
-
-const BASE_MOCK_USERS: User[] = [
-  {
-    id: 'usr_admin_01',
-    email: 'admin@burmeal.com',
-    name: 'BurMeal Curator',
-    role: 'ADMIN',
-    avatarUrl: 'https://api.dicebear.com/7.x/bottts/svg?seed=admin',
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: 'usr_cust_01',
-    email: 'customer@burmeal.com',
-    name: 'Kyaw Swar',
-    role: 'CUSTOMER',
-    avatarUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Kyaw',
-    createdAt: new Date().toISOString(),
-  },
-  ...generateMockOwners(BASE_MOCK_SHOPS),
-];
-const INITIAL_USERS: User[] = BASE_MOCK_USERS;
+const BASE_MOCK_SHOPS: Shop[] = [];
+const BASE_MOCK_MENU_ITEMS: MenuItem[] = [];
+const BASE_MOCK_USERS: User[] = [];
 
 interface LocalDelta {
   customShops: Shop[];
@@ -57,22 +35,16 @@ const DEFAULT_DELTA: LocalDelta = {
   customMenuItems: [],
   updatedMenuItems: {},
   deletedMenuItemIds: [],
-  follows: [
-    { customerId: 'usr_cust_01', shopId: 'shop_01' },
-    { customerId: 'usr_cust_01', shopId: 'shop_02' },
-    { customerId: 'usr_cust_01', shopId: 'shop_04' },
-  ],
-  savedItems: [
-    { customerId: 'usr_cust_01', itemId: 'item_shop_01_1' },
-    { customerId: 'usr_cust_01', itemId: 'item_shop_02_1' },
-  ],
+  follows: [],
+  savedItems: [],
   customUsers: [],
 };
 
 function getLocalDelta(): LocalDelta {
   try {
-    const raw = localStorage.getItem('burmeal_delta_v3');
-    if (!raw) return DEFAULT_DELTA;
+    localStorage.removeItem(LEGACY_MOCK_DELTA_KEY);
+    const raw = localStorage.getItem(REAL_DELTA_KEY);
+    if (!raw) return { ...DEFAULT_DELTA };
     const parsed = JSON.parse(raw);
     return {
       customShops: parsed.customShops || [],
@@ -80,18 +52,18 @@ function getLocalDelta(): LocalDelta {
       customMenuItems: parsed.customMenuItems || [],
       updatedMenuItems: parsed.updatedMenuItems || {},
       deletedMenuItemIds: parsed.deletedMenuItemIds || [],
-      follows: parsed.follows || DEFAULT_DELTA.follows,
-      savedItems: parsed.savedItems || DEFAULT_DELTA.savedItems,
+      follows: parsed.follows || [],
+      savedItems: parsed.savedItems || [],
       customUsers: parsed.customUsers || [],
     };
   } catch {
-    return DEFAULT_DELTA;
+    return { ...DEFAULT_DELTA };
   }
 }
 
 function saveLocalDelta(delta: LocalDelta) {
   try {
-    localStorage.setItem('burmeal_delta_v3', JSON.stringify(delta));
+    localStorage.setItem(REAL_DELTA_KEY, JSON.stringify(delta));
   } catch (e) {
     console.warn('Failed to save delta to localStorage', e);
   }
@@ -474,11 +446,11 @@ export const apiClient = {
     // Client fallback
     const db = getLocalDb();
     const newId = data.id || 'item_' + Date.now();
-    const targetShop = db.shops.find((s) => s.id === data.shopId) || db.shops[0];
+    const targetShop = db.shops.find((s) => s.id === data.shopId);
     const newItem: MenuItem = {
       id: newId,
-      shopId: data.shopId || targetShop.id,
-      shopName: targetShop.name,
+      shopId: data.shopId || targetShop?.id || '',
+      shopName: data.shopName || targetShop?.name || '',
       title: data.title || 'Untitled Dish',
       description: data.description || '',
       image: data.image || '/src/assets/images/burmeal_mohinga_dish_1793906770254.jpg',
@@ -606,7 +578,8 @@ export const apiClient = {
     } catch {}
 
     const db = getLocalDb();
-    const userId = getUserIdFromToken(token) || 'usr_cust_01';
+    const userId = getUserIdFromToken(token);
+    if (!userId) return false;
     const exists = db.savedItems.some((s) => s.customerId === userId && s.itemId === itemId);
     const nextSaved = desiredState !== undefined ? desiredState : !exists;
     if (!nextSaved) {
@@ -643,7 +616,8 @@ export const apiClient = {
     } catch {}
 
     const db = getLocalDb();
-    const userId = getUserIdFromToken(token) || 'usr_cust_01';
+    const userId = getUserIdFromToken(token);
+    if (!userId) return false;
     const exists = db.follows.some((f) => f.customerId === userId && f.shopId === shopId);
     const nextFollowed = desiredState !== undefined ? desiredState : !exists;
     if (!nextFollowed) {

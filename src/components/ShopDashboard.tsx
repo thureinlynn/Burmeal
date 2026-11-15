@@ -166,17 +166,6 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
     }
   };
 
-  // Sales Insights view toggle: Daily, Weekly, Monthly
-  const [salesPeriod, setSalesPeriod] = useState<'DAILY' | 'WEEKLY' | 'MONTHLY'>('DAILY');
-
-  // Top selling mock metrics
-  const topSellingItems = [
-    { name: 'Royal Fish Mohinga', orders: 84, revenue: 546.00, rating: 4.9, category: 'Noodles & Broth' },
-    { name: 'Ohn No Khao Swè', orders: 62, revenue: 434.00, rating: 4.8, category: 'Noodles & Broth' },
-    { name: 'Crispy Split-Pea Fritters', orders: 48, revenue: 144.00, rating: 4.9, category: 'Salads & Snacks' },
-    { name: 'Fermented Tea Leaf Salad', orders: 36, revenue: 234.00, rating: 4.7, category: 'Salads & Snacks' },
-  ];
-
   const [menuFilter, setMenuFilter] = useState<MenuType | 'ALL'>('ALL');
 
   // Dish modal
@@ -593,23 +582,13 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
 
         const todaysSpecial = dailySpecials.find((m) => m.specialDate === todayStr) || dailySpecials[0];
 
-        const activeChannelsList = [
-          whatsappPhone || shop.whatsappPhone,
-          viberPhone || shop.viberPhone,
-          lineId || shop.lineId,
-          facebookUrl || shop.facebookUrl,
-          phoneNumber || shop.phoneNumber,
-        ].filter(Boolean);
-        const activeChannelsCount = activeChannelsList.length > 0 ? activeChannelsList.length : 5;
+        const hasWa = Boolean(whatsappPhone || shop.whatsappPhone);
+        const hasViber = Boolean(viberPhone || shop.viberPhone);
+        const hasLine = Boolean(lineId || shop.lineId);
+        const hasFb = Boolean(facebookUrl || shop.facebookUrl);
+        const hasPhone = Boolean(phoneNumber || shop.phoneNumber);
+        const activeChannelsCount = [hasWa, hasViber, hasLine, hasFb, hasPhone].filter(Boolean).length;
         const todayDateBadge = `${todayStr} (${currentDayName})`;
-
-        // Sales Metrics according to period
-        const revenueAmount =
-          salesPeriod === 'DAILY' ? '$185.00' : salesPeriod === 'WEEKLY' ? '$1,420.00' : '$5,840.00';
-        const ordersCount = salesPeriod === 'DAILY' ? 24 : salesPeriod === 'WEEKLY' ? 186 : 728;
-        const avgTicket = salesPeriod === 'DAILY' ? '$7.70' : salesPeriod === 'WEEKLY' ? '$7.63' : '$8.02';
-        const growthPercentage =
-          salesPeriod === 'DAILY' ? '+18.5% vs yesterday' : salesPeriod === 'WEEKLY' ? '+14.2% vs last week' : '+22.8% vs last month';
 
         return (
           <div className="space-y-6">
@@ -703,7 +682,7 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
                 </div>
                 <div className="mt-3">
                   <div className="text-3xl font-extrabold text-stone-900 dark:text-white font-display">
-                    {shop.followerCount ?? 1}
+                    {shop.followerCount ?? 0}
                   </div>
                   <p className="text-xs text-stone-500 dark:text-stone-400 mt-2 leading-relaxed">
                     Engaged customers receiving updates in their Following feed
@@ -729,18 +708,36 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
                     </span>
                   </div>
                   <div className="flex items-center gap-1.5 mt-2 flex-wrap">
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300">
-                      WA
-                    </span>
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-purple-100 dark:bg-purple-950/50 text-purple-700 dark:text-purple-300">
-                      Viber
-                    </span>
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-green-100 dark:bg-green-950/50 text-green-700 dark:text-green-300">
-                      LINE
-                    </span>
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-blue-100 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300">
-                      FB
-                    </span>
+                    {hasWa && (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300">
+                        WA
+                      </span>
+                    )}
+                    {hasViber && (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-purple-100 dark:bg-purple-950/50 text-purple-700 dark:text-purple-300">
+                        Viber
+                      </span>
+                    )}
+                    {hasLine && (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-green-100 dark:bg-green-950/50 text-green-700 dark:text-green-300">
+                        LINE
+                      </span>
+                    )}
+                    {hasFb && (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-blue-100 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300">
+                        FB
+                      </span>
+                    )}
+                    {hasPhone && (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-100 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300">
+                        Phone
+                      </span>
+                    )}
+                    {activeChannelsCount === 0 && (
+                      <span className="text-[11px] text-stone-400 dark:text-stone-500">
+                        No channels configured yet
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1037,10 +1034,12 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
 
                   <div className="mt-3">
                     <p className="font-semibold text-xs text-stone-900 dark:text-stone-100">
-                      {address || shop.address || '78th Street, Between 26th & 27th'}
+                      {address || shop.address || locationArea || shop.locationArea || 'Address not set yet'}
                     </p>
                     <p className="text-[11px] text-stone-500 dark:text-stone-400 mt-1">
-                      {city || shop.city || 'Mandalay'}, {region || shop.region || 'Mandalay Region'}, {country || shop.country || 'Myanmar'}
+                      {[city || shop.city, region || shop.region, country || shop.country]
+                        .filter(Boolean)
+                        .join(', ') || 'Location not set yet'}
                     </p>
                   </div>
                 </div>
@@ -2016,7 +2015,7 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
               </div>
               <div className="p-3.5 rounded-xl bg-stone-50 dark:bg-stone-800/60 border border-stone-200 dark:border-stone-700">
                 <span className="text-[11px] text-stone-500 dark:text-stone-400 block mb-0.5">Registered Email</span>
-                <span className="font-bold text-stone-900 dark:text-stone-100">{user?.email || 'owner@burmeal.com'}</span>
+                <span className="font-bold text-stone-900 dark:text-stone-100">{user?.email || shop.ownerEmail || '—'}</span>
               </div>
               <div className="p-3.5 rounded-xl bg-stone-50 dark:bg-stone-800/60 border border-stone-200 dark:border-stone-700">
                 <span className="text-[11px] text-stone-500 dark:text-stone-400 block mb-0.5">Account Role</span>
