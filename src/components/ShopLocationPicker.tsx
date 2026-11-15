@@ -1,17 +1,13 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
+import { MapPin, LocateFixed, RotateCcw, Search } from 'lucide-react';
 import {
-  APIProvider,
-  Map as GoogleMap,
-  AdvancedMarker,
-  Pin,
-  useApiLoadingStatus,
-  APILoadingStatus,
-  type MapMouseEvent,
-} from '@vis.gl/react-google-maps';
-import { MapPin, LocateFixed, RotateCcw, AlertTriangle } from 'lucide-react';
-import {
+  buildOsmNominatimSearchUrl,
+  formatCoordinateValue,
   getDefaultCenterForCountry,
   hasValidCoordinates,
+  parseOsmNominatimResult,
 } from '../utils/shopLocationHelpers';
 
 interface ShopLocationPickerProps {
@@ -23,86 +19,22 @@ interface ShopLocationPickerProps {
   onChange: (lat: number | undefined, lng: number | undefined) => void;
 }
 
-function getGoogleMapsApiKey(): string {
-  const key = (import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '').trim();
-  if (!key || key === 'MY_GOOGLE_MAPS_API_KEY') return '';
-  return key;
+function createShopPinIcon() {
+  return L.divIcon({
+    className: 'burmeal-osm-pin',
+    html: `
+      <div style="position:relative;width:30px;height:38px;display:flex;align-items:center;justify-content:center;">
+        <svg viewBox="0 0 24 30" width="30" height="38" style="filter:drop-shadow(0 3px 6px rgba(0,0,0,0.35));overflow:visible;">
+          <path d="M12 0C5.37 0 0 5.37 0 12c0 8.5 12 18 12 18s12-9.5 12-18C24 5.37 18.63 0 12 0z" fill="#d97706" stroke="#ffffff" stroke-width="2"/>
+          <circle cx="12" cy="11.5" r="4.2" fill="#ffffff"/>
+        </svg>
+      </div>
+    `,
+    iconSize: [30, 38],
+    iconAnchor: [15, 38],
+    popupAnchor: [0, -34],
+  });
 }
-
-const MapCanvas: React.FC<{
-  center: { lat: number; lng: number };
-  hasPin: boolean;
-  pinPosition: { lat: number; lng: number };
-  shopName?: string;
-  onSelectLocation: (lat: number, lng: number) => void;
-}> = ({ center, hasPin, pinPosition, shopName, onSelectLocation }) => {
-  const status = useApiLoadingStatus();
-
-  if (status === APILoadingStatus.FAILED || status === APILoadingStatus.AUTH_FAILURE) {
-    return (
-      <div className="w-full h-full flex flex-col items-center justify-center p-5 text-center bg-amber-50/70 dark:bg-amber-950/30 text-amber-900 dark:text-amber-200">
-        <AlertTriangle className="w-6 h-6 text-amber-600 mb-2" />
-        <p className="text-xs font-bold">Interactive Google Map could not load right now</p>
-        <p className="text-[11px] text-amber-800/80 dark:text-amber-300/80 mt-1 max-w-md">
-          You can still use "Use Current Location" above so your storefront Direction button works.
-        </p>
-      </div>
-    );
-  }
-
-  if (status !== APILoadingStatus.LOADED) {
-    return (
-      <div className="w-full h-full flex items-center justify-center bg-stone-100 dark:bg-stone-800 text-stone-500 dark:text-stone-400 text-xs font-medium">
-        Loading Google Maps picker...
-      </div>
-    );
-  }
-
-  const handleMapClick = (event: MapMouseEvent) => {
-    const latLng = event.detail?.latLng;
-    if (!latLng) return;
-    onSelectLocation(Number(latLng.lat.toFixed(6)), Number(latLng.lng.toFixed(6)));
-  };
-
-  const handleMarkerDragEnd = (event: {
-    latLng?: {
-      lat: number | (() => number);
-      lng: number | (() => number);
-    } | null;
-  }) => {
-    const latLng = event.latLng;
-    if (!latLng) return;
-    const lat = typeof latLng.lat === 'function' ? latLng.lat() : Number(latLng.lat);
-    const lng = typeof latLng.lng === 'function' ? latLng.lng() : Number(latLng.lng);
-    if (Number.isFinite(lat) && Number.isFinite(lng)) {
-      onSelectLocation(Number(lat.toFixed(6)), Number(lng.toFixed(6)));
-    }
-  };
-
-  return (
-    <GoogleMap
-      mapId="DEMO_MAP_ID"
-      internalUsageAttributionIds={['gmp_mcp_codeassist_v1_aistudio']}
-      defaultCenter={center}
-      defaultZoom={hasPin ? 15 : 12}
-      gestureHandling="greedy"
-      clickableIcons={false}
-      onClick={handleMapClick}
-      style={{ width: '100%', height: '100%' }}
-    >
-      {hasPin && (
-        <AdvancedMarker
-          position={pinPosition}
-          draggable
-          onDragEnd={handleMarkerDragEnd}
-          title={shopName || 'Shop Pick-Up Location'}
-        >
-          <Pin background="#d97706" borderColor="#92400e" glyphColor="#ffffff" />
-        </AdvancedMarker>
-      )}
-    </GoogleMap>
-  );
-};
 
 export const ShopLocationPicker: React.FC<ShopLocationPickerProps> = ({
   latitude,
@@ -112,7 +44,6 @@ export const ShopLocationPicker: React.FC<ShopLocationPickerProps> = ({
   shopName,
   onChange,
 }) => {
-  const apiKey = getGoogleMapsApiKey();
   const hasPin = hasValidCoordinates(latitude, longitude);
   const fallbackCenter = getDefaultCenterForCountry(country, city);
   const activeCenter = hasPin
@@ -121,6 +52,111 @@ export const ShopLocationPicker: React.FC<ShopLocationPickerProps> = ({
 
   const [geoStatus, setGeoStatus] = useState<string>('');
   const [isLocating, setIsLocating] = useState(false);
+  const [searchText, setSearchText] = useState('');
+  const [isSearching, setIsSearching] = useState(false);
+
+  const mapContainerRef = useRef<HTMLDivElement | null>(null);
+  const mapInstanceRef = useRef<L.Map | null>(null);
+  const markerRef = useRef<L.Marker | null>(null);
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
+
+  // Initialize Leaflet + OpenStreetMap instance once
+  useEffect(() => {
+    const container = mapContainerRef.current;
+    if (!container || mapInstanceRef.current) return;
+
+    const map = L.map(container, {
+      center: [activeCenter.lat, activeCenter.lng],
+      zoom: hasPin ? 15 : 12,
+      zoomControl: true,
+      scrollWheelZoom: true,
+    });
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap contributors',
+      maxZoom: 19,
+    }).addTo(map);
+
+    map.on('click', (event: L.LeafletMouseEvent) => {
+      const lat = formatCoordinateValue(event.latlng.lat);
+      const lng = formatCoordinateValue(event.latlng.lng);
+      setGeoStatus('');
+      onChangeRef.current(lat, lng);
+    });
+
+    mapInstanceRef.current = map;
+
+    const resizeTimer = window.setTimeout(() => {
+      map.invalidateSize();
+    }, 150);
+
+    let resizeObserver: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== 'undefined') {
+      resizeObserver = new ResizeObserver(() => {
+        map.invalidateSize();
+      });
+      resizeObserver.observe(container);
+    }
+
+    return () => {
+      window.clearTimeout(resizeTimer);
+      if (resizeObserver) resizeObserver.disconnect();
+      markerRef.current?.remove();
+      markerRef.current = null;
+      map.remove();
+      mapInstanceRef.current = null;
+    };
+  }, []);
+
+  // Keep Leaflet marker and map center synchronized with props
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    if (!map) return;
+
+    if (hasPin) {
+      const lat = Number(latitude);
+      const lng = Number(longitude);
+
+      if (!markerRef.current) {
+        const marker = L.marker([lat, lng], {
+          draggable: true,
+          icon: createShopPinIcon(),
+          title: shopName || 'Shop Pick-Up Location',
+        }).addTo(map);
+
+        marker.on('dragend', () => {
+          const pos = marker.getLatLng();
+          setGeoStatus('');
+          onChangeRef.current(
+            formatCoordinateValue(pos.lat),
+            formatCoordinateValue(pos.lng)
+          );
+        });
+
+        markerRef.current = marker;
+      } else {
+        markerRef.current.setLatLng([lat, lng]);
+        markerRef.current.options.title = shopName || 'Shop Pick-Up Location';
+      }
+
+      const currentCenter = map.getCenter();
+      const distance = currentCenter.distanceTo(L.latLng(lat, lng));
+      if (distance > 15 || map.getZoom() < 13) {
+        map.setView([lat, lng], Math.max(map.getZoom(), 15), { animate: true });
+      }
+    } else {
+      if (markerRef.current) {
+        markerRef.current.remove();
+        markerRef.current = null;
+      }
+      const nextDefault = getDefaultCenterForCountry(country, city);
+      const currentCenter = map.getCenter();
+      if (currentCenter.distanceTo(L.latLng(nextDefault.lat, nextDefault.lng)) > 500) {
+        map.setView([nextDefault.lat, nextDefault.lng], 12, { animate: true });
+      }
+    }
+  }, [hasPin, latitude, longitude, country, city, shopName]);
 
   const handleUseCurrentLocation = () => {
     if (!navigator.geolocation) {
@@ -131,10 +167,10 @@ export const ShopLocationPicker: React.FC<ShopLocationPickerProps> = ({
     setGeoStatus('');
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        const lat = Number(pos.coords.latitude.toFixed(6));
-        const lng = Number(pos.coords.longitude.toFixed(6));
+        const lat = formatCoordinateValue(pos.coords.latitude);
+        const lng = formatCoordinateValue(pos.coords.longitude);
         onChange(lat, lng);
-        setGeoStatus('Pinned your current GPS location.');
+        setGeoStatus('Pinned your current GPS location on OpenStreetMap.');
         setIsLocating(false);
       },
       (err) => {
@@ -143,6 +179,34 @@ export const ShopLocationPicker: React.FC<ShopLocationPickerProps> = ({
       },
       { enableHighAccuracy: true, timeout: 10000 }
     );
+  };
+
+  const handleSearchPlace = async () => {
+    const searchUrl = buildOsmNominatimSearchUrl(searchText, country);
+    if (!searchUrl) return;
+    setIsSearching(true);
+    setGeoStatus('');
+    try {
+      const res = await fetch(searchUrl, {
+        headers: { Accept: 'application/json' },
+      });
+      if (!res.ok) {
+        setGeoStatus('OpenStreetMap search is temporarily unavailable. Click the map directly to drop a pin.');
+        return;
+      }
+      const data = await res.json();
+      const match = parseOsmNominatimResult(data);
+      if (!match) {
+        setGeoStatus('No matching place found on OpenStreetMap. Try a nearby street or city name.');
+        return;
+      }
+      onChange(match.lat, match.lng);
+      setGeoStatus(`Pinned: ${match.displayName}`);
+    } catch {
+      setGeoStatus('Could not reach OpenStreetMap search. Click the map directly to drop a pin.');
+    } finally {
+      setIsSearching(false);
+    }
   };
 
   const handleClearPin = () => {
@@ -156,7 +220,7 @@ export const ShopLocationPicker: React.FC<ShopLocationPickerProps> = ({
         <div>
           <h4 className="text-xs font-bold text-stone-900 dark:text-stone-100 flex items-center gap-1.5">
             <MapPin className="w-3.5 h-3.5 text-amber-600" />
-            <span>Pick Shop Location</span>
+            <span>Pick Shop Location (OpenStreetMap)</span>
           </h4>
           <p className="text-[11px] text-stone-500 dark:text-stone-400 mt-0.5">
             Click anywhere on the map or drag the pin to set the exact pick-up spot for the storefront Direction button.
@@ -187,32 +251,55 @@ export const ShopLocationPicker: React.FC<ShopLocationPickerProps> = ({
         </div>
       </div>
 
-      {/* Explicit non-zero container height required by Maps JS SDK */}
-      <div className="w-full h-[320px] rounded-xl overflow-hidden border border-stone-200 dark:border-stone-700 bg-stone-100 dark:bg-stone-800 relative">
-        {apiKey ? (
-          <APIProvider apiKey={apiKey} libraries={['marker']}>
-            <MapCanvas
-              center={activeCenter}
-              hasPin={hasPin}
-              pinPosition={activeCenter}
-              shopName={shopName}
-              onSelectLocation={(lat, lng) => {
-                setGeoStatus('');
-                onChange(lat, lng);
-              }}
-            />
-          </APIProvider>
+      {/* Search OpenStreetMap without nesting a form inside ShopDashboard's form */}
+      <div className="flex items-center gap-2">
+        <div className="relative flex-1">
+          <Search className="w-3.5 h-3.5 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+          <input
+            type="text"
+            value={searchText}
+            onChange={(e) => setSearchText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                handleSearchPlace();
+              }
+            }}
+            placeholder="Search street, landmark, or neighborhood on OpenStreetMap..."
+            aria-label="Search OpenStreetMap location"
+            className="w-full pl-8 pr-3 py-1.5 text-xs bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-lg focus:outline-none focus:border-amber-600 text-stone-900 dark:text-stone-100"
+          />
+        </div>
+        <button
+          type="button"
+          onClick={handleSearchPlace}
+          disabled={isSearching || !searchText.trim()}
+          className="px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold transition-colors cursor-pointer disabled:opacity-50 shrink-0"
+        >
+          {isSearching ? 'Searching...' : 'Find'}
+        </button>
+      </div>
+
+      {/* Explicit non-zero container height required by Leaflet */}
+      <div
+        ref={mapContainerRef}
+        data-testid="osm-leaflet-map"
+        className="w-full h-[320px] rounded-xl overflow-hidden border border-stone-200 dark:border-stone-700 bg-stone-100 dark:bg-stone-800 relative z-0"
+      />
+
+      <div className="flex flex-wrap items-center justify-between gap-2 text-[11px]">
+        {hasPin ? (
+          <span className="font-mono text-emerald-700 dark:text-emerald-400 font-medium">
+            Pinned Coordinates: {Number(latitude).toFixed(5)}, {Number(longitude).toFixed(5)}
+          </span>
         ) : (
-          <div className="w-full h-full flex flex-col items-center justify-center p-5 text-center bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-300">
-            <MapPin className="w-7 h-7 text-amber-600 mb-2" />
-            <p className="text-xs font-bold text-stone-800 dark:text-stone-100">
-              Google Maps API key not detected in runtime environment
-            </p>
-            <p className="text-[11px] text-stone-500 dark:text-stone-400 mt-1 max-w-md">
-              Use "Use Current Location" above to set your shop pin for the storefront Direction button.
-            </p>
-          </div>
+          <span className="text-stone-500 dark:text-stone-400">
+            Click on the OpenStreetMap canvas above to drop your shop location pin.
+          </span>
         )}
+        <span className="text-[10px] text-stone-400 dark:text-stone-500">
+          Powered by OpenStreetMap &bull; Leaflet
+        </span>
       </div>
 
       {geoStatus && (

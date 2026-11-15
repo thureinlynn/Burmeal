@@ -5,6 +5,8 @@ import {
   parseCoordinateInput,
   getDefaultCenterForCountry,
   buildGoogleMapsDirectionsUrl,
+  buildOsmNominatimSearchUrl,
+  parseOsmNominatimResult,
   getShopProfileImage,
   normalizeExternalImageUrl,
   extractSupabaseStoragePath,
@@ -141,4 +143,35 @@ test('validateProfileImageFile checks mime type and max size', () => {
   assert.equal(validateProfileImageFile({ size: 1024, type: 'application/pdf', name: 'doc.pdf' }).valid, false);
   assert.equal(validateProfileImageFile({ size: 6 * 1024 * 1024, type: 'image/jpeg', name: 'big.jpg' }).valid, false);
   assert.equal(validateProfileImageFile({ size: 0, type: 'image/png', name: 'empty.png' }).valid, false);
+});
+
+test('buildOsmNominatimSearchUrl builds encoded OpenStreetMap Nominatim queries cleanly', () => {
+  assert.equal(buildOsmNominatimSearchUrl('   '), null);
+  assert.equal(
+    buildOsmNominatimSearchUrl('Sule Pagoda', 'Myanmar'),
+    'https://nominatim.openstreetmap.org/search?format=json&limit=1&q=Sule%20Pagoda%2C%20Myanmar'
+  );
+  assert.equal(
+    buildOsmNominatimSearchUrl('Peninsula Plaza, Singapore', 'Singapore'),
+    'https://nominatim.openstreetmap.org/search?format=json&limit=1&q=Peninsula%20Plaza%2C%20Singapore'
+  );
+});
+
+test('parseOsmNominatimResult validates and rounds OSM search coordinates', () => {
+  assert.deepEqual(
+    parseOsmNominatimResult([
+      {
+        lat: '16.77451234',
+        lon: '96.15887654',
+        display_name: 'Sule Pagoda Road, Yangon, Myanmar',
+      },
+    ]),
+    {
+      lat: 16.774512,
+      lng: 96.158877,
+      displayName: 'Sule Pagoda Road, Yangon, Myanmar',
+    }
+  );
+  assert.equal(parseOsmNominatimResult([]), null);
+  assert.equal(parseOsmNominatimResult([{ lat: '999', lon: '96.1' }]), null);
 });

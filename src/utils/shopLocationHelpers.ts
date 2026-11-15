@@ -25,6 +25,41 @@ export function parseCoordinateInput(raw: string, type: 'lat' | 'lng'): number |
   return Number(num.toFixed(6));
 }
 
+export function formatCoordinateValue(val: number): number {
+  return Number(val.toFixed(6));
+}
+
+export function buildOsmNominatimSearchUrl(query: string, country?: string): string | null {
+  const cleanQuery = query.trim();
+  if (!cleanQuery) return null;
+  const cleanCountry = (country || '').trim();
+  const fullQuery =
+    cleanCountry && !cleanQuery.toLowerCase().includes(cleanCountry.toLowerCase())
+      ? `${cleanQuery}, ${cleanCountry}`
+      : cleanQuery;
+  return `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(fullQuery)}`;
+}
+
+export function parseOsmNominatimResult(
+  payload: unknown
+): { lat: number; lng: number; displayName: string } | null {
+  if (!Array.isArray(payload) || payload.length === 0) return null;
+  const first = payload[0] as Record<string, unknown>;
+  if (!first || typeof first !== 'object') return null;
+  const lat = Number(first.lat);
+  const lng = Number(first.lon ?? first.lng);
+  if (!isValidLatitude(lat) || !isValidLongitude(lng)) return null;
+  const displayName =
+    typeof first.display_name === 'string' && first.display_name.trim()
+      ? first.display_name.trim()
+      : `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+  return {
+    lat: formatCoordinateValue(lat),
+    lng: formatCoordinateValue(lng),
+    displayName,
+  };
+}
+
 const CITY_CENTERS: Array<{ match: string; center: Coordinates }> = [
   { match: 'mandalay', center: { lat: 21.9588, lng: 96.0891 } },
   { match: 'yangon', center: { lat: 16.8409, lng: 96.1735 } },

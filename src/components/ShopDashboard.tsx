@@ -4,7 +4,14 @@ import { formatPrice } from '../utils/filter';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
-import { COUNTRIES, getCountryFlag, getCurrencyForCountry } from '../utils/countries';
+import {
+  COUNTRIES,
+  getCountryFlag,
+  getCurrencyForCountry,
+  getDefaultRegionNameForCountry,
+  getRegionsForCountry,
+  matchRegionOptionName,
+} from '../utils/countries';
 import { removeShopProfilePicture, uploadShopProfilePicture } from '../services/supabaseClient';
 import { getShopProfileImage, normalizeExternalImageUrl } from '../utils/shopLocationHelpers';
 import {
@@ -47,6 +54,7 @@ import {
   Sparkles,
   Upload,
   Loader2,
+  X,
 } from 'lucide-react';
 
 interface ShopDashboardProps {
@@ -213,6 +221,17 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
   const [lineId, setLineId] = useState(shop.lineId || '');
   const [phoneNumber, setPhoneNumber] = useState(shop.phoneNumber || '');
   const [profileSaved, setProfileSaved] = useState(false);
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const [profileSaveError, setProfileSaveError] = useState('');
+  const profileSaveTimerRef = React.useRef<number | null>(null);
+
+  React.useEffect(() => {
+    return () => {
+      if (profileSaveTimerRef.current) {
+        window.clearTimeout(profileSaveTimerRef.current);
+      }
+    };
+  }, []);
 
   // Sync state if shop prop updates
   React.useEffect(() => {
@@ -382,36 +401,51 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
 
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
-    const normalizedCoverUrl = normalizeExternalImageUrl(coverImage);
-    const normalizedProfileUrl =
-      normalizeExternalImageUrl(profileImageUrl) || normalizeExternalImageUrl(avatarImage);
-    setCoverImage(normalizedCoverUrl);
-    setProfileImageUrl(normalizedProfileUrl);
-    setAvatarImage(normalizedProfileUrl);
-    await onUpdateShopProfile({
-      name: shopName,
-      bio,
-      cuisineType,
-      locationArea,
-      operatingHours,
-      address,
-      city,
-      region,
-      country,
-      coverImage: normalizedCoverUrl,
-      avatarImage: normalizedProfileUrl,
-      profileImageUrl: normalizedProfileUrl,
-      latitude: (latitude ?? null) as any,
-      longitude: (longitude ?? null) as any,
-      facebookUrl,
-      whatsappPhone,
-      viberPhone,
-      lineId,
-      phoneNumber,
-      isOpen,
-    });
-    setProfileSaved(true);
-    setTimeout(() => setProfileSaved(false), 2500);
+    setProfileSaveError('');
+    setProfileSaved(false);
+    setIsSavingProfile(true);
+    try {
+      const normalizedCoverUrl = normalizeExternalImageUrl(coverImage);
+      const normalizedProfileUrl =
+        normalizeExternalImageUrl(profileImageUrl) || normalizeExternalImageUrl(avatarImage);
+      setCoverImage(normalizedCoverUrl);
+      setProfileImageUrl(normalizedProfileUrl);
+      setAvatarImage(normalizedProfileUrl);
+      await onUpdateShopProfile({
+        name: shopName,
+        bio,
+        cuisineType,
+        locationArea,
+        operatingHours,
+        address,
+        city,
+        region,
+        country,
+        coverImage: normalizedCoverUrl,
+        avatarImage: normalizedProfileUrl,
+        profileImageUrl: normalizedProfileUrl,
+        latitude: (latitude ?? null) as any,
+        longitude: (longitude ?? null) as any,
+        facebookUrl,
+        whatsappPhone,
+        viberPhone,
+        lineId,
+        phoneNumber,
+        isOpen,
+      });
+      setProfileSaved(true);
+      if (profileSaveTimerRef.current) {
+        window.clearTimeout(profileSaveTimerRef.current);
+      }
+      profileSaveTimerRef.current = window.setTimeout(() => {
+        setProfileSaved(false);
+        profileSaveTimerRef.current = null;
+      }, 4500);
+    } catch (err: any) {
+      setProfileSaveError(err?.message || 'Failed to update Shop Info. Please try again.');
+    } finally {
+      setIsSavingProfile(false);
+    }
   };
 
   const toggleDay = (day: string) => {
@@ -1368,8 +1402,8 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
 
       {/* ================= TAB 3: "PAGE INFO" (SHOP CONFIGURATION & CONTACTS) ================= */}
       {currentTab === 'shop_profile' && (
-        <div className="space-y-6 max-w-3xl">
-          <div className="bg-white dark:bg-stone-900 rounded-2xl border border-stone-200 dark:border-stone-800 p-6 shadow-xs transition-colors">
+        <div className="space-y-6 w-full">
+          <div className="w-full bg-white dark:bg-stone-900 rounded-2xl border border-stone-200 dark:border-stone-800 p-6 shadow-xs transition-colors">
             <form onSubmit={handleSaveProfile} className="space-y-5">
               <div>
                 <h2 className="text-lg font-bold font-display text-stone-900 dark:text-stone-100 mb-1">
@@ -1381,9 +1415,12 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
               </div>
 
               {profileSaved && (
-                <div className="p-3 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 text-xs rounded-xl flex items-center gap-2">
-                  <Check className="w-4 h-4 text-emerald-600" />
-                  <span>{t.shopInfoUpdated}</span>
+                <div
+                  role="alert"
+                  className="p-3 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 text-xs rounded-xl flex items-center gap-2 font-medium"
+                >
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>Shop Info has been updated</span>
                 </div>
               )}
 
@@ -1656,25 +1693,63 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="md:col-span-2">
                     <label className="block text-xs font-semibold text-stone-700 dark:text-stone-300 mb-1">
-                      Assigned Country * (Controls regional customer feed visibility)
+                      Assigned Country &amp; Region * (Controls regional customer feed visibility)
                     </label>
-                    <div className="flex items-center gap-3">
-                      <select
-                        value={country}
-                        onChange={(e) => setCountry(e.target.value)}
-                        className="w-full pl-3 pr-8 py-2 text-xs bg-stone-50 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-lg focus:outline-none focus:border-amber-600 text-stone-900 dark:text-stone-100 font-medium"
-                      >
-                        {COUNTRIES.map((c) => (
-                          <option key={c.code} value={c.name} className="dark:bg-stone-800">
-                            {c.flag} {c.name}
-                          </option>
-                        ))}
-                      </select>
-                      <div className="flex items-center gap-2 px-3 py-2 bg-stone-100 dark:bg-stone-800 rounded-lg border border-stone-200 dark:border-stone-700 text-xs shrink-0 font-medium text-stone-700 dark:text-stone-300">
-                        <span className="text-base">{getCountryFlag(country)}</span>
-                        <span>{country}</span>
-                      </div>
-                    </div>
+                    {(() => {
+                      const countryRegions = getRegionsForCountry(country);
+                      const matchedRegionValue = matchRegionOptionName(country, region);
+                      const isListedRegion = countryRegions.some(
+                        (r) => r.name.toLowerCase() === matchedRegionValue.toLowerCase()
+                      );
+                      const hasCustomRegion = Boolean(matchedRegionValue) && !isListedRegion;
+
+                      return (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <select
+                            aria-label="Assigned Country"
+                            value={country}
+                            onChange={(e) => {
+                              const nextCountry = e.target.value;
+                              setCountry(nextCountry);
+                              const defaultRegion = getDefaultRegionNameForCountry(nextCountry);
+                              if (defaultRegion) {
+                                setRegion(defaultRegion);
+                              }
+                            }}
+                            className="w-full pl-3 pr-8 py-2 text-xs bg-stone-50 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-lg focus:outline-none focus:border-amber-600 text-stone-900 dark:text-stone-100 font-medium"
+                          >
+                            {COUNTRIES.map((c) => (
+                              <option key={c.code} value={c.name} className="dark:bg-stone-800">
+                                {c.flag} {c.name}
+                              </option>
+                            ))}
+                          </select>
+
+                          <select
+                            aria-label="Assigned Region"
+                            value={matchedRegionValue}
+                            onChange={(e) => setRegion(e.target.value)}
+                            className="w-full pl-3 pr-8 py-2 text-xs bg-stone-50 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-lg focus:outline-none focus:border-amber-600 text-stone-900 dark:text-stone-100 font-medium"
+                          >
+                            {!matchedRegionValue && (
+                              <option value="" className="dark:bg-stone-800">
+                                Select Region...
+                              </option>
+                            )}
+                            {countryRegions.map((r) => (
+                              <option key={r.id} value={r.name} className="dark:bg-stone-800">
+                                {r.flag} {r.name}
+                              </option>
+                            ))}
+                            {hasCustomRegion && (
+                              <option value={matchedRegionValue} className="dark:bg-stone-800">
+                                {getCountryFlag(country)} {matchedRegionValue}
+                              </option>
+                            )}
+                          </select>
+                        </div>
+                      );
+                    })()}
                   </div>
 
                   <div>
@@ -1723,7 +1798,7 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
                       latitude={latitude}
                       longitude={longitude}
                       country={country}
-                      city={city}
+                      city={city || region}
                       shopName={shopName}
                       onChange={(lat, lng) => {
                         setLatitude(lat);
@@ -1811,17 +1886,58 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
                 </div>
               </div>
 
-              <div className="pt-4 flex justify-end">
+              {profileSaveError && (
+                <div
+                  role="alert"
+                  className="p-3 bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300 text-xs rounded-xl flex items-center gap-2 font-medium"
+                >
+                  <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                  <span>{profileSaveError}</span>
+                </div>
+              )}
+
+              <div className="pt-4 flex flex-col-reverse sm:flex-row sm:items-center justify-end gap-3">
+                {profileSaved && (
+                  <div
+                    role="alert"
+                    data-testid="shop-info-saved-alert"
+                    className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 text-xs font-semibold"
+                  >
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span>Shop Info has been updated</span>
+                  </div>
+                )}
+
                 <button
                   type="submit"
-                  className="flex items-center gap-1.5 px-6 py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-semibold text-xs rounded-xl transition-colors shadow-xs"
+                  disabled={isSavingProfile}
+                  className="flex items-center justify-center gap-1.5 px-6 py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-semibold text-xs rounded-xl transition-colors shadow-xs disabled:opacity-60 cursor-pointer"
                 >
-                  <Save className="w-4 h-4" />
-                  <span>Save Page Info Changes</span>
+                  {isSavingProfile ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                  <span>{isSavingProfile ? 'Saving...' : 'Save Page Info Changes'}</span>
                 </button>
               </div>
             </form>
           </div>
+
+          {profileSaved && (
+            <div
+              role="status"
+              data-testid="shop-info-toast"
+              className="fixed bottom-6 right-6 z-50 flex items-center gap-2.5 px-4 py-3 rounded-xl bg-emerald-600 text-white shadow-lg border border-emerald-500 text-xs font-semibold"
+            >
+              <CheckCircle2 className="w-4 h-4 shrink-0" />
+              <span>Shop Info has been updated</span>
+              <button
+                type="button"
+                aria-label="Dismiss alert"
+                onClick={() => setProfileSaved(false)}
+                className="ml-1 p-0.5 rounded-md hover:bg-emerald-500/80 transition-colors cursor-pointer"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
 
         </div>
       )}
