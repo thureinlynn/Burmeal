@@ -6,6 +6,8 @@ import {
   mergeUniqueMenuItems,
   applyFollowStateToShops,
   applySaveStateToMenuItems,
+  buildDisplayedShops,
+  buildDisplayedMenuItems,
   filterFollowedShops,
   filterFollowedMenuItems,
   filterSavedMenuItems,
@@ -100,6 +102,68 @@ test('applyFollowStateToShops and filterFollowedShops reflect authoritative foll
   assert.equal(followedOnly.length, 1);
   assert.equal(followedOnly[0].id, 'shop_jp_1');
   assert.equal(followedOnly[0].isFollowed, true);
+});
+
+test('buildDisplayedShops and buildDisplayedMenuItems include Firestore-only shops and dishes matching active region', () => {
+  const fsShops: Shop[] = [
+    {
+      id: 'shop_us_fs',
+      ownerId: 'uid_us',
+      name: 'Little Myanmar',
+      bio: 'Authentic food',
+      coverImage: '/c3.jpg',
+      avatarImage: '/a3.jpg',
+      status: 'APPROVED',
+      cuisineType: 'Burmese',
+      locationArea: 'Indianapolis, IN',
+      city: 'Indianapolis',
+      region: 'Indiana ',
+      country: 'United States',
+      createdAt: '2026-02-01T00:00:00.000Z',
+    },
+  ];
+  const fsItems: MenuItem[] = [
+    {
+      id: 'item_us_fs_1',
+      shopId: 'shop_us_fs',
+      shopName: 'Little Myanmar',
+      shopCountry: 'United States',
+      shopRegion: 'Indiana ',
+      shopCity: 'Indianapolis',
+      title: 'Nan Gyi Thoke',
+      description: 'Thick noodle salad',
+      image: '/n1.jpg',
+      price: 10,
+      category: 'Noodles & Broth',
+      menuType: 'WEEKLY',
+      isVegetarian: false,
+      isHalal: false,
+      createdAt: '2026-02-01T00:00:00.000Z',
+    },
+  ];
+
+  const displayedUsShops = buildDisplayedShops([], fsShops, new Set(['shop_us_fs']), {
+    country: 'United States',
+    regionId: 'US-ALL',
+  });
+  assert.equal(displayedUsShops.length, 1);
+  assert.equal(displayedUsShops[0].id, 'shop_us_fs');
+  assert.equal(displayedUsShops[0].isFollowed, true);
+
+  const displayedMmShops = buildDisplayedShops([shops[0]], fsShops, new Set(), {
+    country: 'Myanmar',
+    regionId: 'MM-ALL',
+  });
+  assert.equal(displayedMmShops.length, 1);
+  assert.equal(displayedMmShops[0].id, 'shop_mm_1');
+
+  const displayedUsItems = buildDisplayedMenuItems([], fsItems, fsShops, new Set(['item_us_fs_1']), {
+    country: 'United States',
+    regionId: 'US-ALL',
+  });
+  assert.equal(displayedUsItems.length, 1);
+  assert.equal(displayedUsItems[0].id, 'item_us_fs_1');
+  assert.equal(displayedUsItems[0].isSaved, true);
 });
 
 test('filterFollowedMenuItems strictly includes followed shops and respects dietary/search filters', () => {

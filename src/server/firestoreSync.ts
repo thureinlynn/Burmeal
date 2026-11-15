@@ -13,6 +13,7 @@ export async function syncShopToFirestore(shop: any) {
     const payload: Record<string, any> = {
       id: shop.id,
       ownerId: shop.ownerId || shop.owner_id,
+      ownerEmail: (shop.ownerEmail || shop.owner_email || '').trim().toLowerCase(),
       name: shop.name,
       bio: shop.bio || '',
       coverImage: shop.coverImage || shop.cover_image || '',
@@ -30,6 +31,8 @@ export async function syncShopToFirestore(shop: any) {
       viberPhone: shop.viberPhone || shop.viber_phone || '',
       lineId: shop.lineId || shop.line_id || '',
       phoneNumber: shop.phoneNumber || shop.phone_number || '',
+      isOpen: shop.isOpen !== undefined ? Boolean(shop.isOpen) : shop.is_open === undefined ? true : Boolean(shop.is_open),
+      operatingHours: shop.operatingHours || shop.operating_hours || '8:00 AM - 8:00 PM',
       createdAt: shop.createdAt || shop.created_at || new Date().toISOString(),
     };
     if (typeof lat === 'number' && Number.isFinite(lat)) {

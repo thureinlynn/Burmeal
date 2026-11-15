@@ -1,4 +1,5 @@
-import { MenuItem, Shop } from '../types';
+import { MenuItem, MenuType, Shop } from '../types';
+import { filterMenuItems, matchesRegionFilter } from './filter';
 
 export function mergeUniqueIds(...lists: Array<Iterable<string> | undefined | null>): string[] {
   const seen = new Set<string>();
@@ -51,6 +52,113 @@ export function applySaveStateToMenuItems(items: MenuItem[], savedIds: Set<strin
     ...item,
     isSaved: savedIds.has(item.id),
   }));
+}
+
+export function buildDisplayedShops(
+  backendShops: Shop[],
+  firestoreShops: Shop[],
+  followedIds: Set<string>,
+  regionFilter?: { country?: string; regionId?: string },
+  allItems: MenuItem[] = []
+): Shop[] {
+  const fsInRegion = firestoreShops.filter((s) => {
+    if (s.status && s.status !== 'APPROVED') return false;
+    if (!regionFilter?.country && !regionFilter?.regionId) return true;
+    return matchesRegionFilter(s, regionFilter?.regionId, regionFilter?.country);
+  });
+
+  // Firestore overrides matching SQLite shop records so online edits always take precedence
+  const merged = mergeUniqueShops(backendShops, fsInRegion);
+  const itemCounts = new Map<string, number>();
+  for (const item of allItems) {
+    if (item?.shopId) {
+      itemCounts.set(item.shopId, (itemCounts.get(item.shopId) || 0) + 1);
+    }
+  }
+  const withCounts = merged.map((s) => {
+    const dynamicCount = itemCounts.get(s.id);
+    return dynamicCount !== undefined ? { ...s, itemCount: dynamicCount } : s;
+  });
+  return applyFollowStateToShops(withCounts, followedIds);
+}
+
+export function buildDisplayedMenuItems(
+  backendItems: MenuItem[],
+  firestoreItems: MenuItem[],
+  allShops: Shop[],
+  savedIds: Set<string>,
+  filters: {
+    shopId?: string | null;
+    country?: string;
+    regionId?: string;
+    menuType?: MenuType | 'ALL';
+    category?: string;
+    isVegetarian?: boolean;
+    isHalal?: boolean;
+    query?: string;
+  }
+): MenuItem[] {
+  const shopMap = new Map(allShops.map((s) => [s.id, s]));
+
+  // Enrich Firestore items with shop metadata and filter to active region/shop/filters
+  const enrichedFsItems = firestoreItems
+    .map((item) => {
+      const shop = shopMap.get(item.shopId);
+      const shopCountry = item.shopCountry || item.country || shop?.country;
+      const shopRegion = item.shopRegion || shop?.region;
+      const shopCity = item.shopCity || shop?.city;
+      const shopName = item.shopName || shop?.name || 'Local Kitchen';
+      return {
+        ...item,
+        shopName,
+        shopCountry,
+        shopRegion,
+        shopCity,
+        country: shopCountry,
+        contactLinks: item.contactLinks || (shop
+          ? {
+              whatsappPhone: shop.whatsappPhone,
+              viberPhone: shop.viberPhone,
+              lineId: shop.lineId,
+              facebookUrl: shop.facebookUrl,
+              phoneNumber: shop.phoneNumber,
+            }
+          : undefined),
+      };
+    })
+    .filter((item) => {
+      const shop = shopMap.get(item.shopId);
+      if (shop && shop.status && shop.status !== 'APPROVED' && !filters.shopId) {
+        return false;
+      }
+      if (!filters.shopId && (filters.country || filters.regionId)) {
+        const regionCandidate = {
+          name: item.shopName || shop?.name || '',
+          country: item.shopCountry || item.country || shop?.country,
+          region: item.shopRegion || shop?.region,
+          city: item.shopCity || shop?.city,
+          locationArea: shop?.locationArea || '',
+          address: shop?.address || '',
+        };
+        if (!matchesRegionFilter(regionCandidate, filters.regionId, filters.country)) {
+          return false;
+        }
+      }
+      return true;
+    });
+
+  const filteredFsItems = filterMenuItems(enrichedFsItems, {
+    shopId: filters.shopId || undefined,
+    menuType: filters.menuType,
+    category: filters.category,
+    isVegetarian: filters.isVegetarian,
+    isHalal: filters.isHalal,
+    query: filters.query,
+  });
+
+  // Firestore overrides SQLite items for same ID so online edits win across all devices
+  const merged = mergeUniqueMenuItems(backendItems, filteredFsItems);
+  return applySaveStateToMenuItems(merged, savedIds);
 }
 
 export function filterFollowedShops(allShops: Shop[], followedIds: Set<string>): Shop[] {

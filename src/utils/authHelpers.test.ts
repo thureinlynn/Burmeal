@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   resolveEffectiveUserRole,
+  hydrateFirebaseUserProfile,
   buildNewShopForOwner,
   stripUndefined,
   classifyFirebaseLoginError,
@@ -50,10 +51,77 @@ test('resolveEffectiveUserRole allows normal Customer login', () => {
   assert.equal(result.error, undefined);
 });
 
+test('hydrateFirebaseUserProfile repairs blank Firestore profile fields from Google Auth identity', () => {
+  const blankResetDoc: User = {
+    id: 'google_uid_1',
+    email: '',
+    name: '',
+    role: 'CUSTOMER',
+    avatarUrl: '',
+    createdAt: '',
+  };
+
+  const result = hydrateFirebaseUserProfile(
+    {
+      uid: 'google_uid_1',
+      email: 'jared@example.com',
+      displayName: 'Jared Hendrix',
+      photoURL: 'https://lh3.googleusercontent.com/photo.jpg',
+    },
+    blankResetDoc,
+    null,
+    'CUSTOMER'
+  );
+
+  assert.equal(result.error, undefined);
+  assert.equal(result.user.id, 'google_uid_1');
+  assert.equal(result.user.email, 'jared@example.com');
+  assert.equal(result.user.name, 'Jared Hendrix');
+  assert.equal(result.user.avatarUrl, 'https://lh3.googleusercontent.com/photo.jpg');
+  assert.equal(result.user.role, 'CUSTOMER');
+  assert.ok(result.user.createdAt.length > 0);
+  assert.equal(result.needsFirestoreSync, true);
+});
+
+test('hydrateFirebaseUserProfile falls back to providerData and promotes Google user who owns a shop', () => {
+  const result = hydrateFirebaseUserProfile(
+    {
+      uid: 'google_uid_2',
+      email: null,
+      displayName: null,
+      photoURL: null,
+      providerData: [
+        {
+          providerId: 'google.com',
+          email: 'owner@kitchen.com',
+          displayName: 'Owner Google',
+          photoURL: 'https://lh3.googleusercontent.com/owner.jpg',
+        },
+      ],
+    },
+    {
+      id: 'google_uid_2',
+      email: 'owner@kitchen.com',
+      name: 'Owner Google',
+      role: 'CUSTOMER',
+      avatarUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=google_uid_2',
+      createdAt: '2026-01-01T00:00:00.000Z',
+    },
+    baseShop,
+    'SHOP_OWNER'
+  );
+
+  assert.equal(result.error, undefined);
+  assert.equal(result.user.role, 'SHOP_OWNER');
+  assert.equal(result.shopId, 'shop_999');
+  assert.equal(result.user.avatarUrl, 'https://lh3.googleusercontent.com/owner.jpg');
+  assert.equal(result.needsFirestoreSync, true);
+});
+
 test('buildNewShopForOwner creates APPROVED shop with owner metadata', () => {
   const shop = buildNewShopForOwner(
     'uid_abc',
-    'owner@kitchen.com',
+    'Owner@Kitchen.com',
     {
       name: 'Ko Aye',
       shopName: 'Aye Golden Kitchen',

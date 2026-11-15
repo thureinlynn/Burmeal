@@ -14,6 +14,7 @@ import {
 import { firestoreService } from '../services/firestoreService';
 import {
   resolveEffectiveUserRole,
+  hydrateFirebaseUserProfile,
   buildNewShopForOwner,
   classifyFirebaseLoginError,
 } from '../utils/authHelpers';
@@ -28,7 +29,9 @@ interface AuthContextType {
     password?: string,
     expectedRole?: 'CUSTOMER' | 'SHOP_OWNER'
   ) => Promise<{ success: boolean; error?: string; errorCode?: string }>;
-  loginWithGoogle: () => Promise<{ success: boolean; error?: string; errorCode?: string }>;
+  loginWithGoogle: (
+    expectedRole?: 'CUSTOMER' | 'SHOP_OWNER'
+  ) => Promise<{ success: boolean; error?: string; errorCode?: string }>;
   register: (data: any) => Promise<{ success: boolean; error?: string; errorCode?: string }>;
   logout: () => Promise<void>;
 }
@@ -62,106 +65,143 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     let isMounted = true;
+    let unsubscribe = () => {};
 
-    const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
-      if (!isMounted || isAuthActionInProgressRef.current) {
-        return;
+    const initAuth = async () => {
+      if ((window as any).__BURMEAL_PENDING_FIREBASE_SIGNOUT__) {
+        delete (window as any).__BURMEAL_PENDING_FIREBASE_SIGNOUT__;
+        clearLocalSession();
+        try {
+          await firebaseSignOut(auth);
+        } catch {}
       }
 
-      if (fbUser) {
-        try {
-          let profile = await firestoreService.getUserProfile(fbUser.uid);
-          let ownedShop = await firestoreService.getShopByOwnerId(fbUser.uid);
-          if (!ownedShop && fbUser.email) {
-            ownedShop = await firestoreService.getShopByOwnerEmail(fbUser.email);
-          }
+      if (!isMounted) return;
 
-          // Fallback to cached user data for matching UID if Firestore read failed transiently
-          if (!profile) {
-            try {
-              const cachedRaw = localStorage.getItem('burmeal_user_data');
-              if (cachedRaw) {
-                const cached = JSON.parse(cachedRaw) as User;
-                if (cached?.id === fbUser.uid) {
-                  profile = cached;
-                }
-              }
-            } catch {}
-          }
-
-          const resolved = resolveEffectiveUserRole(profile, ownedShop);
-          const hydratedUser: User = {
-            id: fbUser.uid,
-            email: profile?.email || fbUser.email || '',
-            name: profile?.name || fbUser.displayName || (fbUser.email ? fbUser.email.split('@')[0] : 'User'),
-            role: resolved.role,
-            avatarUrl:
-              profile?.avatarUrl ||
-              fbUser.photoURL ||
-              `https://api.dicebear.com/7.x/avataaars/svg?seed=${fbUser.uid}`,
-            createdAt: profile?.createdAt || new Date().toISOString(),
-          };
-
-          let effectiveToken = await fbUser.getIdToken();
-          const syncRes = await apiClient.syncFirebaseAccount(hydratedUser, ownedShop);
-          if (syncRes.token) {
-            effectiveToken = syncRes.token;
-          }
-
-          const effectiveShopId = resolved.shopId || syncRes.shopId || null;
-
-          if (!isMounted) return;
-          persistLocalSession(hydratedUser, effectiveToken, effectiveShopId);
-          setUser(hydratedUser);
-          setShopId(effectiveShopId);
-          setToken(effectiveToken);
-        } catch (err) {
-          console.error('Firebase session restore error:', err);
-        } finally {
-          if (isMounted) setIsLoading(false);
+      unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
+        if (!isMounted || isAuthActionInProgressRef.current) {
+          return;
         }
-        return;
-      }
 
-      // No Firebase user: check if a backend/SQLite `tok_` session exists
-      const storedToken = localStorage.getItem('burmeal_token');
-      if (storedToken && storedToken.startsWith('tok_')) {
-        try {
-          const data = await apiClient.getMe(storedToken);
-          if (isMounted && data && data.user) {
-            let resolvedShopId = data.shopId || null;
-            let resolvedUser = data.user;
-            if (resolvedUser.role === 'SHOP_OWNER' && !resolvedShopId) {
-              const ownedShop =
-                (await firestoreService.getShopByOwnerId(resolvedUser.id)) ||
-                (resolvedUser.email ? await firestoreService.getShopByOwnerEmail(resolvedUser.email) : null);
-              if (ownedShop) resolvedShopId = ownedShop.id;
+        if (fbUser) {
+          try {
+            const authEmail =
+              fbUser.email ||
+              fbUser.providerData?.find((p) => p?.email)?.email ||
+              '';
+
+            let profile = await firestoreService.getUserProfile(fbUser.uid);
+            if ((!profile || !(profile.email || '').trim()) && authEmail) {
+              const byEmail = await firestoreService.getUserByEmail(authEmail);
+              if (byEmail) {
+                profile = { ...(profile || {}), ...byEmail, id: fbUser.uid };
+              }
             }
-            persistLocalSession(resolvedUser, storedToken, resolvedShopId);
-            setUser(resolvedUser);
-            setShopId(resolvedShopId);
-            setToken(storedToken);
-          } else if (isMounted) {
-            clearLocalSession();
+
+            let ownedShop = await firestoreService.getShopByOwnerId(fbUser.uid);
+            if (!ownedShop && authEmail) {
+              ownedShop = await firestoreService.getShopByOwnerEmail(authEmail);
+            }
+            if (!ownedShop && profile?.email) {
+              ownedShop = await firestoreService.getShopByOwnerEmail(profile.email);
+            }
+
+            // Fallback to cached user data for matching UID if Firestore read failed transiently
+            if (!profile) {
+              try {
+                const cachedRaw = localStorage.getItem('burmeal_user_data');
+                if (cachedRaw) {
+                  const cached = JSON.parse(cachedRaw) as User;
+                  if (cached?.id === fbUser.uid && (cached.email || '').trim()) {
+                    profile = cached;
+                  }
+                }
+              } catch {}
+            }
+
+            const hydrated = hydrateFirebaseUserProfile(fbUser, profile, ownedShop);
+            const hydratedUser = hydrated.user;
+
+            if (hydrated.needsFirestoreSync) {
+              await firestoreService.saveUserProfile(hydratedUser).catch(() => {});
+            }
+            if (ownedShop && ownedShop.ownerId !== fbUser.uid) {
+              await firestoreService
+                .updateShop(ownedShop.id, {
+                  ownerId: fbUser.uid,
+                  ownerEmail: hydratedUser.email || ownedShop.ownerEmail,
+                })
+                .catch(() => {});
+              ownedShop = {
+                ...ownedShop,
+                ownerId: fbUser.uid,
+                ownerEmail: hydratedUser.email || ownedShop.ownerEmail,
+              };
+            }
+
+            let effectiveToken = await fbUser.getIdToken();
+            const syncRes = await apiClient.syncFirebaseAccount(hydratedUser, ownedShop);
+            if (syncRes.token) {
+              effectiveToken = syncRes.token;
+            }
+
+            const effectiveShopId = hydrated.shopId || syncRes.shopId || null;
+
+            if (!isMounted) return;
+            persistLocalSession(hydratedUser, effectiveToken, effectiveShopId);
+            setUser(hydratedUser);
+            setShopId(effectiveShopId);
+            setToken(effectiveToken);
+          } catch (err) {
+            console.error('Firebase session restore error:', err);
+          } finally {
+            if (isMounted) setIsLoading(false);
+          }
+          return;
+        }
+
+        // No Firebase user: check if a backend/SQLite `tok_` session exists
+        const storedToken = localStorage.getItem('burmeal_token');
+        if (storedToken && storedToken.startsWith('tok_')) {
+          try {
+            const data = await apiClient.getMe(storedToken);
+            if (isMounted && data && data.user) {
+              let resolvedShopId = data.shopId || null;
+              let resolvedUser = data.user;
+              if (resolvedUser.role === 'SHOP_OWNER' && !resolvedShopId) {
+                const ownedShop =
+                  (await firestoreService.getShopByOwnerId(resolvedUser.id)) ||
+                  (resolvedUser.email ? await firestoreService.getShopByOwnerEmail(resolvedUser.email) : null);
+                if (ownedShop) resolvedShopId = ownedShop.id;
+              }
+              persistLocalSession(resolvedUser, storedToken, resolvedShopId);
+              setUser(resolvedUser);
+              setShopId(resolvedShopId);
+              setToken(storedToken);
+            } else if (isMounted) {
+              clearLocalSession();
+              setToken(null);
+              setUser(null);
+              setShopId(null);
+            }
+          } catch (err) {
+            console.error('Session load error:', err);
+          } finally {
+            if (isMounted) setIsLoading(false);
+          }
+        } else {
+          clearLocalSession();
+          if (isMounted) {
             setToken(null);
             setUser(null);
             setShopId(null);
+            setIsLoading(false);
           }
-        } catch (err) {
-          console.error('Session load error:', err);
-        } finally {
-          if (isMounted) setIsLoading(false);
         }
-      } else {
-        clearLocalSession();
-        if (isMounted) {
-          setToken(null);
-          setUser(null);
-          setShopId(null);
-          setIsLoading(false);
-        }
-      }
-    });
+      });
+    };
+
+    initAuth();
 
     return () => {
       isMounted = false;
@@ -188,41 +228,40 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const fbUser = userCred.user;
 
           let profile = await firestoreService.getUserProfile(fbUser.uid);
-          if (!profile) {
-            profile = await firestoreService.getUserByEmail(cleanEmail);
+          if (!profile || !(profile.email || '').trim()) {
+            const byEmail = await firestoreService.getUserByEmail(fbUser.email || cleanEmail);
+            if (byEmail) {
+              profile = { ...(profile || {}), ...byEmail, id: fbUser.uid };
+            }
           }
 
           let ownedShop = await firestoreService.getShopByOwnerId(fbUser.uid);
           if (!ownedShop) {
-            ownedShop = await firestoreService.getShopByOwnerEmail(cleanEmail);
+            ownedShop = await firestoreService.getShopByOwnerEmail(fbUser.email || cleanEmail);
           }
           if (!ownedShop && profile?.id && profile.id !== fbUser.uid) {
             ownedShop = await firestoreService.getShopByOwnerId(profile.id);
           }
 
-          const resolved = resolveEffectiveUserRole(profile, ownedShop, expectedRole);
-          if (resolved.error) {
+          const hydrated = hydrateFirebaseUserProfile(fbUser, profile, ownedShop, expectedRole);
+          if (hydrated.error) {
             await firebaseSignOut(auth).catch(() => {});
             clearLocalSession();
-            return { success: false, error: resolved.error };
+            return { success: false, error: hydrated.error };
           }
 
-          const finalUser: User = {
-            id: fbUser.uid,
-            email: profile?.email || fbUser.email || cleanEmail,
-            name: profile?.name || fbUser.displayName || cleanEmail.split('@')[0],
-            role: resolved.role,
-            avatarUrl:
-              profile?.avatarUrl ||
-              fbUser.photoURL ||
-              `https://api.dicebear.com/7.x/avataaars/svg?seed=${fbUser.uid}`,
-            createdAt: profile?.createdAt || new Date().toISOString(),
-          };
-
+          const finalUser = hydrated.user;
           await firestoreService.saveUserProfile(finalUser);
           if (ownedShop && ownedShop.ownerId !== fbUser.uid) {
-            await firestoreService.updateShop(ownedShop.id, { ownerId: fbUser.uid });
-            ownedShop = { ...ownedShop, ownerId: fbUser.uid };
+            await firestoreService.updateShop(ownedShop.id, {
+              ownerId: fbUser.uid,
+              ownerEmail: finalUser.email || ownedShop.ownerEmail,
+            });
+            ownedShop = {
+              ...ownedShop,
+              ownerId: fbUser.uid,
+              ownerEmail: finalUser.email || ownedShop.ownerEmail,
+            };
           }
 
           let effectiveToken = await fbUser.getIdToken();
@@ -231,7 +270,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             effectiveToken = syncRes.token;
           }
 
-          const effectiveShopId = resolved.shopId || syncRes.shopId || null;
+          const effectiveShopId = hydrated.shopId || syncRes.shopId || null;
           persistLocalSession(finalUser, effectiveToken, effectiveShopId);
           setUser(finalUser);
           setShopId(effectiveShopId);
@@ -295,7 +334,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const register = async (formData: any) => {
-    const cleanEmail = (formData.email || '').trim();
+    const cleanEmail = (formData.email || '').trim().toLowerCase();
     const password = formData.password || '';
     const assignedRole = formData.role === 'SHOP_OWNER' ? 'SHOP_OWNER' : 'CUSTOMER';
 
@@ -384,44 +423,66 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // Customer Firebase Google Sign-In
-  const loginWithGoogle = async () => {
+  // Firebase Google Sign-In (Customer or verified Shop Owner)
+  const loginWithGoogle = async (expectedRole?: 'CUSTOMER' | 'SHOP_OWNER') => {
     isAuthActionInProgressRef.current = true;
     try {
       const result = await signInWithPopup(auth, googleProvider);
       const fbUser = result.user;
+      const authEmail =
+        fbUser.email ||
+        fbUser.providerData?.find((p) => p?.email)?.email ||
+        '';
 
       let profile = await firestoreService.getUserProfile(fbUser.uid);
+      if ((!profile || !(profile.email || '').trim()) && authEmail) {
+        const byEmail = await firestoreService.getUserByEmail(authEmail);
+        if (byEmail) {
+          profile = { ...(profile || {}), ...byEmail, id: fbUser.uid };
+        }
+      }
+
       let ownedShop = await firestoreService.getShopByOwnerId(fbUser.uid);
-      if (!ownedShop && fbUser.email) {
-        ownedShop = await firestoreService.getShopByOwnerEmail(fbUser.email);
+      if (!ownedShop && authEmail) {
+        ownedShop = await firestoreService.getShopByOwnerEmail(authEmail);
+      }
+      if (!ownedShop && profile?.email) {
+        ownedShop = await firestoreService.getShopByOwnerEmail(profile.email);
       }
 
-      const resolved = resolveEffectiveUserRole(profile, ownedShop, 'CUSTOMER');
+      const hydrated = hydrateFirebaseUserProfile(fbUser, profile, ownedShop, expectedRole);
+      if (hydrated.error) {
+        await firebaseSignOut(auth).catch(() => {});
+        clearLocalSession();
+        return { success: false, error: hydrated.error };
+      }
 
-      if (!profile) {
-        profile = {
-          id: fbUser.uid,
-          email: fbUser.email || '',
-          name: fbUser.displayName || 'Google Customer',
-          role: resolved.role,
-          avatarUrl: fbUser.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${fbUser.uid}`,
-          createdAt: new Date().toISOString(),
+      const finalProfile = hydrated.user;
+      await firestoreService.saveUserProfile(finalProfile);
+
+      if (ownedShop && ownedShop.ownerId !== fbUser.uid) {
+        await firestoreService
+          .updateShop(ownedShop.id, {
+            ownerId: fbUser.uid,
+            ownerEmail: finalProfile.email || ownedShop.ownerEmail,
+          })
+          .catch(() => {});
+        ownedShop = {
+          ...ownedShop,
+          ownerId: fbUser.uid,
+          ownerEmail: finalProfile.email || ownedShop.ownerEmail,
         };
-      } else if (resolved.role === 'SHOP_OWNER' && profile.role !== 'SHOP_OWNER') {
-        profile = { ...profile, role: 'SHOP_OWNER' };
       }
-      await firestoreService.saveUserProfile(profile);
 
       let effectiveToken = await fbUser.getIdToken();
-      const syncRes = await apiClient.syncFirebaseAccount(profile, ownedShop);
+      const syncRes = await apiClient.syncFirebaseAccount(finalProfile, ownedShop);
       if (syncRes.token) {
         effectiveToken = syncRes.token;
       }
 
-      const effectiveShopId = resolved.shopId || syncRes.shopId || null;
-      persistLocalSession(profile, effectiveToken, effectiveShopId);
-      setUser(profile);
+      const effectiveShopId = hydrated.shopId || syncRes.shopId || null;
+      persistLocalSession(finalProfile, effectiveToken, effectiveShopId);
+      setUser(finalProfile);
       setShopId(effectiveShopId);
       setToken(effectiveToken);
       return { success: true };

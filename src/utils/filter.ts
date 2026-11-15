@@ -1,5 +1,107 @@
-import { MenuItem, MenuType } from '../types';
+import { MenuItem, MenuType, Shop } from '../types';
 import { getCurrencyForCountry } from './countries';
+
+export const REGION_PREFIX_TO_COUNTRY: Record<string, string> = {
+  MM: 'Myanmar',
+  TH: 'Thailand',
+  SG: 'Singapore',
+  MY: 'Malaysia',
+  JP: 'Japan',
+  US: 'United States',
+  EU: 'European Union',
+  GB: 'United Kingdom',
+  KR: 'South Korea',
+  AU: 'Australia',
+};
+
+export function getCountryFromRegionId(regionId?: string): string | undefined {
+  if (!regionId) return undefined;
+  const prefix = regionId.split('-')[0]?.toUpperCase();
+  return REGION_PREFIX_TO_COUNTRY[prefix];
+}
+
+export function matchesRegionFilter(
+  s: Pick<Shop, 'name' | 'country' | 'region' | 'city' | 'locationArea' | 'address'>,
+  regionId?: string,
+  country?: string
+): boolean {
+  let effectiveCountry = country;
+  if (!effectiveCountry && regionId) {
+    effectiveCountry = getCountryFromRegionId(regionId);
+  }
+
+  if (effectiveCountry) {
+    if (!s.country) return false;
+    const sc = s.country.trim().toLowerCase();
+    const ec = effectiveCountry.trim().toLowerCase();
+    if (ec === 'european union') {
+      const euCountries = [
+        'germany',
+        'france',
+        'netherlands',
+        'italy',
+        'spain',
+        'sweden',
+        'belgium',
+        'european union',
+        'europe',
+      ];
+      if (!euCountries.includes(sc)) return false;
+    } else if (sc !== ec) {
+      return false;
+    }
+  }
+
+  if (regionId && !regionId.endsWith('-ALL')) {
+    const r = regionId.toUpperCase();
+    const text = `${s.name || ''} ${s.region || ''} ${s.city || ''} ${s.locationArea || ''} ${s.address || ''}`.toLowerCase();
+
+    if (r === 'MM-YGN') return text.includes('yangon');
+    if (r === 'MM-MDY') return text.includes('mandalay');
+    if (r === 'MM-SHN') return text.includes('shan') || text.includes('taunggyi') || text.includes('inle') || text.includes('nyaungshwe');
+    if (r === 'MM-BGO') return text.includes('bago') || text.includes('pyay');
+    if (r === 'MM-AYY') return text.includes('ayeyarwady') || text.includes('pathein');
+    if (r === 'MM-MON') return text.includes('mon') || text.includes('mawlamyine');
+    if (r === 'MM-KRN') return text.includes('kayin') || text.includes('hpa-an') || text.includes('karen');
+
+    if (r === 'TH-BKK') return text.includes('bangkok') || text.includes('pratunam') || text.includes('silom');
+    if (r === 'TH-CNX') return text.includes('chiang mai') || text.includes('nimman');
+    if (r === 'TH-MSOT') return text.includes('mae sot') || text.includes('border');
+
+    if (r === 'US-SF') return text.includes('san francisco') || text.includes('oakland') || text.includes('fremont') || text.includes('berkeley') || text.includes('san jose') || text.includes('bay area');
+    if (r === 'US-LA') return text.includes('los angeles') || text.includes('alhambra') || text.includes('silver lake') || text.includes('socal');
+    if (r === 'US-NYC') return text.includes('new york') || text.includes('queens') || text.includes('elmhurst') || text.includes('manhattan') || text.includes('brooklyn');
+    if (r === 'US-TX') return text.includes('texas') || text.includes('houston') || text.includes('dallas');
+    if (r === 'US-DC') return text.includes('washington') || text.includes('virginia');
+    if (r === 'US-FW') return text.includes('indiana') || text.includes('fort wayne') || text.includes('indianapolis');
+
+    if (r === 'EU-DE') return text.includes('germany') || text.includes('berlin') || text.includes('munich') || text.includes('frankfurt');
+    if (r === 'EU-FR') return text.includes('france') || text.includes('paris') || text.includes('lyon');
+    if (r === 'EU-NL') return text.includes('netherlands') || text.includes('amsterdam') || text.includes('rotterdam');
+    if (r === 'EU-IT') return text.includes('italy') || text.includes('rome') || text.includes('milan');
+    if (r === 'EU-ES') return text.includes('spain') || text.includes('madrid') || text.includes('barcelona');
+
+    if (r === 'GB-LDN') return text.includes('london') || text.includes('soho') || text.includes('shoreditch') || text.includes('camden') || text.includes('brixton');
+    if (r === 'GB-MAN') return text.includes('manchester');
+    if (r === 'GB-BIR') return text.includes('birmingham');
+    if (r === 'GB-EDI') return text.includes('edinburgh') || text.includes('scotland');
+
+    if (r === 'JP-TYO') return text.includes('tokyo') || text.includes('takadanobaba') || text.includes('shinjuku') || text.includes('ikebukuro') || text.includes('shibuya');
+    if (r === 'JP-YOK') return text.includes('yokohama') || text.includes('kanagawa');
+    if (r === 'JP-OSA') return text.includes('osaka');
+
+    if (r === 'AU-SYD') return text.includes('sydney') || text.includes('cabramatta') || text.includes('marrickville') || text.includes('parramatta');
+    if (r === 'AU-MEL') return text.includes('melbourne') || text.includes('richmond') || text.includes('fitzroy') || text.includes('footscray');
+
+    if (r === 'KR-SEL') return text.includes('seoul') || text.includes('itaewon') || text.includes('hongdae') || text.includes('gangnam');
+    if (r === 'KR-INC') return text.includes('incheon') || text.includes('bupyeong');
+    if (r === 'KR-ANS') return text.includes('ansan');
+    if (r === 'KR-BUS') return text.includes('busan');
+
+    return true;
+  }
+  return true;
+}
 
 export interface FeedFilterParams {
   query?: string;

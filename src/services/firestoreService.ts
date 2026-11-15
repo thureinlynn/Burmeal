@@ -398,6 +398,7 @@ export const firestoreService = {
     const fullShop = stripUndefined({
       ...shop,
       id: shopId,
+      ownerEmail: shop.ownerEmail ? normalizeEmail(shop.ownerEmail) : shop.ownerEmail,
       createdAt: shop.createdAt || new Date().toISOString(),
     }) as Shop;
     const ref = doc(db, 'shops', shopId);
@@ -413,7 +414,10 @@ export const firestoreService = {
   // 11. Update Shop profile in Firestore
   async updateShop(shopId: string, data: Partial<Shop>): Promise<void> {
     const ref = doc(db, 'shops', shopId);
-    const cleanData = stripUndefined(data);
+    const cleanData = stripUndefined({
+      ...data,
+      ...(data.ownerEmail !== undefined ? { ownerEmail: normalizeEmail(data.ownerEmail) } : {}),
+    });
     try {
       await setDoc(ref, cleanData, { merge: true });
     } catch (error) {
@@ -435,11 +439,17 @@ export const firestoreService = {
   },
 
   async getUserByEmail(email: string): Promise<User | null> {
-    const q = query(collection(db, 'users'), where('email', '==', email));
+    const trimmed = email.trim();
+    const lowered = normalizeEmail(email);
+    if (!lowered) return null;
+    const candidates = Array.from(new Set([lowered, trimmed]));
     try {
-      const snap = await getDocs(q);
-      if (!snap.empty) {
-        return snap.docs[0].data() as User;
+      for (const candidate of candidates) {
+        const snap = await getDocs(query(collection(db, 'users'), where('email', '==', candidate)));
+        if (!snap.empty) {
+          const validDoc = snap.docs.find((d) => Boolean((d.data()?.email || '').trim()));
+          return ((validDoc || snap.docs[0]).data() as User);
+        }
       }
       return null;
     } catch (error) {
@@ -449,7 +459,11 @@ export const firestoreService = {
   },
 
   async saveUserProfile(user: User): Promise<void> {
-    const cleanUser = stripUndefined(user) as User;
+    const normalizedEmail = user.email ? user.email.trim() : '';
+    const cleanUser = stripUndefined({
+      ...user,
+      email: normalizedEmail,
+    }) as User;
     try {
       await Promise.all([
         setDoc(doc(db, 'users', user.id), cleanUser, { merge: true }),
@@ -489,11 +503,24 @@ export const firestoreService = {
   },
 
   async getShopByOwnerEmail(ownerEmail: string): Promise<Shop | null> {
-    const q = query(collection(db, 'shops'), where('ownerEmail', '==', ownerEmail));
+    const trimmed = ownerEmail.trim();
+    const lowered = normalizeEmail(ownerEmail);
+    if (!lowered) return null;
+    const candidates = Array.from(new Set([lowered, trimmed]));
     try {
-      const snap = await getDocs(q);
-      if (!snap.empty) {
-        return snap.docs[0].data() as Shop;
+      for (const candidate of candidates) {
+        const snap = await getDocs(query(collection(db, 'shops'), where('ownerEmail', '==', candidate)));
+        if (!snap.empty) {
+          return snap.docs[0].data() as Shop;
+        }
+      }
+      // Fallback: scan shops collection in case ownerEmail had mixed casing in legacy docs
+      const allSnap = await getDocs(collection(db, 'shops'));
+      for (const d of allSnap.docs) {
+        const data = d.data() as Shop;
+        if (data?.ownerEmail && normalizeEmail(data.ownerEmail) === lowered) {
+          return data;
+        }
       }
       return null;
     } catch (error) {

@@ -44,6 +44,94 @@ export function resolveEffectiveUserRole(
   };
 }
 
+export interface FirebaseIdentityInput {
+  uid: string;
+  email?: string | null;
+  displayName?: string | null;
+  photoURL?: string | null;
+  providerData?: Array<{
+    providerId?: string | null;
+    email?: string | null;
+    displayName?: string | null;
+    photoURL?: string | null;
+  }>;
+}
+
+export interface HydratedFirebaseResult {
+  user: User;
+  shopId: string | null;
+  needsFirestoreSync: boolean;
+  error?: string;
+}
+
+function isPlaceholderAvatar(url?: string | null): boolean {
+  if (!url || !url.trim()) return true;
+  return url.includes('api.dicebear.com');
+}
+
+/**
+ * Hydrates the authoritative BurMeal User from Firebase Auth identity (including providerData)
+ * and any existing Firestore profile, repairing blank or stale fields without clobbering
+ * custom non-placeholder avatars or owned-shop privileges.
+ */
+export function hydrateFirebaseUserProfile(
+  fbUser: FirebaseIdentityInput,
+  existingProfile: User | null,
+  ownedShop: Shop | null,
+  expectedRole?: 'CUSTOMER' | 'SHOP_OWNER'
+): HydratedFirebaseResult {
+  const provider = fbUser.providerData?.find((p) => p?.email || p?.displayName || p?.photoURL) || fbUser.providerData?.[0];
+  const authEmail = (fbUser.email || provider?.email || '').trim();
+  const profileEmail = (existingProfile?.email || '').trim();
+  const email = profileEmail || authEmail;
+
+  const authName = (fbUser.displayName || provider?.displayName || '').trim();
+  const profileName = (existingProfile?.name || '').trim();
+  const fallbackName = email ? email.split('@')[0] : 'Google User';
+  const name = profileName || authName || fallbackName;
+
+  const authPhoto = (fbUser.photoURL || provider?.photoURL || '').trim();
+  const profilePhoto = (existingProfile?.avatarUrl || '').trim();
+  const defaultAvatar = `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(fbUser.uid)}`;
+
+  let avatarUrl = defaultAvatar;
+  if (profilePhoto && !isPlaceholderAvatar(profilePhoto)) {
+    avatarUrl = profilePhoto;
+  } else if (authPhoto) {
+    avatarUrl = authPhoto;
+  } else if (profilePhoto) {
+    avatarUrl = profilePhoto;
+  }
+
+  const resolved = resolveEffectiveUserRole(existingProfile, ownedShop, expectedRole);
+  const createdAt = (existingProfile?.createdAt || '').trim() || new Date().toISOString();
+
+  const user: User = {
+    id: fbUser.uid,
+    email,
+    name,
+    role: resolved.role,
+    avatarUrl,
+    createdAt,
+  };
+
+  const needsFirestoreSync =
+    !existingProfile ||
+    existingProfile.id !== user.id ||
+    (existingProfile.email || '').trim() !== user.email ||
+    (existingProfile.name || '').trim() !== user.name ||
+    (existingProfile.avatarUrl || '').trim() !== user.avatarUrl ||
+    existingProfile.role !== user.role ||
+    !(existingProfile.createdAt || '').trim();
+
+  return {
+    user,
+    shopId: resolved.shopId,
+    needsFirestoreSync,
+    error: resolved.error,
+  };
+}
+
 /**
  * Builds a complete, Firestore-safe Shop object for a newly registered Shop Owner.
  */
@@ -63,14 +151,15 @@ export function buildNewShopForOwner(
   shopId?: string
 ): Shop {
   const id = shopId || `shop_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
-  const ownerDisplay = formData.name?.trim() || ownerEmail.split('@')[0] || 'Chef';
+  const cleanEmail = ownerEmail.trim().toLowerCase();
+  const ownerDisplay = formData.name?.trim() || cleanEmail.split('@')[0] || 'Chef';
   const city = formData.city?.trim() || 'Yangon';
   const country = formData.country?.trim() || 'Myanmar';
 
   return {
     id,
     ownerId,
-    ownerEmail,
+    ownerEmail: cleanEmail,
     name: formData.shopName?.trim() || `${ownerDisplay}'s Kitchen`,
     bio: 'Artisan home kitchen preparing authentic delicacies for direct contact and kitchen pick-up.',
     coverImage: '/src/assets/images/burmeal_hero_spread_1793906769541.jpg',

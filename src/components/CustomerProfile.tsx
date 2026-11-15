@@ -44,21 +44,23 @@ export const CustomerProfile: React.FC<CustomerProfileProps> = ({
       {/* Account Info Box */}
       <div className="bg-white rounded-2xl border border-stone-200 p-6 shadow-xs flex items-center gap-4">
         <img
-          src={user.avatarUrl || 'https://api.dicebear.com/7.x/avataaars/svg?seed=user'}
-          alt={user.name}
+          src={user.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(user.id || 'user')}`}
+          alt={user.name || user.email || 'Account'}
           className="w-16 h-16 rounded-2xl border-2 border-stone-200 object-cover bg-stone-50"
           referrerPolicy="no-referrer"
         />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <h1 className="text-lg font-bold font-display text-stone-900 truncate">{user.name}</h1>
+            <h1 className="text-lg font-bold font-display text-stone-900 truncate">
+              {user.name || user.email || 'Google Account'}
+            </h1>
             <span className="text-[10px] bg-stone-100 text-stone-700 font-bold px-2 py-0.5 rounded">
               {user.role}
             </span>
           </div>
           <p className="text-xs text-stone-500 flex items-center gap-1.5 mt-0.5">
             <Mail className="w-3.5 h-3.5 text-stone-400" />
-            <span className="truncate">{user.email}</span>
+            <span className="truncate">{user.email || 'Connected Account'}</span>
           </p>
         </div>
         <button

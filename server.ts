@@ -275,16 +275,18 @@ app.post('/api/auth/firebase-login', (req: Request, res: Response) => {
 app.post('/api/auth/firebase-sync', (req: Request, res: Response) => {
   try {
     const { user: incomingUser, shop: incomingShop } = req.body;
-    if (!incomingUser?.id || !incomingUser?.email) {
-      return res.status(400).json({ error: 'User ID and email required' });
+    if (!incomingUser?.id) {
+      return res.status(400).json({ error: 'User ID required' });
     }
 
     const now = new Date().toISOString();
+    const cleanEmail = (incomingUser.email || `${incomingUser.id}@user.burmeal.com`).trim();
+    const cleanName = (incomingUser.name || cleanEmail.split('@')[0] || 'User').trim();
     const role = incomingUser.role === 'SHOP_OWNER' ? 'SHOP_OWNER' : incomingUser.role === 'ADMIN' ? 'ADMIN' : 'CUSTOMER';
 
     const existingById = db.prepare('SELECT * FROM users WHERE id = ?').get(incomingUser.id) as any;
     const existingByEmail = !existingById
-      ? (db.prepare('SELECT * FROM users WHERE email = ?').get(incomingUser.email) as any)
+      ? (db.prepare('SELECT * FROM users WHERE LOWER(email) = LOWER(?)').get(cleanEmail) as any)
       : null;
     const existing = existingById || existingByEmail;
 
@@ -296,9 +298,9 @@ app.post('/api/auth/firebase-sync', (req: Request, res: Response) => {
         VALUES (?, ?, ?, ?, ?, ?, ?)
       `).run(
         incomingUser.id,
-        incomingUser.email,
+        cleanEmail,
         dummyHash,
-        incomingUser.name || incomingUser.email.split('@')[0],
+        cleanName,
         role,
         incomingUser.avatarUrl || null,
         incomingUser.createdAt || now
@@ -306,10 +308,11 @@ app.post('/api/auth/firebase-sync', (req: Request, res: Response) => {
     } else {
       effectiveUserId = existing.id;
       db.prepare(`
-        UPDATE users SET name = ?, role = ?, avatar_url = ?
+        UPDATE users SET email = ?, name = ?, role = ?, avatar_url = ?
         WHERE id = ?
       `).run(
-        incomingUser.name || existing.name,
+        cleanEmail || existing.email,
+        cleanName || existing.name,
         role === 'SHOP_OWNER' || existing.role === 'SHOP_OWNER' ? 'SHOP_OWNER' : role,
         incomingUser.avatarUrl || existing.avatar_url,
         effectiveUserId
@@ -318,15 +321,23 @@ app.post('/api/auth/firebase-sync', (req: Request, res: Response) => {
 
     let syncedShopId: string | null = null;
     if (incomingShop && incomingShop.id) {
-      const existingShop = db.prepare('SELECT id FROM shops WHERE id = ?').get(incomingShop.id) as any;
+      const existingShop = db.prepare('SELECT * FROM shops WHERE id = ?').get(incomingShop.id) as any;
+      const lat = typeof incomingShop.latitude === 'number' && Number.isFinite(incomingShop.latitude) ? incomingShop.latitude : null;
+      const lng = typeof incomingShop.longitude === 'number' && Number.isFinite(incomingShop.longitude) ? incomingShop.longitude : null;
+      const isOpenInt = incomingShop.isOpen === false ? 0 : 1;
+
       if (!existingShop) {
         db.prepare(`
-          INSERT INTO shops (id, owner_id, name, bio, cover_image, avatar_image, profile_image_url, status, cuisine_type, location_area, address, city, region, country, latitude, longitude, created_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          INSERT INTO shops (
+            id, owner_id, name, bio, cover_image, avatar_image, profile_image_url, status,
+            cuisine_type, location_area, address, city, region, country, latitude, longitude,
+            facebook_url, whatsapp_phone, viber_phone, line_id, phone_number, is_open, operating_hours, created_at
+          )
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `).run(
           incomingShop.id,
           effectiveUserId,
-          incomingShop.name,
+          incomingShop.name || `${cleanName}'s Kitchen`,
           incomingShop.bio || '',
           incomingShop.coverImage || '/src/assets/images/burmeal_hero_spread_1793906769541.jpg',
           incomingShop.avatarImage || '',
@@ -338,9 +349,49 @@ app.post('/api/auth/firebase-sync', (req: Request, res: Response) => {
           incomingShop.city || 'Yangon',
           incomingShop.region || 'Yangon Region',
           incomingShop.country || 'Myanmar',
-          typeof incomingShop.latitude === 'number' ? incomingShop.latitude : null,
-          typeof incomingShop.longitude === 'number' ? incomingShop.longitude : null,
+          lat,
+          lng,
+          incomingShop.facebookUrl || '',
+          incomingShop.whatsappPhone || '',
+          incomingShop.viberPhone || '',
+          incomingShop.lineId || '',
+          incomingShop.phoneNumber || '',
+          isOpenInt,
+          incomingShop.operatingHours || '8:00 AM - 8:00 PM',
           incomingShop.createdAt || now
+        );
+      } else {
+        db.prepare(`
+          UPDATE shops
+          SET owner_id = ?, name = ?, bio = ?, cover_image = ?, avatar_image = ?, profile_image_url = ?,
+              status = ?, cuisine_type = ?, location_area = ?, address = ?, city = ?, region = ?, country = ?,
+              latitude = ?, longitude = ?, facebook_url = ?, whatsapp_phone = ?, viber_phone = ?,
+              line_id = ?, phone_number = ?, is_open = ?, operating_hours = ?
+          WHERE id = ?
+        `).run(
+          effectiveUserId,
+          incomingShop.name || existingShop.name,
+          incomingShop.bio !== undefined ? incomingShop.bio : existingShop.bio,
+          incomingShop.coverImage !== undefined ? incomingShop.coverImage : existingShop.cover_image,
+          incomingShop.avatarImage !== undefined ? incomingShop.avatarImage : existingShop.avatar_image,
+          incomingShop.profileImageUrl !== undefined ? incomingShop.profileImageUrl : existingShop.profile_image_url,
+          incomingShop.status || existingShop.status,
+          incomingShop.cuisineType || existingShop.cuisine_type,
+          incomingShop.locationArea !== undefined ? incomingShop.locationArea : existingShop.location_area,
+          incomingShop.address !== undefined ? incomingShop.address : existingShop.address,
+          incomingShop.city !== undefined ? incomingShop.city : existingShop.city,
+          incomingShop.region !== undefined ? incomingShop.region : existingShop.region,
+          incomingShop.country !== undefined ? incomingShop.country : existingShop.country,
+          lat !== null ? lat : existingShop.latitude,
+          lng !== null ? lng : existingShop.longitude,
+          incomingShop.facebookUrl !== undefined ? incomingShop.facebookUrl : existingShop.facebook_url,
+          incomingShop.whatsappPhone !== undefined ? incomingShop.whatsappPhone : existingShop.whatsapp_phone,
+          incomingShop.viberPhone !== undefined ? incomingShop.viberPhone : existingShop.viber_phone,
+          incomingShop.lineId !== undefined ? incomingShop.lineId : existingShop.line_id,
+          incomingShop.phoneNumber !== undefined ? incomingShop.phoneNumber : existingShop.phone_number,
+          incomingShop.isOpen !== undefined ? isOpenInt : existingShop.is_open,
+          incomingShop.operatingHours !== undefined ? incomingShop.operatingHours : existingShop.operating_hours,
+          incomingShop.id
         );
       }
       syncedShopId = incomingShop.id;
@@ -443,6 +494,7 @@ function buildRegionSqlClause(regionId?: string, country?: string): string {
     else if (r === 'US-SF') clause += ` AND (LOWER(s.city) LIKE '%san francisco%' OR LOWER(s.city) LIKE '%oakland%' OR LOWER(s.city) LIKE '%fremont%' OR LOWER(s.city) LIKE '%berkeley%' OR LOWER(s.city) LIKE '%san jose%')`;
     else if (r === 'US-LA') clause += ` AND (LOWER(s.city) LIKE '%los angeles%' OR LOWER(s.location_area) LIKE '%alhambra%' OR LOWER(s.location_area) LIKE '%silver lake%')`;
     else if (r === 'US-NYC') clause += ` AND (LOWER(s.city) LIKE '%new york%' OR LOWER(s.location_area) LIKE '%queens%' OR LOWER(s.location_area) LIKE '%elmhurst%' OR LOWER(s.location_area) LIKE '%brooklyn%')`;
+    else if (r === 'US-FW') clause += ` AND (LOWER(s.city) LIKE '%fort wayne%' OR LOWER(s.city) LIKE '%indianapolis%' OR LOWER(s.region) LIKE '%indiana%' OR LOWER(s.location_area) LIKE '%fort wayne%')`;
     else if (r === 'EU-DE') clause += ` AND (LOWER(s.country) = 'germany' OR LOWER(s.city) LIKE '%berlin%' OR LOWER(s.city) LIKE '%munich%')`;
     else if (r === 'EU-FR') clause += ` AND (LOWER(s.country) = 'france' OR LOWER(s.city) LIKE '%paris%')`;
     else if (r === 'EU-NL') clause += ` AND (LOWER(s.country) = 'netherlands' OR LOWER(s.city) LIKE '%amsterdam%')`;
@@ -470,7 +522,7 @@ app.get('/api/shops', (req: Request, res: Response) => {
         (SELECT COUNT(*) FROM follows WHERE shop_id = s.id) as follower_count,
         (SELECT COUNT(*) FROM menu_items WHERE shop_id = s.id) as item_count
       FROM shops s
-      JOIN users u ON s.owner_id = u.id
+      LEFT JOIN users u ON s.owner_id = u.id
     `;
 
     // Only admins can see non-approved shops unless owner is viewing own shop
@@ -523,6 +575,8 @@ app.get('/api/shops', (req: Request, res: Response) => {
       viberPhone: s.viber_phone,
       lineId: s.line_id,
       phoneNumber: s.phone_number,
+      isOpen: s.is_open === null || s.is_open === undefined ? true : Boolean(s.is_open),
+      operatingHours: s.operating_hours || '8:00 AM - 8:00 PM',
       createdAt: s.created_at,
       followerCount: s.follower_count,
       itemCount: s.item_count,
@@ -545,7 +599,7 @@ app.get('/api/shops/:id', (req: Request, res: Response) => {
         (SELECT COUNT(*) FROM follows WHERE shop_id = s.id) as follower_count,
         (SELECT COUNT(*) FROM menu_items WHERE shop_id = s.id) as item_count
       FROM shops s
-      JOIN users u ON s.owner_id = u.id
+      LEFT JOIN users u ON s.owner_id = u.id
       WHERE s.id = ?
     `).get(req.params.id) as any;
 
@@ -582,6 +636,8 @@ app.get('/api/shops/:id', (req: Request, res: Response) => {
       viberPhone: shop.viber_phone,
       lineId: shop.line_id,
       phoneNumber: shop.phone_number,
+      isOpen: shop.is_open === null || shop.is_open === undefined ? true : Boolean(shop.is_open),
+      operatingHours: shop.operating_hours || '8:00 AM - 8:00 PM',
       createdAt: shop.created_at,
       followerCount: shop.follower_count,
       itemCount: shop.item_count,
@@ -599,10 +655,19 @@ app.put('/api/shops/:id', async (req: Request, res: Response) => {
     const user = getAuthenticatedUser(req);
     if (!user) return res.status(401).json({ error: 'Unauthorized' });
 
-    const shop = db.prepare('SELECT * FROM shops WHERE id = ?').get(req.params.id) as any;
+    const shop = db.prepare(`
+      SELECT s.*, u.email as owner_email
+      FROM shops s
+      LEFT JOIN users u ON s.owner_id = u.id
+      WHERE s.id = ?
+    `).get(req.params.id) as any;
     if (!shop) return res.status(404).json({ error: 'Shop not found' });
 
-    if (shop.owner_id !== user.id && user.role !== 'ADMIN') {
+    const emailMatches =
+      Boolean(shop.owner_email && user.email) &&
+      shop.owner_email.toLowerCase() === user.email.toLowerCase();
+
+    if (shop.owner_id !== user.id && !emailMatches && user.role !== 'ADMIN') {
       return res.status(403).json({ error: 'Not authorized to edit this shop' });
     }
 
@@ -625,6 +690,8 @@ app.put('/api/shops/:id', async (req: Request, res: Response) => {
       viberPhone,
       lineId,
       phoneNumber,
+      isOpen,
+      operatingHours,
     } = req.body;
 
     const nextLat =
@@ -645,16 +712,17 @@ app.put('/api/shops/:id', async (req: Request, res: Response) => {
       SET name = ?, bio = ?, cover_image = ?, avatar_image = ?, profile_image_url = ?,
           cuisine_type = ?, location_area = ?, address = ?, city = ?, region = ?, country = ?,
           latitude = ?, longitude = ?,
-          facebook_url = ?, whatsapp_phone = ?, viber_phone = ?, line_id = ?, phone_number = ?
+          facebook_url = ?, whatsapp_phone = ?, viber_phone = ?, line_id = ?, phone_number = ?,
+          is_open = ?, operating_hours = ?
       WHERE id = ?
     `).run(
       name || shop.name,
-      bio || shop.bio,
+      bio !== undefined ? bio : shop.bio,
       coverImage !== undefined ? coverImage : shop.cover_image,
       avatarImage !== undefined ? avatarImage : shop.avatar_image,
       profileImageUrl !== undefined ? profileImageUrl : shop.profile_image_url,
       cuisineType || shop.cuisine_type,
-      locationArea || shop.location_area,
+      locationArea !== undefined ? locationArea : shop.location_area,
       address !== undefined ? address : shop.address,
       city !== undefined ? city : shop.city,
       region !== undefined ? region : shop.region,
@@ -666,10 +734,17 @@ app.put('/api/shops/:id', async (req: Request, res: Response) => {
       viberPhone !== undefined ? viberPhone : shop.viber_phone,
       lineId !== undefined ? lineId : shop.line_id,
       phoneNumber !== undefined ? phoneNumber : shop.phone_number,
+      isOpen !== undefined ? (isOpen ? 1 : 0) : shop.is_open,
+      operatingHours !== undefined ? operatingHours : shop.operating_hours,
       req.params.id
     );
 
-    const updatedShop = db.prepare('SELECT * FROM shops WHERE id = ?').get(req.params.id);
+    const updatedShop = db.prepare(`
+      SELECT s.*, u.email as owner_email
+      FROM shops s
+      LEFT JOIN users u ON s.owner_id = u.id
+      WHERE s.id = ?
+    `).get(req.params.id);
     if (updatedShop) await syncShopToFirestore(updatedShop);
 
     return res.json({ success: true, message: 'Shop profile updated successfully.' });
@@ -846,6 +921,7 @@ app.post('/api/menu-items', (req: Request, res: Response) => {
     if (!user) return res.status(401).json({ error: 'Unauthorized' });
 
     const {
+      id: requestedId,
       shopId,
       title,
       description,
@@ -859,21 +935,34 @@ app.post('/api/menu-items', (req: Request, res: Response) => {
       availableDays,
     } = req.body;
 
-    if (!shopId || !title || !price || !category || !menuType) {
+    if (!shopId || !title || price === undefined || !category || !menuType) {
       return res.status(400).json({ error: 'Required fields missing.' });
     }
 
-    const shop = db.prepare('SELECT owner_id FROM shops WHERE id = ?').get(shopId) as any;
+    const shop = db.prepare(`
+      SELECT s.*, u.email as owner_email
+      FROM shops s
+      LEFT JOIN users u ON s.owner_id = u.id
+      WHERE s.id = ?
+    `).get(shopId) as any;
     if (!shop) return res.status(404).json({ error: 'Shop not found' });
-    if (shop.owner_id !== user.id && user.role !== 'ADMIN') {
+
+    const emailMatches =
+      Boolean(shop.owner_email && user.email) &&
+      shop.owner_email.toLowerCase() === user.email.toLowerCase();
+
+    if (shop.owner_id !== user.id && !emailMatches && user.role !== 'ADMIN') {
       return res.status(403).json({ error: 'Unauthorized to add items to this shop.' });
     }
 
-    const itemId = 'item_' + crypto.randomUUID().slice(0, 8);
+    const itemId =
+      typeof requestedId === 'string' && requestedId.trim()
+        ? requestedId.trim()
+        : 'item_' + crypto.randomUUID().slice(0, 8);
     const now = new Date().toISOString();
 
     db.prepare(`
-      INSERT INTO menu_items (id, shop_id, title, description, image, price, category, menu_type, is_vegetarian, is_halal, special_date, available_days, created_at)
+      INSERT OR REPLACE INTO menu_items (id, shop_id, title, description, image, price, category, menu_type, is_vegetarian, is_halal, special_date, available_days, created_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       itemId,
@@ -891,10 +980,18 @@ app.post('/api/menu-items', (req: Request, res: Response) => {
       now
     );
 
-    const createdItem = db.prepare('SELECT * FROM menu_items WHERE id = ?').get(itemId);
-    if (createdItem) syncMenuItemToFirestore(createdItem, shop);
+    const createdJoined = db.prepare(`
+      SELECT m.*, s.name as shop_name,
+             s.country as shop_country, s.region as shop_region, s.city as shop_city,
+             s.whatsapp_phone, s.viber_phone, s.line_id, s.facebook_url, s.phone_number
+      FROM menu_items m
+      JOIN shops s ON m.shop_id = s.id
+      WHERE m.id = ?
+    `).get(itemId);
+    if (createdJoined) syncMenuItemToFirestore(createdJoined, shop);
+    const formattedItem = createdJoined ? formatMenuItems([createdJoined], user.id)[0] : { id: itemId };
 
-    return res.json({ success: true, itemId });
+    return res.json({ success: true, id: itemId, itemId, item: formattedItem });
   } catch (err) {
     console.error('Error creating menu item:', err);
     return res.status(500).json({ error: 'Failed to create menu item' });
@@ -908,13 +1005,19 @@ app.put('/api/menu-items/:id', (req: Request, res: Response) => {
     if (!user) return res.status(401).json({ error: 'Unauthorized' });
 
     const existing = db.prepare(`
-      SELECT m.*, s.owner_id FROM menu_items m
+      SELECT m.*, s.owner_id, u.email as owner_email
+      FROM menu_items m
       JOIN shops s ON m.shop_id = s.id
+      LEFT JOIN users u ON s.owner_id = u.id
       WHERE m.id = ?
     `).get(req.params.id) as any;
 
     if (!existing) return res.status(404).json({ error: 'Menu item not found' });
-    if (existing.owner_id !== user.id && user.role !== 'ADMIN') {
+    const emailMatches =
+      Boolean(existing.owner_email && user.email) &&
+      existing.owner_email.toLowerCase() === user.email.toLowerCase();
+
+    if (existing.owner_id !== user.id && !emailMatches && user.role !== 'ADMIN') {
       return res.status(403).json({ error: 'Unauthorized to edit this item.' });
     }
 
@@ -969,13 +1072,19 @@ app.delete('/api/menu-items/:id', (req: Request, res: Response) => {
     if (!user) return res.status(401).json({ error: 'Unauthorized' });
 
     const existing = db.prepare(`
-      SELECT m.*, s.owner_id FROM menu_items m
+      SELECT m.*, s.owner_id, u.email as owner_email
+      FROM menu_items m
       JOIN shops s ON m.shop_id = s.id
+      LEFT JOIN users u ON s.owner_id = u.id
       WHERE m.id = ?
     `).get(req.params.id) as any;
 
     if (!existing) return res.status(404).json({ error: 'Menu item not found' });
-    if (existing.owner_id !== user.id && user.role !== 'ADMIN') {
+    const emailMatches =
+      Boolean(existing.owner_email && user.email) &&
+      existing.owner_email.toLowerCase() === user.email.toLowerCase();
+
+    if (existing.owner_id !== user.id && !emailMatches && user.role !== 'ADMIN') {
       return res.status(403).json({ error: 'Unauthorized to delete this item.' });
     }
 

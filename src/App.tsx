@@ -11,6 +11,8 @@ import {
   mergeUniqueMenuItems,
   applyFollowStateToShops,
   applySaveStateToMenuItems,
+  buildDisplayedShops,
+  buildDisplayedMenuItems,
   filterFollowedShops,
   filterFollowedMenuItems,
   filterSavedMenuItems,
@@ -365,10 +367,26 @@ export default function App() {
       }
 
       if (resolvedShop) {
-        setOwnerShop(resolvedShop);
+        let finalShop = resolvedShop;
+        if (user.id && finalShop.ownerId !== user.id) {
+          finalShop = {
+            ...finalShop,
+            ownerId: user.id,
+            ownerEmail: finalShop.ownerEmail || user.email,
+          };
+          await firestoreService
+            .updateShop(finalShop.id, {
+              ownerId: user.id,
+              ownerEmail: finalShop.ownerEmail,
+            })
+            .catch(() => {});
+        }
+        await apiClient.syncFirebaseAccount(user, finalShop).catch(() => {});
+
+        setOwnerShop(finalShop);
         const [fsItems, apiRes] = await Promise.all([
-          firestoreService.getMenuItemsByShopId(resolvedShop.id),
-          apiClient.getMenuItems({ shopId: resolvedShop.id }, token),
+          firestoreService.getMenuItemsByShopId(finalShop.id),
+          apiClient.getMenuItems({ shopId: finalShop.id }, token),
         ]);
         const mergedMap = new Map<string, MenuItem>();
         for (const item of fsItems) {
@@ -405,22 +423,32 @@ export default function App() {
   const handleUpdateShopProfile = async (data: Partial<Shop>) => {
     const targetId = ownerShop?.id || shopId;
     if (!targetId) return;
+    const baseShop = ownerShop || resolvedOwnerShop;
+    const updatedOnlineShop: Shop = {
+      ...baseShop,
+      ...data,
+      id: targetId,
+      ownerId: user?.id || baseShop.ownerId,
+      ownerEmail: (user?.email || baseShop.ownerEmail || '').trim().toLowerCase(),
+    };
     try {
-      setOwnerShop((prev) => (prev ? { ...prev, ...data } : prev));
+      setOwnerShop(updatedOnlineShop);
       setShops((prev) => prev.map((s) => (s.id === targetId ? { ...s, ...data } : s)));
-      setFirestoreShopsCache((prev) =>
-        prev.map((s) => (s.id === targetId ? { ...s, ...data } : s))
-      );
+      setFirestoreShopsCache((prev) => {
+        const exists = prev.some((s) => s.id === targetId);
+        return exists
+          ? prev.map((s) => (s.id === targetId ? { ...s, ...updatedOnlineShop } : s))
+          : [updatedOnlineShop, ...prev];
+      });
 
       await Promise.all([
         apiClient.updateShop(targetId, data, token).catch(() => null),
-        firestoreService.updateShop(targetId, data).catch((fbErr) => {
+        firestoreService.updateShop(targetId, updatedOnlineShop).catch((fbErr) => {
           console.warn('Direct Firestore shop update notice:', fbErr);
         }),
       ]);
 
-      await loadOwnerData();
-      await loadShops();
+      await Promise.all([loadOwnerData(), loadShops()]);
     } catch (err) {
       console.error('Profile update error:', err);
     }
@@ -430,26 +458,33 @@ export default function App() {
     const targetShopId = ownerShop?.id || shopId;
     if (!targetShopId) return;
     try {
-      const payload = {
+      const canonicalId =
+        data.id || `item_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+      const fullPayload: MenuItem = {
         ...data,
+        id: canonicalId,
         shopId: data.shopId || targetShopId,
+        shopName: ownerShop?.name || data.shopName || '',
+        shopCountry: ownerShop?.country || data.shopCountry || '',
+        shopRegion: ownerShop?.region || data.shopRegion || '',
+        shopCity: ownerShop?.city || data.shopCity || '',
+        country: ownerShop?.country || data.country || '',
+        createdAt: data.createdAt || new Date().toISOString(),
       };
-      const created = await apiClient.createMenuItem(payload, token);
-      const itemId = created?.id || `item_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-      try {
-        await firestoreService.createMenuItem({
-          ...payload,
-          id: itemId,
-          shopName: ownerShop?.name || created?.shopName || '',
-          shopCountry: ownerShop?.country || '',
-          shopRegion: ownerShop?.region || '',
-          shopCity: ownerShop?.city || '',
-        });
-      } catch (fbErr) {
-        console.warn('Direct Firestore item write notice:', fbErr);
-      }
-      await loadOwnerData();
-      await loadMenuItems();
+
+      const [, fsCreated] = await Promise.all([
+        apiClient.createMenuItem(fullPayload, token).catch(() => fullPayload),
+        firestoreService.createMenuItem(fullPayload).catch((fbErr) => {
+          console.warn('Direct Firestore item write notice:', fbErr);
+          return fullPayload;
+        }),
+      ]);
+
+      const finalItem = fsCreated || fullPayload;
+      setOwnerMenuItems((prev) => mergeUniqueMenuItems([finalItem], prev));
+      setFirestoreItemsCache((prev) => mergeUniqueMenuItems([finalItem], prev));
+
+      await Promise.all([loadOwnerData(), loadMenuItems()]);
     } catch (err) {
       console.error('Create menu item error:', err);
     }
@@ -457,14 +492,16 @@ export default function App() {
 
   const handleUpdateMenuItem = async (id: string, data: any) => {
     try {
-      await apiClient.updateMenuItem(id, data, token).catch(() => false);
-      try {
-        await firestoreService.updateMenuItem(id, data);
-      } catch (fbErr) {
-        console.warn('Direct Firestore item update notice:', fbErr);
-      }
-      await loadOwnerData();
-      await loadMenuItems();
+      setOwnerMenuItems((prev) => prev.map((m) => (m.id === id ? { ...m, ...data } : m)));
+      setFirestoreItemsCache((prev) => prev.map((m) => (m.id === id ? { ...m, ...data } : m)));
+
+      await Promise.all([
+        apiClient.updateMenuItem(id, data, token).catch(() => false),
+        firestoreService.updateMenuItem(id, data).catch((fbErr) => {
+          console.warn('Direct Firestore item update notice:', fbErr);
+        }),
+      ]);
+      await Promise.all([loadOwnerData(), loadMenuItems()]);
     } catch (err) {
       console.error('Update menu item error:', err);
     }
@@ -472,14 +509,17 @@ export default function App() {
 
   const handleDeleteMenuItem = async (id: string) => {
     try {
-      await apiClient.deleteMenuItem(id, token).catch(() => false);
-      try {
-        await firestoreService.deleteMenuItem(id);
-      } catch (fbErr) {
-        console.warn('Direct Firestore item delete notice:', fbErr);
-      }
-      await loadOwnerData();
-      await loadMenuItems();
+      setOwnerMenuItems((prev) => prev.filter((m) => m.id !== id));
+      setMenuItems((prev) => prev.filter((m) => m.id !== id));
+      setFirestoreItemsCache((prev) => prev.filter((m) => m.id !== id));
+
+      await Promise.all([
+        apiClient.deleteMenuItem(id, token).catch(() => false),
+        firestoreService.deleteMenuItem(id).catch((fbErr) => {
+          console.warn('Direct Firestore item delete notice:', fbErr);
+        }),
+      ]);
+      await Promise.all([loadOwnerData(), loadMenuItems()]);
     } catch (err) {
       console.error('Delete menu item error:', err);
     }
@@ -506,14 +546,20 @@ export default function App() {
     [allBackendItemsCache, menuItems, firestoreItemsCache, savedItems]
   );
 
-  const displayedShops = React.useMemo(() => {
-    const fsMap = new Map(firestoreShopsCache.map((s) => [s.id, s]));
-    const merged = shops.map((s) => {
-      const fs = fsMap.get(s.id);
-      return fs ? { ...s, ...fs } : s;
-    });
-    return applyFollowStateToShops(merged, effectiveFollowedIds);
-  }, [shops, firestoreShopsCache, effectiveFollowedIds]);
+  const displayedShops = React.useMemo(
+    () =>
+      buildDisplayedShops(
+        shops,
+        firestoreShopsCache,
+        effectiveFollowedIds,
+        {
+          country: selectedCountry,
+          regionId: selectedRegionId,
+        },
+        allKnownItems
+      ),
+    [shops, firestoreShopsCache, effectiveFollowedIds, selectedCountry, selectedRegionId, allKnownItems]
+  );
 
   const followedShopsList = React.useMemo(
     () => filterFollowedShops(allKnownShops, effectiveFollowedIds),
@@ -535,21 +581,27 @@ export default function App() {
         query: searchQuery,
       });
     }
-    if (selectedShopId) {
-      const shopMerged = mergeUniqueMenuItems(
-        menuItems,
-        allKnownItems.filter((m) => m.shopId === selectedShopId)
-      );
-      return applySaveStateToMenuItems(shopMerged, effectiveSavedIds);
-    }
-    return applySaveStateToMenuItems(menuItems, effectiveSavedIds);
+    return buildDisplayedMenuItems(menuItems, firestoreItemsCache, allKnownShops, effectiveSavedIds, {
+      shopId: selectedShopId,
+      country: selectedCountry,
+      regionId: selectedRegionId,
+      menuType: selectedMenuType,
+      category: selectedCategory,
+      isVegetarian,
+      isHalal,
+      query: searchQuery,
+    });
   }, [
     currentTab,
     selectedShopId,
     allKnownItems,
+    allKnownShops,
     menuItems,
+    firestoreItemsCache,
     effectiveFollowedIds,
     effectiveSavedIds,
+    selectedCountry,
+    selectedRegionId,
     selectedMenuType,
     selectedCategory,
     isVegetarian,

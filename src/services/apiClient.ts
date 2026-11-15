@@ -1,5 +1,6 @@
 import { User, Shop, MenuItem, MenuType } from '../types/index';
 import { generateAllMockShops, generateAllMockMenuItems, generateMockOwners } from '../utils/mockDataGenerator';
+import { matchesRegionFilter } from '../utils/filter';
 
 const TOKEN_KEY = 'burmeal_token';
 const SHOP_ID_KEY = 'burmeal_shop_id';
@@ -191,102 +192,7 @@ function saveLocalDb(state: DbState) {
   });
 }
 
-const REGION_PREFIX_TO_COUNTRY: Record<string, string> = {
-  'MM': 'Myanmar',
-  'TH': 'Thailand',
-  'SG': 'Singapore',
-  'MY': 'Malaysia',
-  'JP': 'Japan',
-  'US': 'United States',
-  'EU': 'European Union',
-  'GB': 'United Kingdom',
-  'KR': 'South Korea',
-  'AU': 'Australia',
-};
 
-function getCountryFromRegionId(regionId?: string): string | undefined {
-  if (!regionId) return undefined;
-  const prefix = regionId.split('-')[0]?.toUpperCase();
-  return REGION_PREFIX_TO_COUNTRY[prefix];
-}
-
-function matchesRegionFilter(s: Shop, regionId?: string, country?: string): boolean {
-  let effectiveCountry = country;
-  if (!effectiveCountry && regionId) {
-    effectiveCountry = getCountryFromRegionId(regionId);
-  }
-
-  if (effectiveCountry) {
-    if (!s.country) return false;
-    const sc = s.country.toLowerCase();
-    const ec = effectiveCountry.toLowerCase();
-    if (ec === 'european union') {
-      const euCountries = ['germany', 'france', 'netherlands', 'italy', 'spain', 'sweden', 'belgium', 'european union', 'europe'];
-      if (!euCountries.includes(sc)) return false;
-    } else if (sc !== ec) {
-      return false;
-    }
-  }
-
-  if (regionId && !regionId.endsWith('-ALL')) {
-    const r = regionId.toUpperCase();
-    const text = `${s.name} ${s.region || ''} ${s.city || ''} ${s.locationArea || ''} ${s.address || ''}`.toLowerCase();
-
-    // Myanmar
-    if (r === 'MM-YGN') return text.includes('yangon');
-    if (r === 'MM-MDY') return text.includes('mandalay');
-    if (r === 'MM-SHN') return text.includes('shan') || text.includes('taunggyi') || text.includes('inle') || text.includes('nyaungshwe');
-    if (r === 'MM-BGO') return text.includes('bago') || text.includes('pyay');
-    if (r === 'MM-AYY') return text.includes('ayeyarwady') || text.includes('pathein');
-    if (r === 'MM-MON') return text.includes('mon') || text.includes('mawlamyine');
-    if (r === 'MM-KRN') return text.includes('kayin') || text.includes('hpa-an') || text.includes('karen');
-
-    // Thailand
-    if (r === 'TH-BKK') return text.includes('bangkok') || text.includes('pratunam') || text.includes('silom');
-    if (r === 'TH-CNX') return text.includes('chiang mai') || text.includes('nimman');
-    if (r === 'TH-MSOT') return text.includes('mae sot') || text.includes('border');
-
-    // United States
-    if (r === 'US-SF') return text.includes('san francisco') || text.includes('oakland') || text.includes('fremont') || text.includes('berkeley') || text.includes('san jose') || text.includes('bay area');
-    if (r === 'US-LA') return text.includes('los angeles') || text.includes('alhambra') || text.includes('silver lake') || text.includes('socal');
-    if (r === 'US-NYC') return text.includes('new york') || text.includes('queens') || text.includes('elmhurst') || text.includes('manhattan') || text.includes('brooklyn');
-    if (r === 'US-TX') return text.includes('texas') || text.includes('houston') || text.includes('dallas');
-    if (r === 'US-DC') return text.includes('washington') || text.includes('virginia');
-    if (r === 'US-FW') return text.includes('indiana') || text.includes('fort wayne');
-
-    // European Union
-    if (r === 'EU-DE') return text.includes('germany') || text.includes('berlin') || text.includes('munich') || text.includes('frankfurt');
-    if (r === 'EU-FR') return text.includes('france') || text.includes('paris') || text.includes('lyon');
-    if (r === 'EU-NL') return text.includes('netherlands') || text.includes('amsterdam') || text.includes('rotterdam');
-    if (r === 'EU-IT') return text.includes('italy') || text.includes('rome') || text.includes('milan');
-    if (r === 'EU-ES') return text.includes('spain') || text.includes('madrid') || text.includes('barcelona');
-
-    // United Kingdom
-    if (r === 'GB-LDN') return text.includes('london') || text.includes('soho') || text.includes('shoreditch') || text.includes('camden') || text.includes('brixton');
-    if (r === 'GB-MAN') return text.includes('manchester');
-    if (r === 'GB-BIR') return text.includes('birmingham');
-    if (r === 'GB-EDI') return text.includes('edinburgh') || text.includes('scotland');
-
-    // Japan
-    if (r === 'JP-TYO') return text.includes('tokyo') || text.includes('takadanobaba') || text.includes('shinjuku') || text.includes('ikebukuro') || text.includes('shibuya');
-    if (r === 'JP-YOK') return text.includes('yokohama') || text.includes('kanagawa');
-    if (r === 'JP-OSA') return text.includes('osaka');
-
-    // Australia
-    if (r === 'AU-SYD') return text.includes('sydney') || text.includes('cabramatta') || text.includes('marrickville') || text.includes('parramatta');
-    if (r === 'AU-MEL') return text.includes('melbourne') || text.includes('richmond') || text.includes('fitzroy') || text.includes('footscray');
-
-    // South Korea
-    if (r === 'KR-SEL') return text.includes('seoul') || text.includes('itaewon') || text.includes('hongdae') || text.includes('gangnam');
-    if (r === 'KR-INC') return text.includes('incheon') || text.includes('bupyeong');
-    if (r === 'KR-ANS') return text.includes('ansan');
-    if (r === 'KR-BUS') return text.includes('busan');
-
-    // Fall back to true if it matches country
-    return true;
-  }
-  return true;
-}
 
 // Helper to determine active user id from token
 function getUserIdFromToken(token?: string | null): string | null {
@@ -552,10 +458,14 @@ export const apiClient = {
           const ct = res.headers.get('content-type') || '';
           if (ct.includes('application/json')) {
             const created = await res.json();
+            const normalizedItem: MenuItem = created.item || {
+              ...(data as MenuItem),
+              id: created.id || created.itemId || data.id || 'item_' + Date.now(),
+            };
             const db = getLocalDb();
-            db.menuItems.unshift(created);
+            db.menuItems.unshift(normalizedItem);
             saveLocalDb(db);
-            return created;
+            return normalizedItem;
           }
         }
       }
@@ -563,7 +473,7 @@ export const apiClient = {
 
     // Client fallback
     const db = getLocalDb();
-    const newId = 'item_' + Date.now();
+    const newId = data.id || 'item_' + Date.now();
     const targetShop = db.shops.find((s) => s.id === data.shopId) || db.shops[0];
     const newItem: MenuItem = {
       id: newId,

@@ -57,6 +57,8 @@ export function initDb() {
       viber_phone TEXT,
       line_id TEXT,
       phone_number TEXT,
+      is_open INTEGER NOT NULL DEFAULT 1,
+      operating_hours TEXT,
       created_at TEXT NOT NULL,
       FOREIGN KEY(owner_id) REFERENCES users(id) ON DELETE CASCADE
     );
@@ -121,6 +123,12 @@ export function initDb() {
     }
     if (!columnNames.includes('longitude')) {
       db.prepare('ALTER TABLE shops ADD COLUMN longitude REAL').run();
+    }
+    if (!columnNames.includes('is_open')) {
+      db.prepare('ALTER TABLE shops ADD COLUMN is_open INTEGER NOT NULL DEFAULT 1').run();
+    }
+    if (!columnNames.includes('operating_hours')) {
+      db.prepare('ALTER TABLE shops ADD COLUMN operating_hours TEXT').run();
     }
     // Backfill international shops for Thailand and Singapore
     const now = new Date().toISOString();
