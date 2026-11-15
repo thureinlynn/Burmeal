@@ -1,4 +1,5 @@
 import { createRoot } from 'react-dom/client';
+import { registerSW } from 'virtual:pwa-register';
 import App from './App.tsx';
 import { AuthProvider } from './context/AuthContext.tsx';
 import { LanguageProvider } from './context/LanguageContext.tsx';
@@ -6,6 +7,22 @@ import { ThemeProvider } from './context/ThemeContext.tsx';
 import { LocationProvider } from './context/LocationContext.tsx';
 import { applyOneTimeClientReset } from './utils/resetHelpers.ts';
 import './index.css';
+
+// Register service worker for standalone PWA installation & offline caching
+if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+  registerSW({ immediate: true });
+}
+
+// Lock viewport pinch-zoom on mobile Safari/iOS outside interactive map containers
+if (typeof document !== 'undefined') {
+  const preventViewportPinchZoom = (event: Event) => {
+    const target = event.target as HTMLElement | null;
+    if (target?.closest?.('.leaflet-container')) return;
+    event.preventDefault();
+  };
+  document.addEventListener('gesturestart', preventViewportPinchZoom, { passive: false });
+  document.addEventListener('gesturechange', preventViewportPinchZoom, { passive: false });
+}
 
 // Run one-time clean-start reset if new reset epoch has not been applied yet
 const resetResult = applyOneTimeClientReset(window.localStorage);

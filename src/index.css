@@ -2,6 +2,12 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 @layer base {
+  html,
+  body {
+    touch-action: pan-x pan-y;
+    -webkit-text-size-adjust: 100%;
+    overscroll-behavior-y: contain;
+  }
   body {
     font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
   }

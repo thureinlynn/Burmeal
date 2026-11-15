@@ -31,6 +31,7 @@ import { ShopCard } from './components/ShopCard';
 import { FollowedShopRow } from './components/FollowedShopRow';
 import { SettingsView } from './components/SettingsView';
 import { LocationModal } from './components/LocationModal';
+import { PWAInstallBanner, OfflineIndicator } from './components/PWAInstallBanner';
 import {
   Sparkles,
   Heart,
@@ -706,6 +707,8 @@ export default function App() {
         hasFollowedShops={followedShopsList.length > 0}
       />
 
+      <PWAInstallBanner />
+
       {/* Main Content Area */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6">
         {user?.role === 'SHOP_OWNER' ? (
@@ -1188,6 +1191,8 @@ export default function App() {
         onClose={closeLocationModal}
         canDismiss={Boolean(selectedCountry)}
       />
+
+      <OfflineIndicator />
 
       {/* Mobile Bottom Navigation Bar (Strict 3-Tab layout for Shop Owners, 5-Tab for Customers) */}
       <BottomNav
