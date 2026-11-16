@@ -91,6 +91,15 @@ interface ShopDashboardProps {
     image?: string;
     imageStoragePath?: string;
   }) => Promise<void>;
+  onUpdateDailySpecialPost?: (
+    id: string,
+    data: {
+      title: string;
+      post: string;
+      image?: string;
+      imageStoragePath?: string;
+    }
+  ) => Promise<void>;
   onDeleteDailySpecialPost?: (id: string, imageOrPath?: string | null) => Promise<void>;
 }
 
@@ -110,6 +119,7 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
   onUpdateMenuItem,
   onDeleteMenuItem,
   onCreateDailySpecialPost,
+  onUpdateDailySpecialPost,
   onDeleteDailySpecialPost,
 }) => {
   const { lang, setLang, t } = useLanguage();
@@ -213,6 +223,7 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
 
   // Daily Special Facebook-style Post Modal
   const [isDailySpecialModalOpen, setIsDailySpecialModalOpen] = useState(false);
+  const [editingSpecialPost, setEditingSpecialPost] = useState<DailySpecialPost | null>(null);
   const [specialPostTitle, setSpecialPostTitle] = useState('');
   const [specialPostBody, setSpecialPostBody] = useState('');
   const [specialPostImage, setSpecialPostImage] = useState('');
@@ -308,12 +319,39 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
   };
 
   const openDailySpecialModal = () => {
+    setEditingSpecialPost(null);
     setSpecialPostTitle('');
     setSpecialPostBody('');
     setSpecialPostImage('');
     setSpecialPostImagePath('');
     setSpecialPostError('');
     setIsDailySpecialModalOpen(true);
+  };
+
+  const openEditDailySpecialModal = (post: DailySpecialPost) => {
+    setEditingSpecialPost(post);
+    setSpecialPostTitle(post.title);
+    setSpecialPostBody(post.post);
+    setSpecialPostImage(post.image || '');
+    setSpecialPostImagePath(post.imageStoragePath || '');
+    setSpecialPostError('');
+    setIsDailySpecialModalOpen(true);
+  };
+
+  const closeDailySpecialModal = () => {
+    const currentRef = specialPostImagePath || specialPostImage;
+    const originalPath = editingSpecialPost?.imageStoragePath || '';
+    const originalImg = editingSpecialPost?.image || '';
+    if (currentRef && currentRef !== originalPath && currentRef !== originalImg) {
+      removeDailySpecialImage(currentRef).catch(() => {});
+    }
+    setIsDailySpecialModalOpen(false);
+    setEditingSpecialPost(null);
+    setSpecialPostTitle('');
+    setSpecialPostBody('');
+    setSpecialPostImage('');
+    setSpecialPostImagePath('');
+    setSpecialPostError('');
   };
 
   const handleDailySpecialImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -324,8 +362,11 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
     setSpecialPostError('');
     setIsUploadingSpecialImage(true);
     try {
-      if (specialPostImagePath || specialPostImage) {
-        await removeDailySpecialImage(specialPostImagePath || specialPostImage).catch(() => {});
+      const currentRef = specialPostImagePath || specialPostImage;
+      const originalPath = editingSpecialPost?.imageStoragePath || '';
+      const originalImg = editingSpecialPost?.image || '';
+      if (currentRef && currentRef !== originalPath && currentRef !== originalImg) {
+        await removeDailySpecialImage(currentRef).catch(() => {});
       }
       const uploaded = await uploadDailySpecialImage(file, shop.id || user?.id || 'shop');
       setSpecialPostImage(uploaded.publicUrl);
@@ -339,9 +380,11 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
 
   const handleClearSpecialPostImage = async () => {
     const target = specialPostImagePath || specialPostImage;
+    const originalPath = editingSpecialPost?.imageStoragePath || '';
+    const originalImg = editingSpecialPost?.image || '';
     setSpecialPostImage('');
     setSpecialPostImagePath('');
-    if (target) {
+    if (target && target !== originalPath && target !== originalImg) {
       await removeDailySpecialImage(target).catch(() => {});
     }
   };
@@ -357,6 +400,32 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
       setSpecialPostError(validation.error || 'Please enter a title and post.');
       return;
     }
+
+    if (editingSpecialPost) {
+      if (!onUpdateDailySpecialPost) return;
+      setIsSubmittingSpecialPost(true);
+      try {
+        await onUpdateDailySpecialPost(editingSpecialPost.id, {
+          title: specialPostTitle.trim(),
+          post: specialPostBody.trim(),
+          image: specialPostImage || '',
+          imageStoragePath: specialPostImagePath || '',
+        });
+        setIsDailySpecialModalOpen(false);
+        setEditingSpecialPost(null);
+        setSpecialPostTitle('');
+        setSpecialPostBody('');
+        setSpecialPostImage('');
+        setSpecialPostImagePath('');
+        onRefresh();
+      } catch (err: any) {
+        setSpecialPostError(err?.message || 'Could not update Daily Special post.');
+      } finally {
+        setIsSubmittingSpecialPost(false);
+      }
+      return;
+    }
+
     if (!onCreateDailySpecialPost) return;
 
     setIsSubmittingSpecialPost(true);
@@ -368,6 +437,7 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
         imageStoragePath: specialPostImagePath || undefined,
       });
       setIsDailySpecialModalOpen(false);
+      setEditingSpecialPost(null);
       setSpecialPostTitle('');
       setSpecialPostBody('');
       setSpecialPostImage('');
@@ -1355,6 +1425,7 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
                   <DailySpecialFeedCard
                     key={post.id}
                     post={post}
+                    onEdit={onUpdateDailySpecialPost ? openEditDailySpecialModal : undefined}
                     onDelete={handleDeleteSpecialPost}
                     isDeleting={deletingSpecialId === post.id}
                     hideVisitShopAction
@@ -2631,16 +2702,20 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
                   className="text-xl font-bold font-display text-stone-900 dark:text-stone-100 flex items-center gap-2"
                 >
                   <Megaphone className="w-5 h-5 text-rose-600" />
-                  <span>{t.dailySpecialButton}</span>
+                  <span>{editingSpecialPost ? 'Edit Daily Special' : t.dailySpecialButton}</span>
                 </h2>
                 <p className="text-xs text-stone-500 dark:text-stone-400 mt-1">
-                  {t.dailySpecial48hNotice}
+                  {editingSpecialPost
+                    ? `48h countdown remains locked to original post time (${formatDailySpecialTimestamp(
+                        editingSpecialPost.createdAt
+                      )} · ${formatRemainingTime(editingSpecialPost)}).`
+                    : t.dailySpecial48hNotice}
                 </p>
               </div>
               <button
                 type="button"
                 aria-label="Close Daily Special modal"
-                onClick={() => setIsDailySpecialModalOpen(false)}
+                onClick={closeDailySpecialModal}
                 className="p-1.5 rounded-lg text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 hover:bg-stone-100 dark:hover:bg-stone-800 cursor-pointer"
               >
                 <X className="w-4 h-4" />
@@ -2754,8 +2829,8 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
               <div className="flex items-center justify-end gap-2 pt-3 border-t border-stone-200 dark:border-stone-800">
                 <button
                   type="button"
-                  onClick={() => setIsDailySpecialModalOpen(false)}
-                  className="px-4 py-2 text-xs font-semibold text-stone-600 dark:text-stone-300 hover:text-stone-900 rounded-lg cursor-pointer"
+                  onClick={closeDailySpecialModal}
+                  className="px-4 py-2 text-xs font-semibold text-stone-600 dark:text-stone-300 hover:text-stone-900 dark:hover:text-stone-100 rounded-lg cursor-pointer"
                 >
                   {t.cancel}
                 </button>
@@ -2764,7 +2839,13 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
                   disabled={isSubmittingSpecialPost || isUploadingSpecialImage}
                   className="px-5 py-2 bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs rounded-xl transition-colors shadow-xs disabled:opacity-60 cursor-pointer"
                 >
-                  {isSubmittingSpecialPost ? 'Publishing...' : t.publishDailySpecial}
+                  {isSubmittingSpecialPost
+                    ? editingSpecialPost
+                      ? 'Saving...'
+                      : 'Publishing...'
+                    : editingSpecialPost
+                    ? t.saveChanges
+                    : t.publishDailySpecial}
                 </button>
               </div>
             </form>

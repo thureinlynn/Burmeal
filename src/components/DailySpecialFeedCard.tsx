@@ -7,11 +7,12 @@ import {
 } from '../utils/dailySpecialHelpers';
 import { buildDailySpecialSharePayload } from '../utils/shareHelpers';
 import { ShareButton } from './ShareButton';
-import { ArrowRight, Clock, Store, Trash2 } from 'lucide-react';
+import { ArrowRight, Clock, Edit2, Store, Trash2 } from 'lucide-react';
 
 interface DailySpecialFeedCardProps {
   post: DailySpecialPost;
   onSelectShop?: (shopId: string) => void;
+  onEdit?: (post: DailySpecialPost) => void;
   onDelete?: (post: DailySpecialPost) => void;
   isDeleting?: boolean;
   hideVisitShopAction?: boolean;
@@ -20,6 +21,7 @@ interface DailySpecialFeedCardProps {
 export const DailySpecialFeedCard: React.FC<DailySpecialFeedCardProps> = ({
   post,
   onSelectShop,
+  onEdit,
   onDelete,
   isDeleting = false,
   hideVisitShopAction = false,
@@ -109,6 +111,20 @@ export const DailySpecialFeedCard: React.FC<DailySpecialFeedCardProps> = ({
               )
             }
           />
+          {onEdit && (
+            <button
+              type="button"
+              disabled={isDeleting}
+              onClick={() => onEdit(post)}
+              aria-label={`Edit ${post.title}`}
+              title="Edit Daily Special Post"
+              data-testid={`edit-daily-special-${post.id}`}
+              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-stone-700 dark:text-stone-200 bg-stone-100 hover:bg-stone-200 dark:bg-stone-800 dark:hover:bg-stone-700 border border-stone-200 dark:border-stone-700 transition-colors disabled:opacity-50 cursor-pointer"
+            >
+              <Edit2 className="w-3.5 h-3.5" />
+              <span>Edit</span>
+            </button>
+          )}
           {onDelete && (
             <button
               type="button"

@@ -16,6 +16,7 @@ import {
   filterSavedMenuItems,
 } from './utils/userDataHelpers';
 import {
+  applyDailySpecialPostUpdate,
   computeDailySpecialExpiry,
   filterDailySpecialPosts,
   mergeUniqueDailySpecialPosts,
@@ -785,6 +786,77 @@ export default function App() {
     }
   };
 
+  const handleUpdateDailySpecialPost = async (
+    id: string,
+    data: {
+      title: string;
+      post: string;
+      image?: string;
+      imageStoragePath?: string;
+    }
+  ) => {
+    try {
+      const existingPool = mergeUniqueDailySpecialPosts(
+        ownerDailySpecialPosts,
+        dailySpecialPosts,
+        firestoreSpecialPosts,
+        allBackendSpecialsCache
+      );
+      const existing = existingPool.find((p) => p.id === id);
+      if (!existing) return;
+
+      const updatedPost = applyDailySpecialPostUpdate(existing, data);
+      const nextImg = updatedPost.image || '';
+      const nextPath = updatedPost.imageStoragePath || '';
+      const oldRef = existing.imageStoragePath || existing.image || '';
+      const oldImageToRemove =
+        oldRef && oldRef !== nextPath && oldRef !== nextImg ? oldRef : null;
+
+      setOwnerDailySpecialPosts((prev) =>
+        prev.map((p) => (p.id === id ? applyDailySpecialPostUpdate(p, data) : p))
+      );
+      setDailySpecialPosts((prev) =>
+        prev.map((p) => (p.id === id ? applyDailySpecialPostUpdate(p, data) : p))
+      );
+      setFirestoreSpecialPosts((prev) =>
+        prev.map((p) => (p.id === id ? applyDailySpecialPostUpdate(p, data) : p))
+      );
+      setAllBackendSpecialsCache((prev) =>
+        prev.map((p) => (p.id === id ? applyDailySpecialPostUpdate(p, data) : p))
+      );
+
+      const [apiUpdated] = await Promise.all([
+        apiClient.updateDailySpecialPost(id, data, token).catch(() => null),
+        firestoreService
+          .updateDailySpecialPost(id, updatedPost, oldImageToRemove)
+          .catch((fbErr) => {
+            console.warn('Direct Firestore daily special update notice:', fbErr);
+            return updatedPost;
+          }),
+      ]);
+
+      if (apiUpdated) {
+        setOwnerDailySpecialPosts((prev) =>
+          prev.map((p) => (p.id === id ? apiUpdated : p))
+        );
+        setDailySpecialPosts((prev) =>
+          prev.map((p) => (p.id === id ? apiUpdated : p))
+        );
+        setFirestoreSpecialPosts((prev) =>
+          prev.map((p) => (p.id === id ? apiUpdated : p))
+        );
+        setAllBackendSpecialsCache((prev) =>
+          prev.map((p) => (p.id === id ? apiUpdated : p))
+        );
+      }
+
+      await Promise.all([loadOwnerData(), loadDailySpecialPosts()]);
+    } catch (err) {
+      console.error('Update daily special post error:', err);
+      throw err;
+    }
+  };
+
   const handleDeleteDailySpecialPost = async (id: string, imageOrPath?: string | null) => {
     try {
       setOwnerDailySpecialPosts((prev) => prev.filter((p) => p.id !== id));
@@ -1226,6 +1298,7 @@ export default function App() {
               onUpdateMenuItem={handleUpdateMenuItem}
               onDeleteMenuItem={handleDeleteMenuItem}
               onCreateDailySpecialPost={handleCreateDailySpecialPost}
+              onUpdateDailySpecialPost={handleUpdateDailySpecialPost}
               onDeleteDailySpecialPost={handleDeleteDailySpecialPost}
             />
           )

@@ -649,6 +649,34 @@ export const firestoreService = {
     }
   },
 
+  async updateDailySpecialPost(
+    postId: string,
+    updates: Partial<DailySpecialPost> & { title: string; post: string },
+    oldImageOrPathToRemove?: string | null
+  ): Promise<void> {
+    try {
+      const payload = stripUndefined({
+        ...updates,
+        id: postId,
+        title: updates.title.trim(),
+        post: updates.post.trim(),
+        image: updates.image !== undefined ? updates.image : undefined,
+        imageStoragePath:
+          updates.imageStoragePath !== undefined ? updates.imageStoragePath : undefined,
+        expiresAt:
+          updates.expiresAt ||
+          (updates.createdAt ? computeDailySpecialExpiry(updates.createdAt) : undefined),
+      });
+      await setDoc(doc(db, 'daily_special_posts', postId), payload, { merge: true });
+      if (oldImageOrPathToRemove) {
+        await removeDailySpecialImage(oldImageOrPathToRemove).catch(() => {});
+      }
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `daily_special_posts/${postId}`);
+      throw error;
+    }
+  },
+
   async deleteDailySpecialPost(postId: string, imageOrPath?: string | null): Promise<void> {
     try {
       await removeDailySpecialImage(imageOrPath).catch(() => {});

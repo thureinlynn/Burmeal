@@ -206,3 +206,29 @@ export function buildSupabaseDailySpecialPath(
   const ext = sanitizeFileExtension(fileName, mimeType);
   return `public/daily-special-${safeId}-${timestamp}.${ext}`;
 }
+
+export function applyDailySpecialPostUpdate(
+  existing: DailySpecialPost,
+  updates: {
+    title: string;
+    post: string;
+    image?: string;
+    imageStoragePath?: string;
+  }
+): DailySpecialPost {
+  const createdAt = existing.createdAt;
+  const expiresAt = existing.expiresAt || computeDailySpecialExpiry(createdAt);
+  return {
+    ...existing,
+    title: updates.title.trim(),
+    post: updates.post.trim(),
+    image: updates.image !== undefined ? updates.image : existing.image || '',
+    imageStoragePath:
+      updates.imageStoragePath !== undefined
+        ? updates.imageStoragePath
+        : existing.imageStoragePath || '',
+    createdAt,
+    expiresAt,
+  };
+}
+

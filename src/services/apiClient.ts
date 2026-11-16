@@ -1,6 +1,7 @@
 import { User, Shop, MenuItem, MenuType, DailySpecialPost } from '../types/index';
 import { matchesRegionFilter } from '../utils/filter';
 import {
+  applyDailySpecialPostUpdate,
   computeDailySpecialExpiry,
   filterDailySpecialPosts,
   partitionDailySpecialPosts,
@@ -1017,6 +1018,54 @@ export const apiClient = {
     ];
     saveLocalDelta(delta);
     return newPost;
+  },
+
+  async updateDailySpecialPost(
+    id: string,
+    data: {
+      title: string;
+      post: string;
+      image?: string;
+      imageStoragePath?: string;
+    },
+    token?: string | null
+  ): Promise<DailySpecialPost | null> {
+    try {
+      if (token) {
+        const res = await fetch(`/api/daily-specials/${id}`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(data),
+        });
+        if (res.ok) {
+          const ct = res.headers.get('content-type') || '';
+          if (ct.includes('application/json')) {
+            const updated = await res.json();
+            if (updated?.post) {
+              const delta = getLocalDelta();
+              delta.customDailySpecials = (delta.customDailySpecials || []).map((p) =>
+                p.id === id ? updated.post : p
+              );
+              saveLocalDelta(delta);
+              return updated.post as DailySpecialPost;
+            }
+          }
+        }
+      }
+    } catch {}
+
+    const delta = getLocalDelta();
+    let updatedLocal: DailySpecialPost | null = null;
+    delta.customDailySpecials = (delta.customDailySpecials || []).map((p) => {
+      if (p.id !== id) return p;
+      updatedLocal = applyDailySpecialPostUpdate(p, data);
+      return updatedLocal;
+    });
+    saveLocalDelta(delta);
+    return updatedLocal;
   },
 
   async deleteDailySpecialPost(id: string, token?: string | null): Promise<boolean> {

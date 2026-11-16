@@ -2,6 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   DAILY_SPECIAL_TTL_MS,
+  applyDailySpecialPostUpdate,
   computeDailySpecialExpiry,
   isDailySpecialExpired,
   partitionDailySpecialPosts,
@@ -150,5 +151,38 @@ describe('dailySpecialHelpers', () => {
     );
     const path = buildSupabaseDailySpecialPath('shop-123', 'special.png', 1700000000000, 'image/webp');
     assert.equal(path, 'public/daily-special-shop-123-1700000000000.webp');
+  });
+
+  it('updates post title, body, and image while strictly keeping original createdAt and expiresAt countdown', () => {
+    const createdAt = '2026-11-16T08:00:00.000Z';
+    const expiresAt = computeDailySpecialExpiry(createdAt);
+    const original: DailySpecialPost = {
+      id: 'dsp_edit_1',
+      shopId: 'shop_1',
+      shopName: 'Pyay Thu Lay',
+      title: 'Morning Mohinga',
+      post: 'Fresh fish broth until 2 PM.',
+      image: 'https://example.com/old.jpg',
+      imageStoragePath: 'public/daily-special-shop_1-1.jpg',
+      createdAt,
+      expiresAt,
+    };
+
+    const updated = applyDailySpecialPostUpdate(original, {
+      title: '  Updated Mohinga Pot  ',
+      post: '  Added crispy bean fritters!  ',
+      image: '',
+      imageStoragePath: '',
+    });
+
+    assert.equal(updated.title, 'Updated Mohinga Pot');
+    assert.equal(updated.post, 'Added crispy bean fritters!');
+    assert.equal(updated.image, '');
+    assert.equal(updated.imageStoragePath, '');
+    assert.equal(updated.createdAt, createdAt);
+    assert.equal(updated.expiresAt, expiresAt);
+
+    const checkNowMs = Date.parse('2026-11-17T08:00:00.000Z');
+    assert.equal(formatRemainingTime(updated, checkNowMs), formatRemainingTime(original, checkNowMs));
   });
 });

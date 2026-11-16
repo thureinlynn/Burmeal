@@ -1412,6 +1412,89 @@ app.post('/api/daily-specials', async (req: Request, res: Response) => {
   }
 });
 
+app.patch('/api/daily-specials/:id', async (req: Request, res: Response) => {
+  try {
+    const user = getAuthenticatedUser(req);
+    if (!user) return res.status(401).json({ error: 'Unauthorized' });
+
+    const existing = db
+      .prepare(
+        `
+      SELECT d.*, s.owner_id, u.email as owner_email
+      FROM daily_special_posts d
+      JOIN shops s ON d.shop_id = s.id
+      LEFT JOIN users u ON s.owner_id = u.id
+      WHERE d.id = ?
+    `
+      )
+      .get(req.params.id) as any;
+
+    if (!existing) {
+      return res.status(404).json({ error: 'Daily special post not found' });
+    }
+
+    const emailMatches =
+      Boolean(existing.owner_email && user.email) &&
+      existing.owner_email.toLowerCase() === user.email.toLowerCase();
+    if (existing.owner_id !== user.id && !emailMatches && user.role !== 'ADMIN') {
+      return res.status(403).json({ error: 'Unauthorized to edit this daily special post.' });
+    }
+
+    const { title, post, image, imageStoragePath } = req.body;
+    const validation = validateDailySpecialInput({ title, post });
+    if (!validation.valid) {
+      return res.status(400).json({ error: validation.error || 'Required fields missing.' });
+    }
+
+    const nextImage =
+      image !== undefined ? (image ? String(image).trim() : '') : existing.image || '';
+    const nextStoragePath =
+      imageStoragePath !== undefined
+        ? imageStoragePath
+          ? String(imageStoragePath).trim()
+          : ''
+        : existing.image_storage_path || '';
+
+    const imagesToRemove: string[] = [];
+    if (
+      existing.image_storage_path &&
+      existing.image_storage_path !== nextStoragePath &&
+      existing.image_storage_path !== nextImage
+    ) {
+      imagesToRemove.push(existing.image_storage_path);
+    }
+    if (
+      existing.image &&
+      existing.image !== nextImage &&
+      existing.image !== nextStoragePath
+    ) {
+      imagesToRemove.push(existing.image);
+    }
+    if (imagesToRemove.length > 0) {
+      await removeServerSupabaseImages(imagesToRemove);
+    }
+
+    db.prepare(
+      `
+      UPDATE daily_special_posts
+      SET title = ?, post = ?, image = ?, image_storage_path = ?
+      WHERE id = ?
+    `
+    ).run(String(title).trim(), String(post).trim(), nextImage, nextStoragePath, req.params.id);
+
+    const updatedRow = db
+      .prepare('SELECT * FROM daily_special_posts WHERE id = ?')
+      .get(req.params.id) as any;
+    const formatted = formatDailySpecialPostRow(updatedRow);
+    await syncDailySpecialToFirestore(formatted);
+
+    return res.json({ success: true, id: req.params.id, post: formatted });
+  } catch (err) {
+    console.error('Error updating daily special post:', err);
+    return res.status(500).json({ error: 'Failed to update daily special post' });
+  }
+});
+
 app.delete('/api/daily-specials/:id', async (req: Request, res: Response) => {
   try {
     const user = getAuthenticatedUser(req);
