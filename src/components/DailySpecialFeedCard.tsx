@@ -100,7 +100,7 @@ export const DailySpecialFeedCard: React.FC<DailySpecialFeedCardProps> = ({
 
         <div className="flex items-center gap-1.5 shrink-0">
           <ShareButton
-            variant="icon-inline"
+            variant="icon-box"
             ariaLabel={`Share ${post.title}`}
             getPayload={() =>
               buildDailySpecialSharePayload(

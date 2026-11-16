@@ -4,6 +4,9 @@ import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
 import { User as UserIcon, Mail, ShieldCheck, Heart, LogOut, ArrowRight, Store } from 'lucide-react';
 import { getShopProfileImage } from '../utils/shopLocationHelpers';
+import { PAGE_LIMITS } from '../utils/paginationHelpers';
+import { useInfiniteScrollLimit } from '../hooks/useInfiniteScrollLimit';
+import { ScrollLoadMoreSentinel } from './ScrollLoadMoreSentinel';
 
 interface CustomerProfileProps {
   user: User | null;
@@ -20,13 +23,19 @@ export const CustomerProfile: React.FC<CustomerProfileProps> = ({
 }) => {
   const { t } = useLanguage();
   const { logout } = useAuth();
+  const paginatedFollowed = useInfiniteScrollLimit(
+    followedShops,
+    PAGE_LIMITS.FOLLOWED_SHOPS,
+    `profile-followed:${user?.id || 'anon'}`,
+    Boolean(user)
+  );
 
   if (!user) {
     return (
-      <div className="bg-white rounded-2xl border border-stone-200 p-8 text-center max-w-md mx-auto my-8 space-y-3">
-        <UserIcon className="w-12 h-12 text-stone-300 mx-auto" />
-        <h2 className="text-lg font-bold font-display text-stone-900">{t.signIn}</h2>
-        <p className="text-xs text-stone-500">
+      <div className="bg-white dark:bg-stone-900 rounded-2xl border border-stone-200 dark:border-stone-800 p-8 text-center max-w-md mx-auto my-8 space-y-3">
+        <UserIcon className="w-12 h-12 text-stone-300 dark:text-stone-600 mx-auto" />
+        <h2 className="text-lg font-bold font-display text-stone-900 dark:text-stone-100">{t.signIn}</h2>
+        <p className="text-xs text-stone-500 dark:text-stone-400">
           Sign in or create a customer account to save your favorite dishes and follow food kitchens.
         </p>
         <button
@@ -42,30 +51,30 @@ export const CustomerProfile: React.FC<CustomerProfileProps> = ({
   return (
     <div className="max-w-2xl mx-auto space-y-6">
       {/* Account Info Box */}
-      <div className="bg-white rounded-2xl border border-stone-200 p-6 shadow-xs flex items-center gap-4">
+      <div className="bg-white dark:bg-stone-900 rounded-2xl border border-stone-200 dark:border-stone-800 p-6 shadow-xs flex items-center gap-4">
         <img
           src={user.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(user.id || 'user')}`}
           alt={user.name || user.email || 'Account'}
-          className="w-16 h-16 rounded-2xl border-2 border-stone-200 object-cover bg-stone-50"
+          className="w-16 h-16 rounded-2xl border-2 border-stone-200 dark:border-stone-700 object-cover bg-stone-50 dark:bg-stone-800"
           referrerPolicy="no-referrer"
         />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <h1 className="text-lg font-bold font-display text-stone-900 truncate">
+            <h1 className="text-lg font-bold font-display text-stone-900 dark:text-stone-100 truncate">
               {user.name || user.email || 'Google Account'}
             </h1>
-            <span className="text-[10px] bg-stone-100 text-stone-700 font-bold px-2 py-0.5 rounded">
+            <span className="text-[10px] bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-300 font-bold px-2 py-0.5 rounded border border-stone-200/70 dark:border-stone-700">
               {user.role}
             </span>
           </div>
-          <p className="text-xs text-stone-500 flex items-center gap-1.5 mt-0.5">
-            <Mail className="w-3.5 h-3.5 text-stone-400" />
+          <p className="text-xs text-stone-500 dark:text-stone-400 flex items-center gap-1.5 mt-0.5">
+            <Mail className="w-3.5 h-3.5 text-stone-400 dark:text-stone-500" />
             <span className="truncate">{user.email || 'Connected Account'}</span>
           </p>
         </div>
         <button
           onClick={() => logout()}
-          className="p-2.5 text-stone-500 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-colors border border-stone-200 shrink-0"
+          className="p-2.5 text-stone-500 dark:text-stone-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-xl transition-colors border border-stone-200 dark:border-stone-700 shrink-0"
           title={t.signOut}
         >
           <LogOut className="w-4 h-4" />
@@ -73,54 +82,63 @@ export const CustomerProfile: React.FC<CustomerProfileProps> = ({
       </div>
 
       {/* Followed Shops Section */}
-      <div className="bg-white rounded-2xl border border-stone-200 overflow-hidden shadow-xs">
-        <div className="p-4 bg-stone-50/70 border-b border-stone-200 flex items-center justify-between">
-          <h2 className="text-xs font-bold text-stone-900 uppercase tracking-wider flex items-center gap-1.5">
+      <div className="bg-white dark:bg-stone-900 rounded-2xl border border-stone-200 dark:border-stone-800 overflow-hidden shadow-xs">
+        <div className="p-4 bg-stone-50/70 dark:bg-stone-800/70 border-b border-stone-200 dark:border-stone-800 flex items-center justify-between">
+          <h2 className="text-xs font-bold text-stone-900 dark:text-stone-100 uppercase tracking-wider flex items-center gap-1.5">
             <Heart className="w-4 h-4 text-rose-500" />
             <span>Followed Shops ({followedShops.length})</span>
           </h2>
         </div>
 
         {followedShops.length === 0 ? (
-          <div className="p-6 text-center text-xs text-stone-400">
+          <div className="p-6 text-center text-xs text-stone-400 dark:text-stone-500">
             {t.noFollowedShops}
           </div>
         ) : (
-          <div className="divide-y divide-stone-100">
-            {followedShops.map((shop) => {
+          <div className="divide-y divide-stone-100 dark:divide-stone-800">
+            {paginatedFollowed.visibleItems.map((shop) => {
               const profileImg = getShopProfileImage(shop);
               return (
                 <div
                   key={shop.id}
                   onClick={() => onSelectShop(shop.id)}
-                  className="p-3.5 flex items-center justify-between hover:bg-stone-50 transition-colors cursor-pointer"
+                  className="p-3.5 flex items-center justify-between hover:bg-stone-50 dark:hover:bg-stone-800/60 transition-colors cursor-pointer"
                 >
                   <div className="flex items-center gap-3">
                     {profileImg ? (
                       <img
                         src={profileImg}
                         alt={shop.name}
-                        className="w-10 h-10 rounded-xl object-cover border border-stone-200 bg-stone-100"
+                        className="w-10 h-10 rounded-xl object-cover border border-stone-200 dark:border-stone-700 bg-stone-100 dark:bg-stone-800"
                         referrerPolicy="no-referrer"
                       />
                     ) : (
-                      <div className="w-10 h-10 rounded-xl border border-stone-200 bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
+                      <div className="w-10 h-10 rounded-xl border border-stone-200 dark:border-stone-700 bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
                         <Store className="w-5 h-5" />
                       </div>
                     )}
                     <div>
-                      <h3 className="font-bold text-xs sm:text-sm text-stone-900">{shop.name}</h3>
-                      <p className="text-[11px] text-stone-500">{shop.locationArea}</p>
+                      <h3 className="font-bold text-xs sm:text-sm text-stone-900 dark:text-stone-100">{shop.name}</h3>
+                      <p className="text-[11px] text-stone-500 dark:text-stone-400">{shop.locationArea}</p>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2 text-xs text-amber-700 font-semibold">
+                  <div className="flex items-center gap-2 text-xs text-amber-700 dark:text-amber-400 font-semibold">
                     <span>{t.viewShopProfile}</span>
                     <ArrowRight className="w-3.5 h-3.5" />
                   </div>
                 </div>
               );
             })}
+            <ScrollLoadMoreSentinel
+              sentinelRef={paginatedFollowed.sentinelRef}
+              visibleCount={paginatedFollowed.visibleCount}
+              totalCount={paginatedFollowed.totalCount}
+              pageSize={PAGE_LIMITS.FOLLOWED_SHOPS}
+              hasMore={paginatedFollowed.hasMore}
+              onLoadMore={paginatedFollowed.loadMore}
+              itemLabel="shops"
+            />
           </div>
         )}
       </div>

@@ -32,6 +32,9 @@ import { ItemDetailModal } from './components/ItemDetailModal';
 import { ShopProfileView } from './components/ShopProfileView';
 import { ShopDashboard } from './components/ShopDashboard';
 import { DailySpecialFeedCard } from './components/DailySpecialFeedCard';
+import { ScrollLoadMoreSentinel } from './components/ScrollLoadMoreSentinel';
+import { PAGE_LIMITS } from './utils/paginationHelpers';
+import { useInfiniteScrollLimit } from './hooks/useInfiniteScrollLimit';
 import { CustomerProfile } from './components/CustomerProfile';
 import { AdminPanel } from './components/AdminPanel';
 import { AuthModal } from './components/AuthModal';
@@ -909,6 +912,67 @@ export default function App() {
     [allKnownItems, effectiveSavedIds, allKnownShops]
   );
 
+  // Scroll-triggered incremental pagination:
+  // - Daily Specials: 10 initially + 10 per scroll
+  // - Weekly Highlights & Master Menu: 14 initially + 14 per scroll
+  // - Shops, Saved, Followed Shops: 10 initially + 10 per scroll
+  const isConsumerView = user?.role !== 'SHOP_OWNER' && !selectedShopId;
+
+  const paginatedHomeSpecials = useInfiniteScrollLimit(
+    displayedDailySpecialPosts,
+    PAGE_LIMITS.DAILY_SPECIAL,
+    `feed:SPECIAL:${selectedCountry}:${selectedRegionId}:${searchQuery}`,
+    isConsumerView && currentTab === 'feed' && selectedMenuType === 'SPECIAL'
+  );
+
+  const paginatedHomeDishes = useInfiniteScrollLimit(
+    displayedMenuItems,
+    PAGE_LIMITS.WEEKLY_AND_MASTER,
+    `feed:${selectedMenuType}:${selectedCategory}:${isVegetarian}:${isHalal}:${selectedCountry}:${selectedRegionId}:${searchQuery}`,
+    isConsumerView && currentTab === 'feed' && selectedMenuType !== 'SPECIAL'
+  );
+
+  const paginatedFollowedShops = useInfiniteScrollLimit(
+    followedShopsList,
+    PAGE_LIMITS.FOLLOWED_SHOPS,
+    `following:SHOPS:${user?.id || 'anon'}`,
+    isConsumerView && currentTab === 'following' && followingViewMode === 'SHOPS'
+  );
+
+  const paginatedFollowingSpecials = useInfiniteScrollLimit(
+    displayedDailySpecialPosts,
+    PAGE_LIMITS.DAILY_SPECIAL,
+    `following:SPECIAL:${searchQuery}:${user?.id || 'anon'}`,
+    isConsumerView &&
+      currentTab === 'following' &&
+      followingViewMode === 'DISHES' &&
+      selectedMenuType === 'SPECIAL'
+  );
+
+  const paginatedFollowingDishes = useInfiniteScrollLimit(
+    displayedMenuItems,
+    PAGE_LIMITS.WEEKLY_AND_MASTER,
+    `following:${selectedMenuType}:${selectedCategory}:${isVegetarian}:${isHalal}:${searchQuery}:${user?.id || 'anon'}`,
+    isConsumerView &&
+      currentTab === 'following' &&
+      followingViewMode === 'DISHES' &&
+      selectedMenuType !== 'SPECIAL'
+  );
+
+  const paginatedSavedItems = useInfiniteScrollLimit(
+    displayedSavedItems,
+    PAGE_LIMITS.SAVED_ITEMS,
+    `saved:${user?.id || 'anon'}`,
+    isConsumerView && currentTab === 'saved'
+  );
+
+  const paginatedShops = useInfiniteScrollLimit(
+    displayedShops,
+    PAGE_LIMITS.SHOPS,
+    `shops:${selectedCountry}:${selectedRegionId}`,
+    isConsumerView && currentTab === 'shops'
+  );
+
   const activeDetailShop = React.useMemo(() => {
     if (!selectedShopId) return undefined;
     const found =
@@ -943,14 +1007,14 @@ export default function App() {
   return (
     <div className="min-h-screen flex flex-col bg-[#FAFAF9] dark:bg-stone-950 text-stone-900 dark:text-stone-100 transition-colors pb-20 md:pb-8">
       {gmpQuotaExceeded && (
-        <div className="bg-amber-50 border-b border-amber-200 text-amber-900 px-4 py-2.5 text-xs md:text-sm text-center sticky top-0 z-50 shadow-sm">
+        <div className="bg-amber-50 dark:bg-amber-950/90 border-b border-amber-200 dark:border-amber-800 text-amber-900 dark:text-amber-200 px-4 py-2.5 text-xs md:text-sm text-center sticky top-0 z-50 shadow-sm">
           <span>
             Google Maps Platform quota reached. If you are the app owner, visit{' '}
             <a
               href="https://developers.google.com/maps/ai/ai-studio?utm_campaign=gmp_mcp_codeassist_v1_aistudio#quota_exceeded_errors"
               target="_blank"
               rel="noopener noreferrer"
-              className="underline font-semibold text-amber-950 hover:text-amber-800"
+              className="underline font-semibold text-amber-950 dark:text-amber-100 hover:text-amber-800 dark:hover:text-amber-300"
             >
               maps developer site
             </a>{' '}
@@ -1225,7 +1289,7 @@ export default function App() {
                 </div>
               ) : (
                 <div className="max-w-2xl mx-auto space-y-4">
-                  {displayedDailySpecialPosts.map((post) => (
+                  {paginatedHomeSpecials.visibleItems.map((post) => (
                     <DailySpecialFeedCard
                       key={post.id}
                       post={post}
@@ -1235,6 +1299,15 @@ export default function App() {
                       }}
                     />
                   ))}
+                  <ScrollLoadMoreSentinel
+                    sentinelRef={paginatedHomeSpecials.sentinelRef}
+                    visibleCount={paginatedHomeSpecials.visibleCount}
+                    totalCount={paginatedHomeSpecials.totalCount}
+                    pageSize={PAGE_LIMITS.DAILY_SPECIAL}
+                    hasMore={paginatedHomeSpecials.hasMore}
+                    onLoadMore={paginatedHomeSpecials.loadMore}
+                    itemLabel="posts"
+                  />
                 </div>
               )
             ) : displayedMenuItems.length === 0 ? (
@@ -1269,19 +1342,30 @@ export default function App() {
                 </div>
               </div>
             ) : (
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-6">
-                {displayedMenuItems.map((item) => (
-                  <MenuCard
-                    key={item.id}
-                    item={item}
-                    onToggleSave={handleToggleSave}
-                    onSelectItem={(it) => setSelectedItemForDetail(it)}
-                    onSelectShop={(sId) => {
-                      setSelectedShopId(sId);
-                      setCurrentTab('shop_detail');
-                    }}
-                  />
-                ))}
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-6">
+                  {paginatedHomeDishes.visibleItems.map((item) => (
+                    <MenuCard
+                      key={item.id}
+                      item={item}
+                      onToggleSave={handleToggleSave}
+                      onSelectItem={(it) => setSelectedItemForDetail(it)}
+                      onSelectShop={(sId) => {
+                        setSelectedShopId(sId);
+                        setCurrentTab('shop_detail');
+                      }}
+                    />
+                  ))}
+                </div>
+                <ScrollLoadMoreSentinel
+                  sentinelRef={paginatedHomeDishes.sentinelRef}
+                  visibleCount={paginatedHomeDishes.visibleCount}
+                  totalCount={paginatedHomeDishes.totalCount}
+                  pageSize={PAGE_LIMITS.WEEKLY_AND_MASTER}
+                  hasMore={paginatedHomeDishes.hasMore}
+                  onLoadMore={paginatedHomeDishes.loadMore}
+                  itemLabel="dishes"
+                />
               </div>
             )}
           </div>
@@ -1303,7 +1387,7 @@ export default function App() {
 
               {/* View Switcher: Followed Kitchens vs All Followed Dishes Feed */}
               {isSignedIn && followedShopsList.length > 0 && (
-                <div className="inline-flex p-1 bg-stone-100 dark:bg-stone-850 rounded-2xl border border-stone-200/80 dark:border-stone-800 self-start sm:self-auto shadow-2xs">
+                <div className="inline-flex p-1 bg-stone-100 dark:bg-stone-800 rounded-2xl border border-stone-200/80 dark:border-stone-700 self-start sm:self-auto shadow-2xs">
                   <button
                     onClick={() => setFollowingViewMode('SHOPS')}
                     className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all inline-flex items-center gap-1.5 ${
@@ -1395,7 +1479,7 @@ export default function App() {
                 </div>
 
                 <div className="flex flex-col gap-4 sm:gap-5">
-                  {followedShopsList.map((fShop) => (
+                  {paginatedFollowedShops.visibleItems.map((fShop) => (
                     <FollowedShopRow
                       key={fShop.id}
                       shop={fShop}
@@ -1408,6 +1492,15 @@ export default function App() {
                       onSelectDish={(it) => setSelectedItemForDetail(it)}
                     />
                   ))}
+                  <ScrollLoadMoreSentinel
+                    sentinelRef={paginatedFollowedShops.sentinelRef}
+                    visibleCount={paginatedFollowedShops.visibleCount}
+                    totalCount={paginatedFollowedShops.totalCount}
+                    pageSize={PAGE_LIMITS.FOLLOWED_SHOPS}
+                    hasMore={paginatedFollowedShops.hasMore}
+                    onLoadMore={paginatedFollowedShops.loadMore}
+                    itemLabel="shops"
+                  />
                 </div>
               </div>
             ) : (
@@ -1456,7 +1549,7 @@ export default function App() {
                     </div>
                   ) : (
                     <div className="max-w-2xl mx-auto space-y-4">
-                      {displayedDailySpecialPosts.map((post) => (
+                      {paginatedFollowingSpecials.visibleItems.map((post) => (
                         <DailySpecialFeedCard
                           key={post.id}
                           post={post}
@@ -1466,6 +1559,15 @@ export default function App() {
                           }}
                         />
                       ))}
+                      <ScrollLoadMoreSentinel
+                        sentinelRef={paginatedFollowingSpecials.sentinelRef}
+                        visibleCount={paginatedFollowingSpecials.visibleCount}
+                        totalCount={paginatedFollowingSpecials.totalCount}
+                        pageSize={PAGE_LIMITS.DAILY_SPECIAL}
+                        hasMore={paginatedFollowingSpecials.hasMore}
+                        onLoadMore={paginatedFollowingSpecials.loadMore}
+                        itemLabel="posts"
+                      />
                     </div>
                   )
                 ) : displayedMenuItems.length === 0 ? (
@@ -1494,19 +1596,30 @@ export default function App() {
                     </div>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-6">
-                    {displayedMenuItems.map((item) => (
-                      <MenuCard
-                        key={item.id}
-                        item={item}
-                        onToggleSave={handleToggleSave}
-                        onSelectItem={(it) => setSelectedItemForDetail(it)}
-                        onSelectShop={(sId) => {
-                          setSelectedShopId(sId);
-                          setCurrentTab('shop_detail');
-                        }}
-                      />
-                    ))}
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-6">
+                      {paginatedFollowingDishes.visibleItems.map((item) => (
+                        <MenuCard
+                          key={item.id}
+                          item={item}
+                          onToggleSave={handleToggleSave}
+                          onSelectItem={(it) => setSelectedItemForDetail(it)}
+                          onSelectShop={(sId) => {
+                            setSelectedShopId(sId);
+                            setCurrentTab('shop_detail');
+                          }}
+                        />
+                      ))}
+                    </div>
+                    <ScrollLoadMoreSentinel
+                      sentinelRef={paginatedFollowingDishes.sentinelRef}
+                      visibleCount={paginatedFollowingDishes.visibleCount}
+                      totalCount={paginatedFollowingDishes.totalCount}
+                      pageSize={PAGE_LIMITS.WEEKLY_AND_MASTER}
+                      hasMore={paginatedFollowingDishes.hasMore}
+                      onLoadMore={paginatedFollowingDishes.loadMore}
+                      itemLabel="dishes"
+                    />
                   </div>
                 )}
               </>
@@ -1542,19 +1655,30 @@ export default function App() {
                 {t.noSavedItems}
               </div>
             ) : (
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-6">
-                {displayedSavedItems.map((item) => (
-                  <MenuCard
-                    key={item.id}
-                    item={item}
-                    onToggleSave={handleToggleSave}
-                    onSelectItem={(it) => setSelectedItemForDetail(it)}
-                    onSelectShop={(sId) => {
-                      setSelectedShopId(sId);
-                      setCurrentTab('shop_detail');
-                    }}
-                  />
-                ))}
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-6">
+                  {paginatedSavedItems.visibleItems.map((item) => (
+                    <MenuCard
+                      key={item.id}
+                      item={item}
+                      onToggleSave={handleToggleSave}
+                      onSelectItem={(it) => setSelectedItemForDetail(it)}
+                      onSelectShop={(sId) => {
+                        setSelectedShopId(sId);
+                        setCurrentTab('shop_detail');
+                      }}
+                    />
+                  ))}
+                </div>
+                <ScrollLoadMoreSentinel
+                  sentinelRef={paginatedSavedItems.sentinelRef}
+                  visibleCount={paginatedSavedItems.visibleCount}
+                  totalCount={paginatedSavedItems.totalCount}
+                  pageSize={PAGE_LIMITS.SAVED_ITEMS}
+                  hasMore={paginatedSavedItems.hasMore}
+                  onLoadMore={paginatedSavedItems.loadMore}
+                  itemLabel="saved items"
+                />
               </div>
             )}
           </div>
@@ -1625,18 +1749,29 @@ export default function App() {
                 </div>
               </div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-                {displayedShops.map((shop) => (
-                  <ShopCard
-                    key={shop.id}
-                    shop={shop}
-                    onFollowToggle={handleToggleFollow}
-                    onSelectShop={(sId) => {
-                      setSelectedShopId(sId);
-                      setCurrentTab('shop_detail');
-                    }}
-                  />
-                ))}
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+                  {paginatedShops.visibleItems.map((shop) => (
+                    <ShopCard
+                      key={shop.id}
+                      shop={shop}
+                      onFollowToggle={handleToggleFollow}
+                      onSelectShop={(sId) => {
+                        setSelectedShopId(sId);
+                        setCurrentTab('shop_detail');
+                      }}
+                    />
+                  ))}
+                </div>
+                <ScrollLoadMoreSentinel
+                  sentinelRef={paginatedShops.sentinelRef}
+                  visibleCount={paginatedShops.visibleCount}
+                  totalCount={paginatedShops.totalCount}
+                  pageSize={PAGE_LIMITS.SHOPS}
+                  hasMore={paginatedShops.hasMore}
+                  onLoadMore={paginatedShops.loadMore}
+                  itemLabel="shops"
+                />
               </div>
             )}
           </div>

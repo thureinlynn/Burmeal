@@ -32,6 +32,9 @@ import {
 } from '../utils/coverDesigns';
 import { ShopLocationPicker } from './ShopLocationPicker';
 import { DailySpecialFeedCard } from './DailySpecialFeedCard';
+import { ScrollLoadMoreSentinel } from './ScrollLoadMoreSentinel';
+import { PAGE_LIMITS } from '../utils/paginationHelpers';
+import { useInfiniteScrollLimit } from '../hooks/useInfiniteScrollLimit';
 import {
   LayoutDashboard,
   UtensilsCrossed,
@@ -589,6 +592,20 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
 
   const filteredItems = menuFilter === 'WEEKLY' ? weeklyItemsList : regularItemsList;
 
+  const paginatedDashboardSpecials = useInfiniteScrollLimit(
+    activeDailySpecials,
+    PAGE_LIMITS.DAILY_SPECIAL,
+    `${shop.id}:dash-specials:${currentTab}:${menuFilter}`,
+    currentTab === 'shop_menus' && menuFilter === 'SPECIAL'
+  );
+
+  const paginatedDashboardDishes = useInfiniteScrollLimit(
+    filteredItems,
+    PAGE_LIMITS.WEEKLY_AND_MASTER,
+    `${shop.id}:dash-dishes:${currentTab}:${menuFilter}`,
+    currentTab === 'shop_menus' && menuFilter !== 'SPECIAL'
+  );
+
   return (
     <div className="space-y-6">
       {/* Top Banner Status Bar with Live Store Open/Closed Toggle & 3 Tab Selector */}
@@ -600,7 +617,7 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
               src={getShopProfileImage(shop)}
               alt={shop.name}
               onError={() => setHeaderAvatarError(true)}
-              className="w-12 h-12 rounded-xl object-cover border border-stone-200 dark:border-stone-700 bg-stone-100 shrink-0"
+              className="w-12 h-12 rounded-xl object-cover border border-stone-200 dark:border-stone-700 bg-stone-100 dark:bg-stone-800 shrink-0"
               referrerPolicy="no-referrer"
             />
           ) : (
@@ -651,7 +668,7 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
               title="Toggle shop open or closed for incoming orders"
             >
               <span
-                className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-xs transition duration-200 ease-in-out ${
+                className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white dark:bg-stone-200 shadow-xs transition duration-200 ease-in-out ${
                   isOpen ? 'translate-x-4' : 'translate-x-0'
                 }`}
               />
@@ -665,8 +682,8 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
               onClick={() => setTab('shop_overview')}
               className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-colors cursor-pointer ${
                 currentTab === 'shop_overview'
-                  ? 'bg-white dark:bg-stone-700 text-stone-900 dark:text-white shadow-xs'
-                  : 'text-stone-500 dark:text-stone-400 hover:text-stone-900 dark:hover:text-white'
+                  ? 'bg-white dark:bg-stone-700 text-stone-900 dark:text-stone-100 shadow-xs'
+                  : 'text-stone-500 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100'
               }`}
             >
               <span>Overview</span>
@@ -676,8 +693,8 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
               onClick={() => setTab('shop_menus')}
               className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-colors cursor-pointer ${
                 currentTab === 'shop_menus'
-                  ? 'bg-white dark:bg-stone-700 text-stone-900 dark:text-white shadow-xs'
-                  : 'text-stone-500 dark:text-stone-400 hover:text-stone-900 dark:hover:text-white'
+                  ? 'bg-white dark:bg-stone-700 text-stone-900 dark:text-stone-100 shadow-xs'
+                  : 'text-stone-500 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100'
               }`}
             >
               <span>Menus</span>
@@ -687,8 +704,8 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
               onClick={() => setTab('shop_profile')}
               className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-colors cursor-pointer ${
                 currentTab === 'shop_profile'
-                  ? 'bg-white dark:bg-stone-700 text-stone-900 dark:text-white shadow-xs'
-                  : 'text-stone-500 dark:text-stone-400 hover:text-stone-900 dark:hover:text-white'
+                  ? 'bg-white dark:bg-stone-700 text-stone-900 dark:text-stone-100 shadow-xs'
+                  : 'text-stone-500 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100'
               }`}
             >
               <span>Shop Info</span>
@@ -698,8 +715,8 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
               onClick={() => setTab('shop_settings')}
               className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-colors cursor-pointer ${
                 currentTab === 'shop_settings'
-                  ? 'bg-white dark:bg-stone-700 text-stone-900 dark:text-white shadow-xs'
-                  : 'text-stone-500 dark:text-stone-400 hover:text-stone-900 dark:hover:text-white'
+                  ? 'bg-white dark:bg-stone-700 text-stone-900 dark:text-stone-100 shadow-xs'
+                  : 'text-stone-500 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100'
               }`}
             >
               <span>Settings</span>
@@ -746,16 +763,16 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
                   <button
                     type="button"
                     onClick={openDailySpecialModal}
-                    className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-white text-stone-900 font-bold text-xs sm:text-sm hover:bg-stone-50 transition-colors shadow-xs active:scale-98 cursor-pointer whitespace-nowrap shrink-0"
+                    className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 font-bold text-xs sm:text-sm hover:bg-stone-50 dark:hover:bg-stone-800 dark:border dark:border-stone-700 transition-colors shadow-xs active:scale-98 cursor-pointer whitespace-nowrap shrink-0"
                   >
-                    <Megaphone className="w-4 h-4 text-rose-600" />
+                    <Megaphone className="w-4 h-4 text-rose-600 dark:text-rose-400" />
                     <span>{t.dailySpecialButton}</span>
                   </button>
 
                   <button
                     type="button"
                     onClick={() => openCreateModal('WEEKLY')}
-                    className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-white/20 hover:bg-white/30 text-white font-semibold text-xs sm:text-sm transition-colors backdrop-blur-xs border border-white/20 active:scale-98 cursor-pointer whitespace-nowrap shrink-0"
+                    className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-white/20 dark:bg-stone-950/35 hover:bg-white/30 dark:hover:bg-stone-950/55 text-white font-semibold text-xs sm:text-sm transition-colors backdrop-blur-xs border border-white/20 dark:border-stone-300/20 active:scale-98 cursor-pointer whitespace-nowrap shrink-0"
                   >
                     <Plus className="w-4 h-4 text-white" />
                     <span>+{t.addNewDish}</span>
@@ -764,7 +781,7 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
                   <button
                     type="button"
                     onClick={() => onVisitShop && onVisitShop(shop.id)}
-                    className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-white/20 hover:bg-white/30 text-white font-semibold text-xs sm:text-sm transition-colors backdrop-blur-xs border border-white/20 active:scale-98 cursor-pointer whitespace-nowrap shrink-0"
+                    className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-white/20 dark:bg-stone-950/35 hover:bg-white/30 dark:hover:bg-stone-950/55 text-white font-semibold text-xs sm:text-sm transition-colors backdrop-blur-xs border border-white/20 dark:border-stone-300/20 active:scale-98 cursor-pointer whitespace-nowrap shrink-0"
                   >
                     <Eye className="w-4 h-4 text-white" />
                     <span>View Public Storefront</span>
@@ -781,7 +798,7 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
             {/* 2. Top 4 Metric Cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
               {/* Card 1: ACTIVE DISHES & POSTS */}
-              <div className="bg-white dark:bg-stone-850 rounded-2xl p-5 border border-stone-200 dark:border-stone-800 shadow-xs flex flex-col justify-between">
+              <div className="bg-white dark:bg-stone-900 rounded-2xl p-5 border border-stone-200 dark:border-stone-800 shadow-xs flex flex-col justify-between">
                 <div className="flex items-center justify-between">
                   <span className="text-[11px] font-bold tracking-wider uppercase text-stone-500 dark:text-stone-400">
                     ACTIVE OFFERINGS
@@ -791,7 +808,7 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
                   </div>
                 </div>
                 <div className="mt-3">
-                  <div className="text-3xl font-extrabold text-stone-900 dark:text-white font-display tabular-nums">
+                  <div className="text-3xl font-extrabold text-stone-900 dark:text-stone-100 font-display tabular-nums">
                     {activeDailySpecials.length + weeklyItems.length + regularItems.length}
                   </div>
                   <div className="text-xs text-stone-500 dark:text-stone-400 mt-2 flex items-center gap-1.5 flex-wrap">
@@ -805,7 +822,7 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
               </div>
 
               {/* Card 2: SHOP FOLLOWERS */}
-              <div className="bg-white dark:bg-stone-850 rounded-2xl p-5 border border-stone-200 dark:border-stone-800 shadow-xs flex flex-col justify-between">
+              <div className="bg-white dark:bg-stone-900 rounded-2xl p-5 border border-stone-200 dark:border-stone-800 shadow-xs flex flex-col justify-between">
                 <div className="flex items-center justify-between">
                   <span className="text-[11px] font-bold tracking-wider uppercase text-stone-500 dark:text-stone-400">
                     SHOP FOLLOWERS
@@ -815,7 +832,7 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
                   </div>
                 </div>
                 <div className="mt-3">
-                  <div className="text-3xl font-extrabold text-stone-900 dark:text-white font-display tabular-nums">
+                  <div className="text-3xl font-extrabold text-stone-900 dark:text-stone-100 font-display tabular-nums">
                     {shop.followerCount ?? 0}
                   </div>
                   <p className="text-xs text-stone-500 dark:text-stone-400 mt-2 leading-relaxed">
@@ -825,7 +842,7 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
               </div>
 
               {/* Card 3: ORDERING CHANNELS */}
-              <div className="bg-white dark:bg-stone-850 rounded-2xl p-5 border border-stone-200 dark:border-stone-800 shadow-xs flex flex-col justify-between">
+              <div className="bg-white dark:bg-stone-900 rounded-2xl p-5 border border-stone-200 dark:border-stone-800 shadow-xs flex flex-col justify-between">
                 <div className="flex items-center justify-between">
                   <span className="text-[11px] font-bold tracking-wider uppercase text-stone-500 dark:text-stone-400">
                     ORDERING CHANNELS
@@ -835,7 +852,7 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
                   </div>
                 </div>
                 <div className="mt-3">
-                  <div className="text-3xl font-extrabold text-stone-900 dark:text-white font-display flex items-baseline">
+                  <div className="text-3xl font-extrabold text-stone-900 dark:text-stone-100 font-display flex items-baseline">
                     <span>{activeChannelsCount}</span>
                     <span className="text-xs font-normal text-stone-500 dark:text-stone-400 ml-1.5">
                       / 5 Active
@@ -877,7 +894,7 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
               </div>
 
               {/* Card 4: STORE HEALTH */}
-              <div className="bg-white dark:bg-stone-850 rounded-2xl p-5 border border-stone-200 dark:border-stone-800 shadow-xs flex flex-col justify-between">
+              <div className="bg-white dark:bg-stone-900 rounded-2xl p-5 border border-stone-200 dark:border-stone-800 shadow-xs flex flex-col justify-between">
                 <div className="flex items-center justify-between">
                   <span className="text-[11px] font-bold tracking-wider uppercase text-stone-500 dark:text-stone-400">
                     STORE HEALTH
@@ -888,7 +905,7 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
                 </div>
                 <div className="mt-3">
                   <div className="flex items-baseline gap-2">
-                    <span className="text-3xl font-extrabold text-stone-900 dark:text-white font-display">100%</span>
+                    <span className="text-3xl font-extrabold text-stone-900 dark:text-stone-100 font-display">100%</span>
                     <span className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">Excellent</span>
                   </div>
                   <div className="h-1.5 w-full bg-stone-100 dark:bg-stone-800 rounded-full overflow-hidden mt-3">
@@ -901,12 +918,12 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
             {/* 3. Middle Row: Active Daily Special Posts (48h Feed) & Weekly Rotating Schedule Matrix */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
               {/* Left: Daily Special Feed Summary */}
-              <div className="lg:col-span-5 bg-white dark:bg-stone-850 rounded-2xl p-5 sm:p-6 border border-stone-200 dark:border-stone-800 shadow-xs flex flex-col justify-between">
+              <div className="lg:col-span-5 bg-white dark:bg-stone-900 rounded-2xl p-5 sm:p-6 border border-stone-200 dark:border-stone-800 shadow-xs flex flex-col justify-between">
                 <div>
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-2">
                       <span className="inline-block w-2.5 h-2.5 rounded-full bg-rose-500 shrink-0" />
-                      <h3 className="font-bold text-sm sm:text-base text-stone-900 dark:text-white font-display">
+                      <h3 className="font-bold text-sm sm:text-base text-stone-900 dark:text-stone-100 font-display">
                         Daily Special Feed (48h)
                       </h3>
                     </div>
@@ -932,7 +949,7 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
                               src={post.image}
                               alt={post.title}
                               referrerPolicy="no-referrer"
-                              className="w-14 h-14 rounded-lg object-cover shrink-0 border border-stone-200 dark:border-stone-700 bg-stone-100"
+                              className="w-14 h-14 rounded-lg object-cover shrink-0 border border-stone-200 dark:border-stone-700 bg-stone-100 dark:bg-stone-800"
                             />
                           ) : (
                             <div className="w-14 h-14 rounded-lg shrink-0 border border-rose-200 dark:border-rose-900/50 bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 flex items-center justify-center">
@@ -940,7 +957,7 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
                             </div>
                           )}
                           <div className="flex-1 min-w-0">
-                            <h4 className="font-bold text-xs sm:text-sm text-stone-900 dark:text-white truncate">
+                            <h4 className="font-bold text-xs sm:text-sm text-stone-900 dark:text-stone-100 truncate">
                               {post.title}
                             </h4>
                             <p className="text-[11px] text-stone-500 dark:text-stone-400 mt-0.5 line-clamp-2 leading-relaxed">
@@ -995,12 +1012,12 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
               </div>
 
               {/* Right: Weekly Rotating Schedule Matrix */}
-              <div className="lg:col-span-7 bg-white dark:bg-stone-850 rounded-2xl p-5 sm:p-6 border border-stone-200 dark:border-stone-800 shadow-xs flex flex-col justify-between">
+              <div className="lg:col-span-7 bg-white dark:bg-stone-900 rounded-2xl p-5 sm:p-6 border border-stone-200 dark:border-stone-800 shadow-xs flex flex-col justify-between">
                 <div>
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-2">
                       <Calendar className="w-4 h-4 text-amber-600" />
-                      <h3 className="font-bold text-sm sm:text-base text-stone-900 dark:text-white font-display">
+                      <h3 className="font-bold text-sm sm:text-base text-stone-900 dark:text-stone-100 font-display">
                         Weekly Rotating Schedule Matrix
                       </h3>
                     </div>
@@ -1039,7 +1056,7 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
                               ? 'border-amber-500 bg-amber-500/10 dark:bg-amber-500/20 ring-2 ring-amber-500/30'
                               : isToday
                               ? 'border-amber-400 bg-amber-50/60 dark:bg-amber-950/20 dark:border-amber-500/50'
-                              : 'border-stone-200 dark:border-stone-750 bg-stone-50/60 dark:bg-stone-900/40 hover:bg-stone-100 dark:hover:bg-stone-800'
+                              : 'border-stone-200 dark:border-stone-700 bg-stone-50/60 dark:bg-stone-800/50 hover:bg-stone-100 dark:hover:bg-stone-800'
                           }`}
                         >
                           <div>
@@ -1099,7 +1116,7 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
                           .map((item) => (
                             <div
                               key={item.id}
-                              className="flex items-center justify-between text-xs bg-white dark:bg-stone-850 p-2 rounded-lg border border-amber-100 dark:border-amber-900/40"
+                              className="flex items-center justify-between text-xs bg-white dark:bg-stone-900 p-2 rounded-lg border border-amber-100 dark:border-amber-900/40"
                             >
                               <div className="flex items-center gap-2 truncate">
                                 <img
@@ -1110,7 +1127,7 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
                                     (e.currentTarget as HTMLImageElement).src = '/src/assets/images/burmeal_mohinga_dish_1793906770254.jpg';
                                   }}
                                 />
-                                <span className="font-semibold text-stone-900 dark:text-white truncate">
+                                <span className="font-semibold text-stone-900 dark:text-stone-100 truncate">
                                   {item.title}
                                 </span>
                               </div>
@@ -1161,12 +1178,12 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
             {/* 4. Bottom Row: 3 Operational Info Cards */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
               {/* Card 1: Store Location */}
-              <div className="bg-white dark:bg-stone-850 rounded-2xl p-5 border border-stone-200 dark:border-stone-800 shadow-xs flex flex-col justify-between">
+              <div className="bg-white dark:bg-stone-900 rounded-2xl p-5 border border-stone-200 dark:border-stone-800 shadow-xs flex flex-col justify-between">
                 <div>
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <MapPin className="w-4 h-4 text-rose-500" />
-                      <h4 className="font-bold text-sm text-stone-900 dark:text-white">Store Location</h4>
+                      <h4 className="font-bold text-sm text-stone-900 dark:text-stone-100">Store Location</h4>
                     </div>
                     <span className="text-base">{getCountryFlag(country || shop.country)}</span>
                   </div>
@@ -1194,12 +1211,12 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
               </div>
 
               {/* Card 2: Ordering Channels */}
-              <div className="bg-white dark:bg-stone-850 rounded-2xl p-5 border border-stone-200 dark:border-stone-800 shadow-xs flex flex-col justify-between">
+              <div className="bg-white dark:bg-stone-900 rounded-2xl p-5 border border-stone-200 dark:border-stone-800 shadow-xs flex flex-col justify-between">
                 <div>
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <Check className="w-4 h-4 text-emerald-600" />
-                      <h4 className="font-bold text-sm text-stone-900 dark:text-white">Ordering Channels</h4>
+                      <h4 className="font-bold text-sm text-stone-900 dark:text-stone-100">Ordering Channels</h4>
                     </div>
                     <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300">
                       Direct Contact
@@ -1222,12 +1239,12 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
               </div>
 
               {/* Card 3: Regular Master Dishes */}
-              <div className="bg-white dark:bg-stone-850 rounded-2xl p-5 border border-stone-200 dark:border-stone-800 shadow-xs flex flex-col justify-between">
+              <div className="bg-white dark:bg-stone-900 rounded-2xl p-5 border border-stone-200 dark:border-stone-800 shadow-xs flex flex-col justify-between">
                 <div>
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <UtensilsCrossed className="w-4 h-4 text-amber-600" />
-                      <h4 className="font-bold text-sm text-stone-900 dark:text-white">Regular Master Dishes</h4>
+                      <h4 className="font-bold text-sm text-stone-900 dark:text-stone-100">Regular Master Dishes</h4>
                     </div>
                     <span className="text-xs font-bold text-stone-500 dark:text-stone-400">
                       {regularItems.length} dishes
@@ -1334,7 +1351,7 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
               </div>
             ) : (
               <div className="max-w-2xl mx-auto space-y-4">
-                {activeDailySpecials.map((post) => (
+                {paginatedDashboardSpecials.visibleItems.map((post) => (
                   <DailySpecialFeedCard
                     key={post.id}
                     post={post}
@@ -1343,9 +1360,19 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
                     hideVisitShopAction
                   />
                 ))}
+                <ScrollLoadMoreSentinel
+                  sentinelRef={paginatedDashboardSpecials.sentinelRef}
+                  visibleCount={paginatedDashboardSpecials.visibleCount}
+                  totalCount={paginatedDashboardSpecials.totalCount}
+                  pageSize={PAGE_LIMITS.DAILY_SPECIAL}
+                  hasMore={paginatedDashboardSpecials.hasMore}
+                  onLoadMore={paginatedDashboardSpecials.loadMore}
+                  itemLabel="posts"
+                />
               </div>
             )
           ) : (
+          <div className="space-y-4">
           <div className="bg-white dark:bg-stone-900 rounded-2xl border border-stone-200 dark:border-stone-800 overflow-hidden shadow-xs transition-colors">
             {/* Desktop Table View (md and up) */}
             <div className="hidden md:block overflow-x-auto">
@@ -1369,7 +1396,7 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
                       </td>
                     </tr>
                   ) : (
-                    filteredItems.map((item) => (
+                    paginatedDashboardDishes.visibleItems.map((item) => (
                       <tr key={item.id} className="hover:bg-stone-50 dark:hover:bg-stone-800/50 transition-colors">
                         <td className="py-3 px-4">
                           <div className="flex items-center gap-3">
@@ -1444,7 +1471,7 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
                           <div className="flex items-center justify-end gap-1.5">
                             <button
                               onClick={() => openEditModal(item)}
-                              className="p-1.5 text-stone-500 hover:text-stone-900 dark:hover:text-white hover:bg-stone-100 dark:hover:bg-stone-800 rounded"
+                              className="p-1.5 text-stone-500 hover:text-stone-900 dark:hover:text-stone-100 hover:bg-stone-100 dark:hover:bg-stone-800 rounded"
                               title="Edit dish"
                             >
                               <Edit2 className="w-3.5 h-3.5" />
@@ -1472,7 +1499,7 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
                   {t.noDishesFound} Tap "{t.addNewDish}" above to add your first menu item.
                 </div>
               ) : (
-                filteredItems.map((item) => (
+                paginatedDashboardDishes.visibleItems.map((item) => (
                   <div key={item.id} className="p-4 space-y-3">
                     {/* Top Row: Thumbnail + Title + Price */}
                     <div className="flex items-start gap-3">
@@ -1574,6 +1601,16 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
               )}
             </div>
           </div>
+          <ScrollLoadMoreSentinel
+            sentinelRef={paginatedDashboardDishes.sentinelRef}
+            visibleCount={paginatedDashboardDishes.visibleCount}
+            totalCount={paginatedDashboardDishes.totalCount}
+            pageSize={PAGE_LIMITS.WEEKLY_AND_MASTER}
+            hasMore={paginatedDashboardDishes.hasMore}
+            onLoadMore={paginatedDashboardDishes.loadMore}
+            itemLabel="dishes"
+          />
+          </div>
           )}
         </div>
       )}
@@ -1673,7 +1710,7 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
               </div>
 
               {/* Shop Profile Picture Upload / URL / Remove */}
-              <div className="rounded-2xl border border-stone-200 dark:border-stone-700 bg-stone-50/70 dark:bg-stone-850/60 p-4 space-y-3">
+              <div className="rounded-2xl border border-stone-200 dark:border-stone-700 bg-stone-50/70 dark:bg-stone-800/60 p-4 space-y-3">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <div className="flex items-center gap-3.5">
                     {normalizeExternalImageUrl(profileImageUrl || avatarImage) && !profilePreviewError ? (
@@ -1682,7 +1719,7 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
                         alt={shopName || shop.name}
                         referrerPolicy="no-referrer"
                         onError={() => setProfilePreviewError(true)}
-                        className="w-16 h-16 rounded-2xl object-cover border-2 border-white dark:border-stone-700 shadow-xs bg-stone-200 shrink-0"
+                        className="w-16 h-16 rounded-2xl object-cover border-2 border-white dark:border-stone-700 shadow-xs bg-stone-200 dark:bg-stone-800 shrink-0"
                       />
                     ) : (
                       <div className="w-16 h-16 rounded-2xl border-2 border-white dark:border-stone-700 shadow-xs bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
@@ -1705,7 +1742,7 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
                       className={`inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-colors shrink-0 shadow-xs ${
                         isUploadingProfilePic
                           ? 'bg-stone-300 dark:bg-stone-700 text-stone-600 cursor-wait'
-                          : 'bg-stone-900 hover:bg-amber-600 dark:bg-stone-100 dark:text-stone-900 dark:hover:bg-amber-500 dark:hover:text-white text-white cursor-pointer'
+                          : 'bg-stone-900 hover:bg-amber-600 dark:bg-stone-800 dark:text-stone-100 dark:border dark:border-stone-700 dark:hover:bg-amber-600 dark:hover:border-amber-600 text-white cursor-pointer'
                       }`}
                     >
                       {isUploadingProfilePic ? (
@@ -1782,7 +1819,7 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
               </div>
 
               {/* Cover Image URL + Live Preview */}
-              <div className="rounded-2xl border border-stone-200 dark:border-stone-700 bg-stone-50/70 dark:bg-stone-850/60 p-4 space-y-3">
+              <div className="rounded-2xl border border-stone-200 dark:border-stone-700 bg-stone-50/70 dark:bg-stone-800/60 p-4 space-y-3">
                 <div className="relative h-28 sm:h-36 w-full rounded-xl overflow-hidden bg-stone-200 dark:bg-stone-800 border border-stone-200 dark:border-stone-700">
                   <img
                     src={
@@ -1823,7 +1860,7 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
                         type="button"
                         onClick={() => handleApplyCoverUrl(coverImage)}
                         disabled={isUpdatingCover}
-                        className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-bold bg-stone-900 hover:bg-amber-600 dark:bg-stone-100 dark:text-stone-900 dark:hover:bg-amber-500 dark:hover:text-white text-white transition-colors disabled:opacity-50"
+                        className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-bold bg-stone-900 hover:bg-amber-600 dark:bg-stone-800 dark:text-stone-100 dark:border dark:border-stone-700 dark:hover:bg-amber-600 dark:hover:border-amber-600 text-white transition-colors disabled:opacity-50"
                       >
                         {isUpdatingCover ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
                         <span>Apply Cover</span>
@@ -2167,7 +2204,7 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
               </span>
             </div>
 
-            <p className="text-xs text-stone-600 dark:text-stone-300 leading-relaxed bg-stone-50 dark:bg-stone-850 p-3.5 rounded-2xl border border-stone-100 dark:border-stone-800">
+            <p className="text-xs text-stone-600 dark:text-stone-300 leading-relaxed bg-stone-50 dark:bg-stone-950/60 p-3.5 rounded-2xl border border-stone-100 dark:border-stone-800">
               {shop.status === 'APPROVED' ? (
                 <>
                   <span className="font-semibold text-emerald-700 dark:text-emerald-400">✓ Your shop is verified and live.</span> Customer feeds in <strong>{shop.country || 'Myanmar'} ({shop.city || 'Yangon'})</strong> display your daily specials, weekly highlights, and master menus with direct contact ordering enabled.
@@ -2289,7 +2326,7 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {/* Language Preference */}
-              <div className="p-4 rounded-2xl bg-stone-50 dark:bg-stone-850 border border-stone-200 dark:border-stone-800 space-y-2">
+              <div className="p-4 rounded-2xl bg-stone-50 dark:bg-stone-950/60 border border-stone-200 dark:border-stone-800 space-y-2">
                 <span className="text-xs font-bold text-stone-800 dark:text-stone-200 block">Dashboard Language</span>
                 <div className="grid grid-cols-2 gap-2">
                   <button
@@ -2297,7 +2334,7 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
                     className={`py-2 px-3 rounded-lg border text-xs font-bold transition-all ${
                       lang === 'en'
                         ? 'bg-amber-50 dark:bg-amber-950/40 border-amber-500 text-amber-900 dark:text-amber-200 shadow-xs ring-1 ring-amber-500/20'
-                        : 'bg-white dark:bg-stone-800 border-stone-200 dark:border-stone-700 text-stone-600 dark:text-stone-400'
+                        : 'bg-white dark:bg-stone-800 border-stone-200 dark:border-stone-700 text-stone-600 dark:text-stone-300 hover:dark:bg-stone-700/70'
                     }`}
                   >
                     🇺🇸 English
@@ -2307,7 +2344,7 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
                     className={`py-2 px-3 rounded-lg border text-xs font-bold transition-all ${
                       lang === 'my'
                         ? 'bg-amber-50 dark:bg-amber-950/40 border-amber-500 text-amber-900 dark:text-amber-200 shadow-xs ring-1 ring-amber-500/20'
-                        : 'bg-white dark:bg-stone-800 border-stone-200 dark:border-stone-700 text-stone-600 dark:text-stone-400'
+                        : 'bg-white dark:bg-stone-800 border-stone-200 dark:border-stone-700 text-stone-600 dark:text-stone-300 hover:dark:bg-stone-700/70'
                     }`}
                   >
                     🇲🇲 မြန်မာ
@@ -2316,7 +2353,7 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
               </div>
 
               {/* Theme Preference */}
-              <div className="p-4 rounded-2xl bg-stone-50 dark:bg-stone-850 border border-stone-200 dark:border-stone-800 space-y-2">
+              <div className="p-4 rounded-2xl bg-stone-50 dark:bg-stone-950/60 border border-stone-200 dark:border-stone-800 space-y-2">
                 <span className="text-xs font-bold text-stone-800 dark:text-stone-200 block">Visual Appearance</span>
                 <div className="grid grid-cols-2 gap-2">
                   <button
@@ -2324,7 +2361,7 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
                     className={`py-2 px-3 rounded-lg border text-xs font-bold transition-all ${
                       theme === 'light'
                         ? 'bg-amber-50 dark:bg-amber-950/40 border-amber-500 text-amber-900 dark:text-amber-200 shadow-xs ring-1 ring-amber-500/20'
-                        : 'bg-white dark:bg-stone-800 border-stone-200 dark:border-stone-700 text-stone-600 dark:text-stone-400'
+                        : 'bg-white dark:bg-stone-800 border-stone-200 dark:border-stone-700 text-stone-600 dark:text-stone-300 hover:dark:bg-stone-700/70'
                     }`}
                   >
                     ☀️ Light Mode
@@ -2334,7 +2371,7 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
                     className={`py-2 px-3 rounded-lg border text-xs font-bold transition-all ${
                       theme === 'dark'
                         ? 'bg-amber-950/40 border-amber-500 text-amber-300 shadow-xs ring-1 ring-amber-500/20'
-                        : 'bg-white dark:bg-stone-800 border-stone-200 dark:border-stone-700 text-stone-600 dark:text-stone-400'
+                        : 'bg-white dark:bg-stone-800 border-stone-200 dark:border-stone-700 text-stone-600 dark:text-stone-300 hover:dark:bg-stone-700/70'
                     }`}
                   >
                     🌙 Dark Mode

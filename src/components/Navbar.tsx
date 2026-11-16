@@ -33,10 +33,10 @@ export const Navbar: React.FC<NavbarProps> = ({
   const { selectedCountry, selectedRegionName, selectedFlag, openLocationModal } = useLocation();
 
   return (
-    <header className="sticky top-0 z-40 bg-white/65 dark:bg-stone-950/65 backdrop-blur-2xl backdrop-saturate-200 border-b border-white/50 dark:border-white/10 shadow-[0_8px_32px_0_rgba(0,0,0,0.04)] dark:shadow-[0_8px_32px_0_rgba(0,0,0,0.45)] transition-all">
+    <header className="sticky top-0 z-40 bg-white/65 dark:bg-stone-950/85 backdrop-blur-2xl backdrop-saturate-200 border-b border-white/50 dark:border-stone-800 shadow-[0_8px_32px_0_rgba(0,0,0,0.04)] dark:shadow-[0_8px_32px_0_rgba(0,0,0,0.45)] transition-all">
       <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 relative">
         {/* Liquid Glass Prismatic Specular Top Sheen */}
-        <div className="absolute inset-x-0 -top-px h-[1.5px] bg-gradient-to-r from-transparent via-white/90 dark:via-white/25 to-transparent pointer-events-none" />
+        <div className="absolute inset-x-0 -top-px h-[1.5px] bg-gradient-to-r from-transparent via-white/90 dark:via-amber-500/20 to-transparent pointer-events-none" />
         <div className="absolute inset-x-8 -bottom-px h-px bg-gradient-to-r from-transparent via-amber-500/20 dark:via-amber-400/10 to-transparent pointer-events-none" />
 
         <div className="flex items-center justify-between gap-2 sm:gap-3 h-16">
@@ -79,7 +79,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               <>
                 <button
                   onClick={() => onSelectTab('feed')}
-                  className={`hover:text-stone-900 dark:hover:text-white transition-colors whitespace-nowrap shrink-0 ${
+                  className={`hover:text-stone-900 dark:hover:text-stone-100 transition-colors whitespace-nowrap shrink-0 ${
                     currentTab === 'feed' ? 'text-amber-700 dark:text-amber-400 font-bold border-b-2 border-amber-600 pb-1' : ''
                   }`}
                 >
@@ -87,7 +87,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 </button>
                 <button
                   onClick={() => onSelectTab('following')}
-                  className={`flex items-center gap-1 hover:text-stone-900 dark:hover:text-white transition-colors whitespace-nowrap shrink-0 ${
+                  className={`flex items-center gap-1 hover:text-stone-900 dark:hover:text-stone-100 transition-colors whitespace-nowrap shrink-0 ${
                     currentTab === 'following' ? 'text-amber-700 dark:text-amber-400 font-bold border-b-2 border-amber-600 pb-1' : ''
                   }`}
                 >
@@ -99,7 +99,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 </button>
                 <button
                   onClick={() => onSelectTab('shops')}
-                  className={`hover:text-stone-900 dark:hover:text-white transition-colors whitespace-nowrap shrink-0 ${
+                  className={`hover:text-stone-900 dark:hover:text-stone-100 transition-colors whitespace-nowrap shrink-0 ${
                     currentTab === 'shops' ? 'text-amber-700 dark:text-amber-400 font-bold border-b-2 border-amber-600 pb-1' : ''
                   }`}
                 >
@@ -107,7 +107,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 </button>
                 <button
                   onClick={() => onSelectTab('saved')}
-                  className={`flex items-center gap-1 hover:text-stone-900 dark:hover:text-white transition-colors whitespace-nowrap shrink-0 ${
+                  className={`flex items-center gap-1 hover:text-stone-900 dark:hover:text-stone-100 transition-colors whitespace-nowrap shrink-0 ${
                     currentTab === 'saved' ? 'text-amber-700 dark:text-amber-400 font-bold border-b-2 border-amber-600 pb-1' : ''
                   }`}
                 >
@@ -117,7 +117,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 {user && (
                   <button
                     onClick={() => onSelectTab('profile')}
-                    className={`flex items-center gap-1 hover:text-stone-900 dark:hover:text-white transition-colors whitespace-nowrap shrink-0 ${
+                    className={`flex items-center gap-1 hover:text-stone-900 dark:hover:text-stone-100 transition-colors whitespace-nowrap shrink-0 ${
                       currentTab === 'profile' ? 'text-amber-700 dark:text-amber-400 font-bold border-b-2 border-amber-600 pb-1' : ''
                     }`}
                   >
@@ -127,7 +127,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 )}
                 <button
                   onClick={() => onSelectTab('settings')}
-                  className={`flex items-center gap-1 hover:text-stone-900 dark:hover:text-white transition-colors whitespace-nowrap shrink-0 ${
+                  className={`flex items-center gap-1 hover:text-stone-900 dark:hover:text-stone-100 transition-colors whitespace-nowrap shrink-0 ${
                     currentTab === 'settings' ? 'text-amber-700 dark:text-amber-400 font-bold border-b-2 border-amber-600 pb-1' : ''
                   }`}
                 >
@@ -141,7 +141,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               <>
                 <button
                   onClick={() => onSelectTab('shop_overview')}
-                  className={`hover:text-stone-900 dark:hover:text-white transition-colors whitespace-nowrap shrink-0 ${
+                  className={`hover:text-stone-900 dark:hover:text-stone-100 transition-colors whitespace-nowrap shrink-0 ${
                     currentTab === 'shop_overview' ? 'text-amber-700 dark:text-amber-400 font-bold border-b-2 border-amber-600 pb-1' : ''
                   }`}
                 >
@@ -149,7 +149,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 </button>
                 <button
                   onClick={() => onSelectTab('shop_menus')}
-                  className={`hover:text-stone-900 dark:hover:text-white transition-colors whitespace-nowrap shrink-0 ${
+                  className={`hover:text-stone-900 dark:hover:text-stone-100 transition-colors whitespace-nowrap shrink-0 ${
                     currentTab === 'shop_menus' ? 'text-amber-700 dark:text-amber-400 font-bold border-b-2 border-amber-600 pb-1' : ''
                   }`}
                 >
@@ -157,7 +157,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 </button>
                 <button
                   onClick={() => onSelectTab('shop_profile')}
-                  className={`hover:text-stone-900 dark:hover:text-white transition-colors whitespace-nowrap shrink-0 ${
+                  className={`hover:text-stone-900 dark:hover:text-stone-100 transition-colors whitespace-nowrap shrink-0 ${
                     currentTab === 'shop_profile' ? 'text-amber-700 dark:text-amber-400 font-bold border-b-2 border-amber-600 pb-1' : ''
                   }`}
                 >
@@ -165,7 +165,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 </button>
                 <button
                   onClick={() => onSelectTab('shop_settings')}
-                  className={`hover:text-stone-900 dark:hover:text-white transition-colors whitespace-nowrap shrink-0 ${
+                  className={`hover:text-stone-900 dark:hover:text-stone-100 transition-colors whitespace-nowrap shrink-0 ${
                     currentTab === 'shop_settings' ? 'text-amber-700 dark:text-amber-400 font-bold border-b-2 border-amber-600 pb-1' : ''
                   }`}
                 >
@@ -193,7 +193,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
             {/* User Account Badge or Sign In Button */}
             {user ? (
-              <div className="flex items-center gap-2 px-2.5 py-1.5 bg-white/50 dark:bg-stone-850/60 backdrop-blur-md border border-white/60 dark:border-white/10 rounded-xl shadow-2xs">
+              <div className="flex items-center gap-2 px-2.5 py-1.5 bg-white/50 dark:bg-stone-800/80 backdrop-blur-md border border-white/60 dark:border-stone-700 rounded-xl shadow-2xs">
                 <img
                   src={user.avatarUrl || 'https://api.dicebear.com/7.x/avataaars/svg?seed=user'}
                   alt={user.name}

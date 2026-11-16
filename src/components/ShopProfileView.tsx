@@ -10,10 +10,13 @@ import {
   hasValidCoordinates,
 } from '../utils/shopLocationHelpers';
 import { partitionDailySpecialPosts } from '../utils/dailySpecialHelpers';
+import { PAGE_LIMITS } from '../utils/paginationHelpers';
+import { useInfiniteScrollLimit } from '../hooks/useInfiniteScrollLimit';
 import { buildShopSharePayload } from '../utils/shareHelpers';
 import { ShareButton } from './ShareButton';
 import { MenuCard } from './MenuCard';
 import { DailySpecialFeedCard } from './DailySpecialFeedCard';
+import { ScrollLoadMoreSentinel } from './ScrollLoadMoreSentinel';
 import {
   MapPin,
   Heart,
@@ -93,6 +96,20 @@ export const ShopProfileView: React.FC<ShopProfileViewProps> = ({
   );
   const filteredItems = selectedMenuType === 'WEEKLY' ? weeklyItems : masterItems;
 
+  const paginatedSpecials = useInfiniteScrollLimit(
+    activeSpecialPosts,
+    PAGE_LIMITS.DAILY_SPECIAL,
+    `${shop.id}:SPECIAL`,
+    selectedMenuType === 'SPECIAL'
+  );
+
+  const paginatedDishes = useInfiniteScrollLimit(
+    filteredItems,
+    PAGE_LIMITS.WEEKLY_AND_MASTER,
+    `${shop.id}:${selectedMenuType}`,
+    selectedMenuType !== 'SPECIAL'
+  );
+
   const countryFlag = getCountryFlag(shop.country);
   const directionsUrl = buildGoogleMapsDirectionsUrl(shop);
   const hasPinnedCoords = hasValidCoordinates(shop.latitude, shop.longitude);
@@ -142,7 +159,7 @@ export const ShopProfileView: React.FC<ShopProfileViewProps> = ({
               className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all shadow-md backdrop-blur ${
                 (shop as any).isFollowed
                   ? 'bg-rose-600 text-white'
-                  : 'bg-white/90 text-stone-900 hover:bg-white'
+                  : 'bg-white/90 dark:bg-stone-900/90 text-stone-900 dark:text-stone-100 hover:bg-white dark:hover:bg-stone-800 dark:border dark:border-stone-700'
               }`}
             >
               <Heart className={`w-3.5 h-3.5 ${(shop as any).isFollowed ? 'fill-current' : ''}`} />
@@ -157,11 +174,11 @@ export const ShopProfileView: React.FC<ShopProfileViewProps> = ({
                 src={profileImageSrc}
                 alt={shop.name}
                 onError={() => setProfileImgFailed(true)}
-                className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl border-2 border-white object-cover bg-stone-800 shadow-md shrink-0"
+                className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl border-2 border-white dark:border-stone-700 object-cover bg-stone-800 shadow-md shrink-0"
                 referrerPolicy="no-referrer"
               />
             ) : (
-              <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl border-2 border-white/90 bg-amber-600/90 text-white flex items-center justify-center shadow-md shrink-0">
+              <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl border-2 border-white/90 dark:border-stone-700 bg-amber-600/90 text-white flex items-center justify-center shadow-md shrink-0">
                 <Store className="w-7 h-7" />
               </div>
             )}
@@ -189,7 +206,7 @@ export const ShopProfileView: React.FC<ShopProfileViewProps> = ({
         </div>
 
         {/* Bio & Full Address Section */}
-        <div className="p-4 sm:p-6 bg-stone-50/50 dark:bg-stone-850/50 border-b border-stone-200 dark:border-stone-800 space-y-3">
+        <div className="p-4 sm:p-6 bg-stone-50/50 dark:bg-stone-950/60 border-b border-stone-200 dark:border-stone-800 space-y-3">
           <p className="text-xs sm:text-sm text-stone-700 dark:text-stone-300 leading-relaxed max-w-3xl">
             {shop.bio}
           </p>
@@ -426,13 +443,22 @@ export const ShopProfileView: React.FC<ShopProfileViewProps> = ({
           </div>
         ) : (
           <div className="max-w-2xl mx-auto space-y-4">
-            {activeSpecialPosts.map((post) => (
+            {paginatedSpecials.visibleItems.map((post) => (
               <DailySpecialFeedCard
                 key={post.id}
                 post={post}
                 hideVisitShopAction
               />
             ))}
+            <ScrollLoadMoreSentinel
+              sentinelRef={paginatedSpecials.sentinelRef}
+              visibleCount={paginatedSpecials.visibleCount}
+              totalCount={paginatedSpecials.totalCount}
+              pageSize={PAGE_LIMITS.DAILY_SPECIAL}
+              hasMore={paginatedSpecials.hasMore}
+              onLoadMore={paginatedSpecials.loadMore}
+              itemLabel="posts"
+            />
           </div>
         )
       ) : filteredItems.length === 0 ? (
@@ -440,19 +466,30 @@ export const ShopProfileView: React.FC<ShopProfileViewProps> = ({
           {t.noDishesFound}
         </div>
       ) : (
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-6">
-          {filteredItems.map((item) => (
-            <MenuCard
-              key={item.id}
-              item={{
-                ...item,
-                shopCountry: item.shopCountry || shop.country,
-                shopName: item.shopName || shop.name,
-              }}
-              onToggleSave={onToggleSave}
-              onSelectItem={onSelectItem}
-            />
-          ))}
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-6">
+            {paginatedDishes.visibleItems.map((item) => (
+              <MenuCard
+                key={item.id}
+                item={{
+                  ...item,
+                  shopCountry: item.shopCountry || shop.country,
+                  shopName: item.shopName || shop.name,
+                }}
+                onToggleSave={onToggleSave}
+                onSelectItem={onSelectItem}
+              />
+            ))}
+          </div>
+          <ScrollLoadMoreSentinel
+            sentinelRef={paginatedDishes.sentinelRef}
+            visibleCount={paginatedDishes.visibleCount}
+            totalCount={paginatedDishes.totalCount}
+            pageSize={PAGE_LIMITS.WEEKLY_AND_MASTER}
+            hasMore={paginatedDishes.hasMore}
+            onLoadMore={paginatedDishes.loadMore}
+            itemLabel="dishes"
+          />
         </div>
       )}
     </div>

@@ -91,7 +91,7 @@ export const ShareButton: React.FC<ShareButtonProps> = ({
         className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all shadow-md backdrop-blur cursor-pointer ${
           isDone
             ? 'bg-emerald-600 text-white'
-            : 'bg-white/90 text-stone-900 hover:bg-white'
+            : 'bg-white/90 dark:bg-stone-900/90 text-stone-900 dark:text-stone-100 hover:bg-white dark:hover:bg-stone-800 dark:border dark:border-stone-700'
         } ${className}`}
       >
         {isDone ? <Check className="w-3.5 h-3.5" /> : <Share2 className="w-3.5 h-3.5" />}
@@ -107,11 +107,11 @@ export const ShareButton: React.FC<ShareButtonProps> = ({
       aria-label={ariaLabel}
       className={`flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-xl border text-xs font-semibold transition-colors cursor-pointer ${
         isDone
-          ? 'bg-emerald-50 border-emerald-300 text-emerald-700'
-          : 'bg-white border-stone-200 text-stone-700 hover:bg-stone-50'
+          ? 'bg-emerald-50 dark:bg-emerald-950/60 border-emerald-300 dark:border-emerald-700 text-emerald-700 dark:text-emerald-300'
+          : 'bg-white dark:bg-stone-800 border-stone-200 dark:border-stone-700 text-stone-700 dark:text-stone-200 hover:bg-stone-50 dark:hover:bg-stone-700'
       } ${className}`}
     >
-      {isDone ? <Check className="w-4 h-4 text-emerald-600" /> : <Share2 className="w-4 h-4" />}
+      {isDone ? <Check className="w-4 h-4 text-emerald-600 dark:text-emerald-400" /> : <Share2 className="w-4 h-4" />}
       <span>{isDone ? 'Copied!' : label}</span>
     </button>
   );

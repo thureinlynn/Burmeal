@@ -87,7 +87,7 @@ export const ShopCard: React.FC<ShopCardProps> = ({ shop, onFollowToggle, onSele
                   alt={shop.name}
                   referrerPolicy="no-referrer"
                   onError={() => setProfileImgFailed(true)}
-                  className="w-9 h-9 rounded-lg object-cover border border-stone-200 dark:border-stone-700 bg-stone-100 shrink-0"
+                  className="w-9 h-9 rounded-lg object-cover border border-stone-200 dark:border-stone-700 bg-stone-100 dark:bg-stone-800 shrink-0"
                 />
               ) : (
                 <div className="w-9 h-9 rounded-lg border border-stone-200 dark:border-stone-700 bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">

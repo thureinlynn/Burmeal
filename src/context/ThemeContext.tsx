@@ -21,8 +21,14 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const root = document.documentElement;
     if (theme === 'dark') {
       root.classList.add('dark');
+      root.style.colorScheme = 'dark';
     } else {
       root.classList.remove('dark');
+      root.style.colorScheme = 'light';
+    }
+    const metaTheme = document.querySelector('meta[name="theme-color"]');
+    if (metaTheme) {
+      metaTheme.setAttribute('content', theme === 'dark' ? '#0c0a09' : '#FAFAF9');
     }
     localStorage.setItem('burmeal_theme', theme);
   }, [theme]);

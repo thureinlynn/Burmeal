@@ -1,7 +1,15 @@
 @import "tailwindcss";
 @custom-variant dark (&:where(.dark, .dark *));
 
+@theme {
+  --color-stone-750: #36322f;
+  --color-stone-850: #211f1d;
+}
+
 @layer base {
+  html.dark {
+    color-scheme: dark;
+  }
   html,
   body {
     touch-action: pan-x pan-y;

@@ -109,31 +109,91 @@ export const LocationModal: React.FC<LocationModalProps> = ({
         <div className="bg-[#FFFBF5] dark:bg-stone-900 rounded-3xl max-w-lg w-full border border-amber-200/90 dark:border-stone-800 shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
           {/* Illustration Frame */}
           <div className="relative w-full aspect-[16/9] bg-[#FFFBF5] dark:bg-stone-950 border-b border-amber-100 dark:border-stone-800 overflow-hidden shrink-0">
-            {!imgFailed ? (
+            {!imgFailed && (
               <img
                 src="/src/assets/images/choose_region_humans_1794741472119.jpg"
                 alt="2D flat design illustration of people choosing their food region on a map"
                 referrerPolicy="no-referrer"
                 onError={() => setImgFailed(true)}
-                className="w-full h-full object-cover"
+                className="w-full h-full object-cover dark:hidden"
               />
-            ) : (
-              <svg
-                viewBox="0 0 400 225"
-                className="w-full h-full"
-                aria-label="2D flat design people choosing region illustration"
-              >
-                <rect width="400" height="225" fill="#FFFBF5" />
-                <rect x="200" y="34" width="160" height="145" rx="14" fill="#FDE68A" />
-                <path d="M210 110 Q260 65 350 95" stroke="#D97706" strokeWidth="5" fill="none" />
-                <circle cx="280" cy="86" r="18" fill="#C2410C" />
-                <circle cx="280" cy="84" r="6" fill="#FFFBF5" />
-                <circle cx="105" cy="78" r="18" fill="#78350F" />
-                <rect x="85" y="100" width="40" height="58" rx="14" fill="#D97706" />
-                <circle cx="160" cy="70" r="19" fill="#451A03" />
-                <rect x="138" y="94" width="44" height="64" rx="14" fill="#334155" />
-              </svg>
             )}
+            <svg
+              viewBox="0 0 480 270"
+              className={`w-full h-full ${imgFailed ? 'block' : 'hidden dark:block'}`}
+              role="img"
+              aria-label="2D flat design illustration of people choosing their food region on a map"
+            >
+              {/* Warm Dark Canvas Background */}
+              <rect width="480" height="270" className="fill-[#FFFBF5] dark:fill-[#161311]" />
+              <circle cx="95" cy="215" r="90" className="fill-amber-200/30 dark:fill-amber-900/15" />
+              <circle cx="385" cy="60" r="72" className="fill-orange-200/30 dark:fill-orange-900/15" />
+
+              {/* Stylized Map Panel on Right */}
+              <rect x="214" y="28" width="234" height="196" rx="18" className="fill-[#FDE68A]/55 dark:fill-[#26201C]" stroke="#B45309" strokeOpacity="0.45" strokeWidth="2" />
+              {/* Decorative Map Blocks */}
+              <rect x="228" y="42" width="66" height="44" rx="8" className="fill-amber-200/70 dark:fill-[#332B24]" />
+              <rect x="304" y="42" width="130" height="58" rx="8" className="fill-orange-200/60 dark:fill-[#2D251F]" />
+              <rect x="228" y="100" width="90" height="108" rx="8" className="fill-amber-100/70 dark:fill-[#2D251F]" />
+              <rect x="330" y="112" width="104" height="96" rx="8" className="fill-orange-100/70 dark:fill-[#332B24]" />
+              {/* Winding River / Route */}
+              <path d="M220 155 Q275 110 330 142 T442 108" stroke="#EA580C" strokeWidth="5" strokeLinecap="round" fill="none" strokeDasharray="8 6" />
+              <path d="M235 80 Q310 120 410 185" stroke="#D97706" strokeWidth="3.5" strokeLinecap="round" fill="none" opacity="0.6" />
+
+              {/* Food Bowls on Map */}
+              <circle cx="272" cy="148" r="19" className="fill-stone-800 dark:fill-[#1A1614]" stroke="#F59E0B" strokeWidth="2.5" />
+              <circle cx="272" cy="148" r="12" fill="#D97706" />
+              <circle cx="268" cy="145" r="3" fill="#FDE68A" />
+              <circle cx="276" cy="150" r="2.5" fill="#FCA5A5" />
+
+              <circle cx="386" cy="164" r="17" className="fill-stone-800 dark:fill-[#1A1614]" stroke="#FB923C" strokeWidth="2.5" />
+              <circle cx="386" cy="164" r="10.5" fill="#EA580C" />
+              <circle cx="384" cy="162" r="2.5" fill="#FEF3C7" />
+
+              {/* Prominent Location Pin */}
+              <path d="M332 48 C312 48 296 64 296 84 C296 110 332 140 332 140 C332 140 368 110 368 84 C368 64 352 48 332 48 Z" fill="#EA580C" />
+              <circle cx="332" cy="83" r="12" className="fill-[#FFFBF5] dark:fill-[#161311]" />
+
+              {/* 2D Flat Design Person 1 (Woman on Left) */}
+              <ellipse cx="78" cy="236" rx="28" ry="6" fill="#000000" opacity="0.35" />
+              {/* Legs */}
+              <rect x="64" y="168" width="12" height="62" rx="6" fill="#1E293B" />
+              <rect x="81" y="168" width="12" height="62" rx="6" fill="#1E293B" />
+              {/* Shoes */}
+              <ellipse cx="69" cy="232" rx="9" ry="4.5" fill="#F59E0B" />
+              <ellipse cx="88" cy="232" rx="9" ry="4.5" fill="#F59E0B" />
+              {/* Torso & Pointing Arm */}
+              <rect x="57" y="110" width="42" height="62" rx="16" fill="#D97706" />
+              <path d="M95 122 L126 114" stroke="#B45309" strokeWidth="11" strokeLinecap="round" />
+              <path d="M58 124 L48 158" stroke="#D97706" strokeWidth="10" strokeLinecap="round" />
+              {/* Head & Bun */}
+              <circle cx="78" cy="64" r="10" fill="#291D18" />
+              <circle cx="78" cy="86" r="18" fill="#C6865A" />
+              <path d="M60 83 C60 70 96 70 96 83" fill="#291D18" />
+              <circle cx="73" cy="87" r="2" fill="#1C1917" />
+              <circle cx="84" cy="87" r="2" fill="#1C1917" />
+              <path d="M74 94 Q78 97 83 94" stroke="#7C2D12" strokeWidth="2" strokeLinecap="round" fill="none" />
+
+              {/* 2D Flat Design Person 2 (Man Pointing at Map) */}
+              <ellipse cx="154" cy="240" rx="32" ry="6.5" fill="#000000" opacity="0.35" />
+              {/* Legs */}
+              <rect x="137" y="166" width="14" height="68" rx="7" fill="#334155" />
+              <rect x="157" y="166" width="14" height="68" rx="7" fill="#334155" />
+              {/* Shoes */}
+              <ellipse cx="143" cy="236" rx="10" ry="4.5" fill="#EA580C" />
+              <ellipse cx="165" cy="236" rx="10" ry="4.5" fill="#EA580C" />
+              {/* Torso & Extended Arm pointing to Map */}
+              <rect x="129" y="102" width="50" height="68" rx="18" fill="#475569" />
+              <path d="M174 118 L244 96" stroke="#64748B" strokeWidth="12" strokeLinecap="round" />
+              <circle cx="246" cy="95" r="6" fill="#D99B72" />
+              <path d="M132 118 L120 156" stroke="#475569" strokeWidth="11" strokeLinecap="round" />
+              {/* Head & Hair/Beard */}
+              <circle cx="154" cy="76" r="20" fill="#D99B72" />
+              <path d="M134 74 C134 55 174 55 174 74 C169 65 139 65 134 74 Z" fill="#3B2314" />
+              <path d="M138 86 Q154 102 170 86 Q168 97 154 98 Q140 97 138 86 Z" fill="#3B2314" />
+              <circle cx="148" cy="76" r="2.2" fill="#1C1917" />
+              <circle cx="160" cy="76" r="2.2" fill="#1C1917" />
+            </svg>
           </div>
 
           {/* Alert Information Body */}
@@ -212,7 +272,7 @@ export const LocationModal: React.FC<LocationModalProps> = ({
                 <button
                   type="button"
                   onClick={() => setStep('intro')}
-                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-white/15 hover:bg-white/25 text-xs font-semibold text-white transition-colors cursor-pointer"
+                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-white/15 dark:bg-stone-950/35 hover:bg-white/25 dark:hover:bg-stone-950/55 text-xs font-semibold text-white transition-colors cursor-pointer"
                 >
                   <ChevronLeft className="w-3.5 h-3.5" />
                   <span>Back</span>
@@ -228,7 +288,7 @@ export const LocationModal: React.FC<LocationModalProps> = ({
               <button
                 type="button"
                 onClick={onClose}
-                className="p-2 text-white/90 hover:text-white bg-white/15 hover:bg-white/25 rounded-full transition-colors cursor-pointer"
+                className="p-2 text-white/90 hover:text-white bg-white/15 dark:bg-stone-950/35 hover:bg-white/25 dark:hover:bg-stone-950/55 rounded-full transition-colors cursor-pointer"
                 aria-label="Close location modal"
                 title="Close location modal"
               >

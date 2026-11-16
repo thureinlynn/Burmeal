@@ -215,7 +215,7 @@ export const ShopLocationPicker: React.FC<ShopLocationPickerProps> = ({
   };
 
   return (
-    <div className="space-y-3 rounded-2xl border border-stone-200 dark:border-stone-700 bg-stone-50/70 dark:bg-stone-850/60 p-4">
+    <div className="space-y-3 rounded-2xl border border-stone-200 dark:border-stone-700 bg-stone-50/70 dark:bg-stone-800/60 p-4">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
         <div>
           <h4 className="text-xs font-bold text-stone-900 dark:text-stone-100 flex items-center gap-1.5">

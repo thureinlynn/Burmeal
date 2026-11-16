@@ -30,9 +30,9 @@ export const PWAInstallBanner: React.FC = () => {
         >
           <div className="flex items-center gap-3 min-w-0">
             <img
-              src="/pwa-192x192.png"
+              src="/assets/aistudio/Gemini_Generated_Image_seoyymseoyymseoy_d7564f40.png"
               alt="BurMeal App Icon"
-              className="w-9 h-9 rounded-xl border border-amber-200 dark:border-amber-800 bg-white shrink-0 object-cover"
+              className="w-9 h-9 rounded-xl border border-amber-200 dark:border-amber-800/80 bg-white dark:bg-stone-900 p-1 shrink-0 object-contain"
             />
             <div className="min-w-0">
               <p className="text-xs font-bold text-stone-900 dark:text-stone-100 flex items-center gap-1.5">
@@ -78,9 +78,9 @@ export const PWAInstallBanner: React.FC = () => {
             <div className="flex items-start justify-between gap-3">
               <div className="flex items-center gap-2.5">
                 <img
-                  src="/pwa-192x192.png"
+                  src="/assets/aistudio/Gemini_Generated_Image_seoyymseoyymseoy_d7564f40.png"
                   alt="BurMeal App"
-                  className="w-10 h-10 rounded-xl border border-stone-200 dark:border-stone-700 bg-stone-50 shrink-0"
+                  className="w-10 h-10 rounded-xl border border-stone-200 dark:border-stone-700 bg-stone-50 dark:bg-stone-800 p-1 shrink-0 object-contain"
                 />
                 <div>
                   <h3 className="text-sm font-bold text-stone-900 dark:text-stone-100">
@@ -115,7 +115,7 @@ export const PWAInstallBanner: React.FC = () => {
             <button
               type="button"
               onClick={() => setShowGuideModal(false)}
-              className="w-full py-2 rounded-xl bg-stone-900 hover:bg-amber-600 dark:bg-stone-100 dark:text-stone-900 dark:hover:bg-amber-500 dark:hover:text-white text-white text-xs font-bold transition-colors cursor-pointer"
+              className="w-full py-2 rounded-xl bg-stone-900 hover:bg-amber-600 dark:bg-stone-800 dark:text-stone-100 dark:border dark:border-stone-700 dark:hover:bg-amber-600 dark:hover:border-amber-600 text-white text-xs font-bold transition-colors cursor-pointer"
             >
               Got It
             </button>

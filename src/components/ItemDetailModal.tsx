@@ -29,19 +29,19 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
   const itemCurrencyCountry = item.shopCountry || item.country || selectedCountry;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
-      <div className="bg-white rounded-2xl max-w-lg w-full overflow-hidden shadow-2xl relative border border-stone-200 flex flex-col max-h-[90vh]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/65 backdrop-blur-xs">
+      <div className="bg-white dark:bg-stone-900 rounded-2xl max-w-lg w-full overflow-hidden shadow-2xl relative border border-stone-200 dark:border-stone-800 flex flex-col max-h-[90vh]">
         {/* Close Button */}
         <button
           onClick={onClose}
-          className="absolute right-3.5 top-3.5 z-10 p-1.5 rounded-full bg-black/40 text-white hover:bg-black/60 transition-colors"
+          className="absolute right-3.5 top-3.5 z-10 p-1.5 rounded-full bg-black/50 text-stone-100 hover:bg-black/70 transition-colors"
           aria-label="Close dialog"
         >
           <X className="w-5 h-5" />
         </button>
 
         {/* Hero Image */}
-        <div className="relative aspect-[16/10] w-full bg-stone-100 overflow-hidden">
+        <div className="relative aspect-[16/10] w-full bg-stone-100 dark:bg-stone-800 overflow-hidden">
           <img
             src={item.image}
             alt={item.title}
@@ -92,10 +92,10 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
         {/* Content Body */}
         <div className="p-5 flex-1 overflow-y-auto space-y-4">
           <div>
-            <div className="flex items-center gap-2 text-xs text-stone-500 mb-1 flex-wrap">
-              <span className="font-semibold text-amber-700">{item.shopName}</span>
+            <div className="flex items-center gap-2 text-xs text-stone-500 dark:text-stone-400 mb-1 flex-wrap">
+              <span className="font-semibold text-amber-700 dark:text-amber-400">{item.shopName}</span>
               {item.shopCountry && (
-                <span className="inline-flex items-center gap-1 text-[11px] text-stone-400 font-medium">
+                <span className="inline-flex items-center gap-1 text-[11px] text-stone-400 dark:text-stone-500 font-medium">
                   <span>{getCountryFlag(item.shopCountry)}</span>
                   <span>{item.shopCountry}</span>
                 </span>
@@ -104,17 +104,17 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
               <span>{item.category}</span>
             </div>
 
-            <h2 className="text-xl font-bold font-display text-stone-900">{item.title}</h2>
+            <h2 className="text-xl font-bold font-display text-stone-900 dark:text-stone-100">{item.title}</h2>
           </div>
 
-          <p className="text-stone-600 text-xs sm:text-sm leading-relaxed">
+          <p className="text-stone-600 dark:text-stone-300 text-xs sm:text-sm leading-relaxed">
             {item.description}
           </p>
 
           {/* Schedule availability box */}
           {item.menuType === 'SPECIAL' && item.specialDate && (
-            <div className="flex items-center gap-2 text-xs text-rose-800 bg-rose-50 border border-rose-200 p-2.5 rounded-lg">
-              <Calendar className="w-4 h-4 text-rose-600 shrink-0" />
+            <div className="flex items-center gap-2 text-xs text-rose-800 dark:text-rose-200 bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-800/70 p-2.5 rounded-lg">
+              <Calendar className="w-4 h-4 text-rose-600 dark:text-rose-400 shrink-0" />
               <span>
                 <strong>{t.todaySpecial}:</strong> {t.servedOn} {item.specialDate}
               </span>
@@ -122,8 +122,8 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
           )}
 
           {item.menuType === 'WEEKLY' && item.availableDays && (
-            <div className="flex items-center gap-2 text-xs text-amber-900 bg-amber-50 border border-amber-200 p-2.5 rounded-lg">
-              <Clock className="w-4 h-4 text-amber-600 shrink-0" />
+            <div className="flex items-center gap-2 text-xs text-amber-900 dark:text-amber-200 bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-800/70 p-2.5 rounded-lg">
+              <Clock className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
               <span>
                 <strong>{t.weeklyHighlight}:</strong> {t.availableOn} {item.availableDays.join(', ')}
               </span>
@@ -131,31 +131,31 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
           )}
 
           {item.menuType === 'PERMANENT' && (
-            <div className="text-xs text-stone-600 bg-stone-50 border border-stone-200 p-2.5 rounded-lg">
+            <div className="text-xs text-stone-600 dark:text-stone-300 bg-stone-50 dark:bg-stone-800/70 border border-stone-200 dark:border-stone-700 p-2.5 rounded-lg">
               <strong>{t.masterMenu}:</strong> {t.everyday}
             </div>
           )}
 
           {/* Direct Ordering Notice */}
-          <div className="p-3 bg-stone-50 rounded-xl border border-stone-200 text-xs text-stone-600">
-            <p className="font-semibold text-stone-800 mb-0.5">Direct Kitchen Ordering</p>
-            <p className="text-[11px] text-stone-500">
+          <div className="p-3 bg-stone-50 dark:bg-stone-800/70 rounded-xl border border-stone-200 dark:border-stone-700 text-xs text-stone-600 dark:text-stone-300">
+            <p className="font-semibold text-stone-800 dark:text-stone-100 mb-0.5">Direct Kitchen Ordering</p>
+            <p className="text-[11px] text-stone-500 dark:text-stone-400">
               Orders for this dish are placed directly with the culinary team. Visit the shop profile below to connect via WhatsApp, Viber, LINE, or phone call.
             </p>
           </div>
         </div>
 
         {/* Footer actions: Save item + Share item + Prominent Visit Shop Profile */}
-        <div className="p-4 border-t border-stone-200 bg-stone-50/80 flex items-center gap-2.5 flex-wrap">
+        <div className="p-4 border-t border-stone-200 dark:border-stone-800 bg-stone-50/80 dark:bg-stone-950/80 flex items-center gap-2.5 flex-wrap">
           <button
             onClick={() => onToggleSave(item)}
             className={`flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-xl border text-xs font-semibold transition-colors cursor-pointer ${
               item.isSaved
-                ? 'bg-amber-50 border-amber-300 text-amber-800'
-                : 'bg-white border-stone-200 text-stone-700 hover:bg-stone-50'
+                ? 'bg-amber-50 dark:bg-amber-950/60 border-amber-300 dark:border-amber-700 text-amber-800 dark:text-amber-300'
+                : 'bg-white dark:bg-stone-800 border-stone-200 dark:border-stone-700 text-stone-700 dark:text-stone-200 hover:bg-stone-50 dark:hover:bg-stone-700'
             }`}
           >
-            <Bookmark className={`w-4 h-4 ${item.isSaved ? 'fill-current text-amber-600' : ''}`} />
+            <Bookmark className={`w-4 h-4 ${item.isSaved ? 'fill-current text-amber-600 dark:text-amber-400' : ''}`} />
             <span>{item.isSaved ? t.saved : t.saveItem}</span>
           </button>
 

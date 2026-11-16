@@ -53,7 +53,9 @@ function getLocalDelta(): LocalDelta {
     const raw = localStorage.getItem(REAL_DELTA_KEY);
     if (!raw) return { ...DEFAULT_DELTA };
     const parsed = JSON.parse(raw);
-    const { active } = partitionDailySpecialPosts(parsed.customDailySpecials || []);
+    const { active } = partitionDailySpecialPosts(
+      (Array.isArray(parsed.customDailySpecials) ? parsed.customDailySpecials : []) as DailySpecialPost[]
+    );
     return {
       customShops: parsed.customShops || [],
       updatedShops: parsed.updatedShops || {},
@@ -940,7 +942,7 @@ export const apiClient = {
         if (ct.includes('application/json')) {
           const json = await res.json();
           if (json && Array.isArray(json.posts)) {
-            return partitionDailySpecialPosts(json.posts).active;
+            return partitionDailySpecialPosts(json.posts as DailySpecialPost[]).active;
           }
         }
       }

@@ -84,10 +84,10 @@ export const FollowedShopRow: React.FC<FollowedShopRowProps> = ({
                 alt={shop.name}
                 referrerPolicy="no-referrer"
                 onError={() => setProfileImgFailed(true)}
-                className="absolute bottom-1.5 right-1.5 w-6 h-6 sm:w-7 sm:h-7 rounded-full border border-white/90 shadow-xs object-cover bg-stone-200"
+                className="absolute bottom-1.5 right-1.5 w-6 h-6 sm:w-7 sm:h-7 rounded-full border border-white/90 dark:border-stone-700 shadow-xs object-cover bg-stone-200 dark:bg-stone-800"
               />
             ) : (
-              <div className="absolute bottom-1.5 right-1.5 w-6 h-6 sm:w-7 sm:h-7 rounded-full border border-white/90 shadow-xs bg-amber-600 text-white flex items-center justify-center">
+              <div className="absolute bottom-1.5 right-1.5 w-6 h-6 sm:w-7 sm:h-7 rounded-full border border-white/90 dark:border-stone-700 shadow-xs bg-amber-600 text-white flex items-center justify-center">
                 <Store className="w-3.5 h-3.5" />
               </div>
             )}
@@ -201,7 +201,7 @@ export const FollowedShopRow: React.FC<FollowedShopRowProps> = ({
           {/* Visit Storefront button */}
           <button
             onClick={() => onSelectShop(shop.id)}
-            className="px-4 py-2 rounded-xl text-xs font-bold bg-stone-900 hover:bg-amber-600 text-white dark:bg-stone-100 dark:text-stone-900 dark:hover:bg-amber-500 dark:hover:text-white transition-all inline-flex items-center gap-1.5 shadow-xs"
+            className="px-4 py-2 rounded-xl text-xs font-bold bg-stone-900 hover:bg-amber-600 text-white dark:bg-stone-800 dark:text-stone-100 dark:border dark:border-stone-700 dark:hover:bg-amber-600 dark:hover:border-amber-600 transition-all inline-flex items-center gap-1.5 shadow-xs"
           >
             <Store className="w-3.5 h-3.5" />
             <span>Storefront</span>
@@ -232,7 +232,7 @@ export const FollowedShopRow: React.FC<FollowedShopRowProps> = ({
               <div
                 key={dish.id}
                 onClick={() => onSelectDish ? onSelectDish(dish) : onSelectShop(shop.id)}
-                className="flex items-center gap-2.5 p-2 rounded-xl bg-stone-50 dark:bg-stone-850/60 border border-stone-200/60 dark:border-stone-800 hover:border-amber-400 dark:hover:border-amber-500 cursor-pointer transition-all group/dish"
+                className="flex items-center gap-2.5 p-2 rounded-xl bg-stone-50 dark:bg-stone-800/70 border border-stone-200/60 dark:border-stone-700/80 hover:border-amber-400 dark:hover:border-amber-500 cursor-pointer transition-all group/dish"
               >
                 <img
                   src={dish.image}
@@ -248,7 +248,7 @@ export const FollowedShopRow: React.FC<FollowedShopRowProps> = ({
                     <span className="text-xs font-bold text-amber-700 dark:text-amber-400 tabular-nums">
                       {formatPrice(dish.price, dish.shopCountry || shop.country)}
                     </span>
-                    <span className="text-[9px] uppercase font-bold px-1.5 py-0.2 rounded bg-stone-200/60 dark:bg-stone-750 text-stone-600 dark:text-stone-300">
+                    <span className="text-[9px] uppercase font-bold px-1.5 py-0.2 rounded bg-stone-200/60 dark:bg-stone-700 text-stone-600 dark:text-stone-300">
                       {dish.menuType}
                     </span>
                   </div>
