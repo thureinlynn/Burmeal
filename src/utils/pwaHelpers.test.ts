@@ -3,7 +3,9 @@ import assert from 'node:assert/strict';
 import {
   detectInstallPlatform,
   getInstallInstructions,
+  getInstallReadinessInfo,
   isStandaloneDisplayMode,
+  shouldShowFirstTimeInstallPopup,
   shouldShowInstallAlert,
 } from './pwaHelpers.ts';
 
@@ -39,6 +41,56 @@ test('shouldShowInstallAlert shows alert only when not installed and not dismiss
   assert.equal(shouldShowInstallAlert({ isInstalled: true, isDismissed: false }), false);
   assert.equal(shouldShowInstallAlert({ isInstalled: false, isDismissed: true }), false);
   assert.equal(shouldShowInstallAlert({ isInstalled: true, isDismissed: true }), false);
+});
+
+test('shouldShowFirstTimeInstallPopup gates properly on install state, acknowledgement, and blocking modals', () => {
+  assert.equal(
+    shouldShowFirstTimeInstallPopup({
+      isInstalled: false,
+      isDismissed: false,
+      hasSeenFirstTimePrompt: false,
+      isBlockedByOtherModal: false,
+    }),
+    true
+  );
+  assert.equal(
+    shouldShowFirstTimeInstallPopup({
+      isInstalled: true,
+      isDismissed: false,
+      hasSeenFirstTimePrompt: false,
+      isBlockedByOtherModal: false,
+    }),
+    false
+  );
+  assert.equal(
+    shouldShowFirstTimeInstallPopup({
+      isInstalled: false,
+      isDismissed: false,
+      hasSeenFirstTimePrompt: true,
+      isBlockedByOtherModal: false,
+    }),
+    false
+  );
+  assert.equal(
+    shouldShowFirstTimeInstallPopup({
+      isInstalled: false,
+      isDismissed: false,
+      hasSeenFirstTimePrompt: false,
+      isBlockedByOtherModal: true,
+    }),
+    false
+  );
+});
+
+test('getInstallReadinessInfo prioritizes native ready status and tailored platform prompts', () => {
+  const nativeReady = getInstallReadinessInfo({ isInstallable: true, platform: 'android' });
+  assert.equal(nativeReady.isNativeReady, true);
+  assert.equal(nativeReady.badgeText, 'Ready to Install');
+  assert.equal(nativeReady.ctaLabel, 'Install App Now');
+
+  const iosInfo = getInstallReadinessInfo({ isInstallable: false, platform: 'ios' });
+  assert.equal(iosInfo.isNativeReady, false);
+  assert.ok(iosInfo.ctaLabel.includes('iPhone'));
 });
 
 test('getInstallInstructions returns clear platform-specific steps', () => {

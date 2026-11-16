@@ -43,6 +43,14 @@ import { FollowedShopRow } from './components/FollowedShopRow';
 import { SettingsView } from './components/SettingsView';
 import { LocationModal } from './components/LocationModal';
 import { PWAInstallBanner, OfflineIndicator } from './components/PWAInstallBanner';
+import { CookieConsentPopup } from './components/CookieConsentPopup';
+import {
+  CookieConsentChoice,
+  CookieConsentPreferences,
+  getStoredCookieConsent,
+  saveCookieConsent,
+  shouldShowCookiePopup,
+} from './utils/cookieConsentHelpers';
 import {
   Sparkles,
   Heart,
@@ -101,6 +109,28 @@ export default function App() {
   const [isVegetarian, setIsVegetarian] = useState(false);
   const [isHalal, setIsHalal] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState('ALL');
+  const [cookieConsent, setCookieConsent] = useState<CookieConsentPreferences | null>(() => {
+    if (typeof window === 'undefined') return null;
+    return getStoredCookieConsent(window.localStorage);
+  });
+
+  const showCookiePopup = shouldShowCookiePopup({
+    consent: cookieConsent,
+    isOnboardingBlocking: isLocationModalOpen,
+  });
+
+  const handleSelectCookieConsent = (choice: CookieConsentChoice) => {
+    const saved = saveCookieConsent(
+      typeof window !== 'undefined' ? window.localStorage : null,
+      choice,
+      typeof document !== 'undefined'
+        ? (cookieStr) => {
+            document.cookie = cookieStr;
+          }
+        : undefined
+    );
+    setCookieConsent(saved);
+  };
 
   const isSignedIn = Boolean(user || token);
 
@@ -1036,7 +1066,7 @@ export default function App() {
         hasFollowedShops={followedShopsList.length > 0}
       />
 
-      <PWAInstallBanner />
+      <PWAInstallBanner isBlockedByOtherModal={isLocationModalOpen || showCookiePopup} />
 
       {/* Main Content Area */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6">
@@ -1854,6 +1884,11 @@ export default function App() {
         onClose={closeLocationModal}
         canDismiss={hasChosenLocation}
         isFirstTime={!hasChosenLocation}
+      />
+
+      <CookieConsentPopup
+        isOpen={showCookiePopup}
+        onSelectConsent={handleSelectCookieConsent}
       />
 
       <OfflineIndicator />

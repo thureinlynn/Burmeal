@@ -8,6 +8,17 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <script>
+      // Capture PWA install prompt early before React mounts so first-time users stay install-ready
+      window.__burmealDeferredPrompt = null;
+      window.__burmealAppInstalled = false;
+      window.addEventListener('beforeinstallprompt', function(event) {
+        event.preventDefault();
+        window.__burmealDeferredPrompt = event;
+      });
+      window.addEventListener('appinstalled', function() {
+        window.__burmealAppInstalled = true;
+        window.__burmealDeferredPrompt = null;
+      });
       // Suppress benign HMR WebSocket connection failure in container proxy environments
       window.addEventListener('unhandledrejection', function(event) {
         var reason = event && event.reason;

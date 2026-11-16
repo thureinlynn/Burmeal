@@ -13,6 +13,8 @@ export const BURMEAL_STORAGE_KEYS = [
   'burmeal_pref_notify',
   'burmeal_lang',
   'burmeal_theme',
+  'burmeal_cookie_consent',
+  'burmeal_pwa_first_prompt_seen',
 ] as const;
 
 export interface StorageLike {

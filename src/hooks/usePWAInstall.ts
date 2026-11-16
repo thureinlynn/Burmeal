@@ -11,11 +11,23 @@ interface BeforeInstallPromptEvent extends Event {
 }
 
 const DISMISS_SESSION_KEY = 'burmeal_pwa_alert_dismissed';
+const FIRST_PROMPT_SEEN_KEY = 'burmeal_pwa_first_prompt_seen';
+
+declare global {
+  interface Window {
+    __burmealDeferredPrompt?: BeforeInstallPromptEvent | null;
+    __burmealAppInstalled?: boolean;
+  }
+}
 
 export function usePWAInstall() {
-  const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+  const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(() => {
+    if (typeof window === 'undefined') return null;
+    return window.__burmealDeferredPrompt || null;
+  });
   const [isInstalled, setIsInstalled] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false;
+    if (window.__burmealAppInstalled) return true;
     const mql = window.matchMedia?.('(display-mode: standalone)')?.matches ?? false;
     const navStandalone = (window.navigator as unknown as { standalone?: boolean }).standalone;
     return isStandaloneDisplayMode(mql, navStandalone);
@@ -31,9 +43,20 @@ export function usePWAInstall() {
       return false;
     }
   });
+  const [hasSeenFirstTimePrompt, setHasSeenFirstTimePrompt] = useState<boolean>(() => {
+    try {
+      return window.localStorage.getItem(FIRST_PROMPT_SEEN_KEY) === '1';
+    } catch {
+      return false;
+    }
+  });
 
   useEffect(() => {
     const checkStandalone = () => {
+      if (window.__burmealAppInstalled) {
+        setIsInstalled(true);
+        return;
+      }
       const mql = window.matchMedia?.('(display-mode: standalone)')?.matches ?? false;
       const navStandalone = (window.navigator as unknown as { standalone?: boolean }).standalone;
       setIsInstalled(isStandaloneDisplayMode(mql, navStandalone));
@@ -41,6 +64,10 @@ export function usePWAInstall() {
 
     checkStandalone();
     setPlatform(detectInstallPlatform(window.navigator.userAgent));
+
+    if (window.__burmealDeferredPrompt) {
+      setDeferredPrompt(window.__burmealDeferredPrompt);
+    }
 
     const mediaQuery = window.matchMedia?.('(display-mode: standalone)');
     const handleDisplayModeChange = () => checkStandalone();
@@ -50,12 +77,22 @@ export function usePWAInstall() {
 
     const handleBeforeInstallPrompt = (e: Event) => {
       e.preventDefault();
-      setDeferredPrompt(e as BeforeInstallPromptEvent);
+      const bipEvent = e as BeforeInstallPromptEvent;
+      window.__burmealDeferredPrompt = bipEvent;
+      setDeferredPrompt(bipEvent);
     };
 
     const handleAppInstalled = () => {
+      window.__burmealAppInstalled = true;
+      window.__burmealDeferredPrompt = null;
       setIsInstalled(true);
       setDeferredPrompt(null);
+      try {
+        window.localStorage.setItem(FIRST_PROMPT_SEEN_KEY, '1');
+        setHasSeenFirstTimePrompt(true);
+      } catch {
+        // Ignore storage errors
+      }
     };
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
@@ -70,11 +107,24 @@ export function usePWAInstall() {
     };
   }, []);
 
+  const acknowledgeFirstTimePrompt = () => {
+    setHasSeenFirstTimePrompt(true);
+    try {
+      window.localStorage.setItem(FIRST_PROMPT_SEEN_KEY, '1');
+    } catch {
+      // Ignore storage failures
+    }
+  };
+
   const install = async (): Promise<'accepted' | 'dismissed' | 'unavailable'> => {
-    if (!deferredPrompt) return 'unavailable';
-    await deferredPrompt.prompt();
-    const { outcome } = await deferredPrompt.userChoice;
+    const promptEvent = deferredPrompt || window.__burmealDeferredPrompt;
+    if (!promptEvent) return 'unavailable';
+    await promptEvent.prompt();
+    const { outcome } = await promptEvent.userChoice;
+    acknowledgeFirstTimePrompt();
     if (outcome === 'accepted') {
+      window.__burmealAppInstalled = true;
+      window.__burmealDeferredPrompt = null;
       setIsInstalled(true);
       setDeferredPrompt(null);
       return 'accepted';
@@ -84,6 +134,7 @@ export function usePWAInstall() {
 
   const dismiss = () => {
     setIsDismissed(true);
+    acknowledgeFirstTimePrompt();
     try {
       window.sessionStorage.setItem(DISMISS_SESSION_KEY, '1');
     } catch {
@@ -95,8 +146,10 @@ export function usePWAInstall() {
     isInstallable: Boolean(deferredPrompt),
     isInstalled,
     isDismissed,
+    hasSeenFirstTimePrompt,
     platform,
     install,
     dismiss,
+    acknowledgeFirstTimePrompt,
   };
 }

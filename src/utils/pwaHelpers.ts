@@ -25,6 +25,73 @@ export function shouldShowInstallAlert(params: {
   return !params.isInstalled && !params.isDismissed;
 }
 
+export function shouldShowFirstTimeInstallPopup(params: {
+  isInstalled: boolean;
+  isDismissed: boolean;
+  hasSeenFirstTimePrompt: boolean;
+  isBlockedByOtherModal: boolean;
+}): boolean {
+  return (
+    !params.isInstalled &&
+    !params.isDismissed &&
+    !params.hasSeenFirstTimePrompt &&
+    !params.isBlockedByOtherModal
+  );
+}
+
+export function getInstallReadinessInfo(params: {
+  isInstallable: boolean;
+  platform: InstallPlatform;
+}): {
+  badgeText: string;
+  headline: string;
+  description: string;
+  ctaLabel: string;
+  isNativeReady: boolean;
+} {
+  if (params.isInstallable) {
+    return {
+      badgeText: 'Ready to Install',
+      headline: 'BurMeal App is Ready on Your Device',
+      description:
+        'Tap Install App for one-tap installation with full-screen mobile access and no browser address bar.',
+      ctaLabel: 'Install App Now',
+      isNativeReady: true,
+    };
+  }
+
+  if (params.platform === 'ios') {
+    return {
+      badgeText: 'iOS Home Screen Ready',
+      headline: 'Install BurMeal on iPhone / iPad',
+      description:
+        'Ready to add to your Home Screen for full-screen mobile access with no Safari address bar.',
+      ctaLabel: 'Install on iPhone / iPad',
+      isNativeReady: false,
+    };
+  }
+
+  if (params.platform === 'android') {
+    return {
+      badgeText: 'Android App Ready',
+      headline: 'Install BurMeal on Android',
+      description:
+        'Ready to install on your device for full-screen mobile access with no browser address bar.',
+      ctaLabel: 'Install App',
+      isNativeReady: false,
+    };
+  }
+
+  return {
+    badgeText: 'Ready to Install',
+    headline: 'Install BurMeal on Your Device',
+    description:
+      'App is not installed yet — install to your device for full-screen access with no address bar.',
+    ctaLabel: 'Install App',
+    isNativeReady: false,
+  };
+}
+
 export function getInstallInstructions(platform: InstallPlatform): {
   title: string;
   subtitle: string;
