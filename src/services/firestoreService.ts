@@ -12,9 +12,14 @@ import {
   handleFirestoreError,
   OperationType,
 } from '../firebase';
-import { Shop, MenuItem, User } from '../types';
+import { Shop, MenuItem, User, DailySpecialPost } from '../types';
 import { stripUndefined } from '../utils/authHelpers';
 import { mergeUniqueIds } from '../utils/userDataHelpers';
+import {
+  computeDailySpecialExpiry,
+  partitionDailySpecialPosts,
+} from '../utils/dailySpecialHelpers';
+import { removeDailySpecialImage } from './supabaseClient';
 
 function normalizeEmail(email?: string | null): string {
   return email ? email.trim().toLowerCase() : '';
@@ -571,4 +576,87 @@ export const firestoreService = {
       return [];
     }
   },
+
+  // 14. Daily Special Facebook-style Posts (48h auto-expiry + Supabase image cleanup)
+  subscribeDailySpecialPosts(onUpdate: (posts: DailySpecialPost[]) => void): () => void {
+    const colRef = collection(db, 'daily_special_posts');
+    return onSnapshot(
+      colRef,
+      (snapshot) => {
+        const raw: DailySpecialPost[] = [];
+        snapshot.forEach((docSnap) => {
+          raw.push(docSnap.data() as DailySpecialPost);
+        });
+        const { active, expired } = partitionDailySpecialPosts(raw);
+        if (expired.length > 0) {
+          void Promise.all(
+            expired.map(async (exp) => {
+              await removeDailySpecialImage(exp.imageStoragePath || exp.image).catch(() => {});
+              await deleteDoc(doc(db, 'daily_special_posts', exp.id)).catch(() => {});
+            })
+          );
+        }
+        onUpdate(active);
+      },
+      (error) => {
+        handleFirestoreError(error, OperationType.GET, 'daily_special_posts');
+      }
+    );
+  },
+
+  async getDailySpecialPostsByShopId(shopId: string): Promise<DailySpecialPost[]> {
+    const q = query(collection(db, 'daily_special_posts'), where('shopId', '==', shopId));
+    try {
+      const snap = await getDocs(q);
+      const raw: DailySpecialPost[] = [];
+      snap.forEach((docSnap) => {
+        raw.push(docSnap.data() as DailySpecialPost);
+      });
+      const { active, expired } = partitionDailySpecialPosts(raw);
+      if (expired.length > 0) {
+        void Promise.all(
+          expired.map(async (exp) => {
+            await removeDailySpecialImage(exp.imageStoragePath || exp.image).catch(() => {});
+            await deleteDoc(doc(db, 'daily_special_posts', exp.id)).catch(() => {});
+          })
+        );
+      }
+      return active;
+    } catch (error) {
+      handleFirestoreError(error, OperationType.GET, 'daily_special_posts');
+      return [];
+    }
+  },
+
+  async createDailySpecialPost(post: DailySpecialPost): Promise<DailySpecialPost> {
+    const postId =
+      post.id || `dsp_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const createdAt = post.createdAt || new Date().toISOString();
+    const expiresAt = post.expiresAt || computeDailySpecialExpiry(createdAt);
+    const fullPost = stripUndefined({
+      ...post,
+      id: postId,
+      createdAt,
+      expiresAt,
+    }) as DailySpecialPost;
+
+    try {
+      await setDoc(doc(db, 'daily_special_posts', postId), fullPost);
+      return fullPost;
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, `daily_special_posts/${postId}`);
+      throw error;
+    }
+  },
+
+  async deleteDailySpecialPost(postId: string, imageOrPath?: string | null): Promise<void> {
+    try {
+      await removeDailySpecialImage(imageOrPath).catch(() => {});
+      await deleteDoc(doc(db, 'daily_special_posts', postId));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, `daily_special_posts/${postId}`);
+      throw error;
+    }
+  },
 };
+

@@ -62,9 +62,16 @@ service cloud.firestore {
       allow read, write: if true;
     }
 
+    // Daily Special Facebook-style Posts (48h TTL)
+    match /daily_special_posts/{postId} {
+      allow read: if true;
+      allow create, update, delete: if true;
+    }
+
     // System connection test doc
     match /system/{docId} {
       allow read, write: if true;
     }
   }
 }
+

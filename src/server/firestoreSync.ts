@@ -89,6 +89,38 @@ export async function deleteMenuItemFromFirestore(itemId: string) {
   }
 }
 
+export async function syncDailySpecialToFirestore(post: any) {
+  try {
+    const payload: Record<string, any> = {
+      id: post.id,
+      shopId: post.shopId || post.shop_id,
+      shopName: post.shopName || post.shop_name || 'Local Kitchen',
+      shopAvatarImage: post.shopAvatarImage || post.shop_avatar_image || '',
+      shopCountry: post.shopCountry || post.shop_country || '',
+      shopRegion: post.shopRegion || post.shop_region || '',
+      shopCity: post.shopCity || post.shop_city || '',
+      title: post.title,
+      post: post.post,
+      image: post.image || '',
+      imageStoragePath: post.imageStoragePath || post.image_storage_path || '',
+      createdAt: post.createdAt || post.created_at || new Date().toISOString(),
+      expiresAt: post.expiresAt || post.expires_at,
+    };
+    await setDoc(doc(serverDb, 'daily_special_posts', post.id), payload, { merge: true });
+  } catch (err) {
+    console.warn('syncDailySpecialToFirestore error:', err);
+  }
+}
+
+export async function deleteDailySpecialFromFirestore(postId: string) {
+  try {
+    await deleteDoc(doc(serverDb, 'daily_special_posts', postId));
+  } catch (err) {
+    console.warn('deleteDailySpecialFromFirestore error:', err);
+  }
+}
+
+
 export async function syncUserToFirestore(user: any) {
   try {
     const payload = {

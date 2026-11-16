@@ -2,21 +2,25 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from './context/AuthContext';
 import { useLanguage } from './context/LanguageContext';
 import { useLocation } from './context/LocationContext';
-import { MenuItem, Shop, MenuType } from './types';
+import { MenuItem, Shop, MenuType, DailySpecialPost } from './types';
 import { apiClient } from './services/apiClient';
 import { firestoreService } from './services/firestoreService';
 import {
   mergeUniqueIds,
   mergeUniqueShops,
   mergeUniqueMenuItems,
-  applyFollowStateToShops,
-  applySaveStateToMenuItems,
   buildDisplayedShops,
   buildDisplayedMenuItems,
   filterFollowedShops,
   filterFollowedMenuItems,
   filterSavedMenuItems,
 } from './utils/userDataHelpers';
+import {
+  computeDailySpecialExpiry,
+  filterDailySpecialPosts,
+  mergeUniqueDailySpecialPosts,
+  partitionDailySpecialPosts,
+} from './utils/dailySpecialHelpers';
 import { parseShareTargetFromSearch } from './utils/shareHelpers';
 import { buildNewShopForOwner } from './utils/authHelpers';
 import { COUNTRIES, getDefaultRegionNameForCountry } from './utils/countries';
@@ -27,6 +31,7 @@ import { MenuCard } from './components/MenuCard';
 import { ItemDetailModal } from './components/ItemDetailModal';
 import { ShopProfileView } from './components/ShopProfileView';
 import { ShopDashboard } from './components/ShopDashboard';
+import { DailySpecialFeedCard } from './components/DailySpecialFeedCard';
 import { CustomerProfile } from './components/CustomerProfile';
 import { AdminPanel } from './components/AdminPanel';
 import { AuthModal } from './components/AuthModal';
@@ -41,6 +46,7 @@ import {
   Bookmark,
   Store,
   MapPin,
+  Megaphone,
 } from 'lucide-react';
 
 export default function App() {
@@ -68,6 +74,10 @@ export default function App() {
 
   // Data states
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
+  const [dailySpecialPosts, setDailySpecialPosts] = useState<DailySpecialPost[]>([]);
+  const [allBackendSpecialsCache, setAllBackendSpecialsCache] = useState<DailySpecialPost[]>([]);
+  const [firestoreSpecialPosts, setFirestoreSpecialPosts] = useState<DailySpecialPost[]>([]);
+  const [expiryClockMs, setExpiryClockMs] = useState<number>(() => Date.now());
   const [shops, setShops] = useState<Shop[]>([]);
   const [allBackendShopsCache, setAllBackendShopsCache] = useState<Shop[]>([]);
   const [allBackendItemsCache, setAllBackendItemsCache] = useState<MenuItem[]>([]);
@@ -82,9 +92,9 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [gmpQuotaExceeded, setGmpQuotaExceeded] = useState(false);
 
-  // Search & Filters
+  // Search & Filters ('SPECIAL' Daily Specials is the default view)
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedMenuType, setSelectedMenuType] = useState<MenuType | 'ALL'>('ALL');
+  const [selectedMenuType, setSelectedMenuType] = useState<MenuType>('SPECIAL');
   const [isVegetarian, setIsVegetarian] = useState(false);
   const [isHalal, setIsHalal] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState('ALL');
@@ -95,6 +105,13 @@ export default function App() {
     const onQuotaExceeded = () => setGmpQuotaExceeded(true);
     window.addEventListener('gmp-quota-exceeded', onQuotaExceeded);
     return () => window.removeEventListener('gmp-quota-exceeded', onQuotaExceeded);
+  }, []);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setExpiryClockMs(Date.now());
+    }, 60 * 1000);
+    return () => window.clearInterval(timer);
   }, []);
 
   // Resolve shared deep links (?item=<id> or ?shop=<id>) across all regions
@@ -186,7 +203,7 @@ export default function App() {
     [firestoreSavedIds, backendSavedIds]
   );
 
-  // Subscribe to global Firestore shops & menu_items caches so followed/saved custom shops/items resolve across devices
+  // Subscribe to global Firestore shops, menu_items, & daily_special_posts caches
   useEffect(() => {
     const unsubShops = firestoreService.subscribeShops((fsShops) => {
       setFirestoreShopsCache(fsShops);
@@ -194,9 +211,13 @@ export default function App() {
     const unsubItems = firestoreService.subscribeMenuItems((fsItems) => {
       setFirestoreItemsCache(fsItems);
     });
+    const unsubSpecials = firestoreService.subscribeDailySpecialPosts((fsPosts) => {
+      setFirestoreSpecialPosts(fsPosts);
+    });
     return () => {
       unsubShops();
       unsubItems();
+      unsubSpecials();
     };
   }, []);
 
@@ -247,7 +268,7 @@ export default function App() {
       const data = await apiClient.getMenuItems(
         {
           shopId: selectedShopId,
-          menuType: selectedMenuType,
+          menuType: selectedShopId ? 'ALL' : selectedMenuType,
           category: selectedCategory,
           isVegetarian,
           isHalal,
@@ -262,6 +283,25 @@ export default function App() {
       console.error('Failed to load menu items', err);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // Load active (<48h) Daily Special Facebook-style posts
+  const loadDailySpecialPosts = async () => {
+    try {
+      const isFollowFeed = currentTab === 'following';
+      const posts = await apiClient.getDailySpecialPosts(
+        {
+          shopId: selectedShopId,
+          query: searchQuery.trim(),
+          country: isFollowFeed || selectedShopId ? undefined : selectedCountry,
+          regionId: isFollowFeed || selectedShopId ? undefined : selectedRegionId,
+        },
+        token
+      );
+      setDailySpecialPosts(posts);
+    } catch (err) {
+      console.error('Failed to load daily special posts', err);
     }
   };
 
@@ -293,12 +333,14 @@ export default function App() {
       return;
     }
     try {
-      const [backendFollowed, allShops] = await Promise.all([
+      const [backendFollowed, allShops, allSpecials] = await Promise.all([
         token ? apiClient.getShops({ followedOnly: true }, token) : Promise.resolve([]),
         apiClient.getShops(null, token),
+        apiClient.getDailySpecialPosts({}, token).catch(() => []),
       ]);
       setBackendFollowedIds(backendFollowed.map((s) => s.id));
       setAllBackendShopsCache(allShops);
+      setAllBackendSpecialsCache(allSpecials);
     } catch (err) {
       console.error('Failed to load followed shops', err);
     }
@@ -311,6 +353,7 @@ export default function App() {
 
   useEffect(() => {
     loadMenuItems();
+    loadDailySpecialPosts();
   }, [
     token,
     currentTab,
@@ -333,6 +376,7 @@ export default function App() {
       setBackendSavedIds([]);
       setAllBackendShopsCache([]);
       setAllBackendItemsCache([]);
+      setAllBackendSpecialsCache([]);
       setSavedItems([]);
     }
   }, [token, user?.id, currentTab]);
@@ -410,12 +454,14 @@ export default function App() {
   // Dedicated Owner Shop & Menu state (never filtered out by consumer region)
   const [ownerShop, setOwnerShop] = useState<Shop | null>(null);
   const [ownerMenuItems, setOwnerMenuItems] = useState<MenuItem[]>([]);
+  const [ownerDailySpecialPosts, setOwnerDailySpecialPosts] = useState<DailySpecialPost[]>([]);
   const [isOwnerLoading, setIsOwnerLoading] = useState(false);
 
   const loadOwnerData = async () => {
     if (user?.role !== 'SHOP_OWNER') {
       setOwnerShop(null);
       setOwnerMenuItems([]);
+      setOwnerDailySpecialPosts([]);
       setIsOwnerLoading(false);
       return;
     }
@@ -467,9 +513,11 @@ export default function App() {
         await apiClient.syncFirebaseAccount(user, finalShop).catch(() => {});
 
         setOwnerShop(finalShop);
-        const [fsItems, apiRes] = await Promise.all([
+        const [fsItems, apiRes, fsSpecials, apiSpecials] = await Promise.all([
           firestoreService.getMenuItemsByShopId(finalShop.id),
           apiClient.getMenuItems({ shopId: finalShop.id }, token),
+          firestoreService.getDailySpecialPostsByShopId(finalShop.id).catch(() => []),
+          apiClient.getDailySpecialPosts({ shopId: finalShop.id }, token).catch(() => []),
         ]);
         const mergedMap = new Map<string, MenuItem>();
         for (const item of fsItems) {
@@ -481,9 +529,15 @@ export default function App() {
           }
         }
         setOwnerMenuItems(Array.from(mergedMap.values()));
+
+        const { active: activeOwnerSpecials } = partitionDailySpecialPosts(
+          mergeUniqueDailySpecialPosts(apiSpecials, fsSpecials)
+        );
+        setOwnerDailySpecialPosts(activeOwnerSpecials);
       } else {
         setOwnerShop(null);
         setOwnerMenuItems([]);
+        setOwnerDailySpecialPosts([]);
       }
     } catch (err) {
       console.error('Failed to load owner data:', err);
@@ -498,6 +552,7 @@ export default function App() {
     } else {
       setOwnerShop(null);
       setOwnerMenuItems([]);
+      setOwnerDailySpecialPosts([]);
       setIsOwnerLoading(false);
     }
   }, [user, user?.role, shopId, token]);
@@ -645,6 +700,77 @@ export default function App() {
     }
   };
 
+  const handleCreateDailySpecialPost = async (data: {
+    title: string;
+    post: string;
+    image?: string;
+    imageStoragePath?: string;
+  }) => {
+    const targetShopId = ownerShop?.id || shopId;
+    if (!targetShopId) return;
+    try {
+      const createdAt = new Date().toISOString();
+      const canonicalId = `dsp_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+      const fullPost: DailySpecialPost = {
+        id: canonicalId,
+        shopId: targetShopId,
+        shopName: ownerShop?.name || 'Local Kitchen',
+        shopAvatarImage: ownerShop?.profileImageUrl || ownerShop?.avatarImage || '',
+        shopCountry: ownerShop?.country || '',
+        shopRegion: ownerShop?.region || '',
+        shopCity: ownerShop?.city || '',
+        title: data.title.trim(),
+        post: data.post.trim(),
+        image: data.image || '',
+        imageStoragePath: data.imageStoragePath || '',
+        createdAt,
+        expiresAt: computeDailySpecialExpiry(createdAt),
+      };
+
+      const [apiCreated] = await Promise.all([
+        apiClient.createDailySpecialPost(fullPost, token).catch(() => fullPost),
+        firestoreService.createDailySpecialPost(fullPost).catch((fbErr) => {
+          console.warn('Direct Firestore daily special write notice:', fbErr);
+          return fullPost;
+        }),
+      ]);
+
+      const finalPost = apiCreated || fullPost;
+      setOwnerDailySpecialPosts((prev) =>
+        partitionDailySpecialPosts(mergeUniqueDailySpecialPosts([finalPost], prev)).active
+      );
+      setDailySpecialPosts((prev) =>
+        partitionDailySpecialPosts(mergeUniqueDailySpecialPosts([finalPost], prev)).active
+      );
+      setFirestoreSpecialPosts((prev) =>
+        partitionDailySpecialPosts(mergeUniqueDailySpecialPosts([finalPost], prev)).active
+      );
+
+      await Promise.all([loadOwnerData(), loadDailySpecialPosts()]);
+    } catch (err) {
+      console.error('Create daily special post error:', err);
+    }
+  };
+
+  const handleDeleteDailySpecialPost = async (id: string, imageOrPath?: string | null) => {
+    try {
+      setOwnerDailySpecialPosts((prev) => prev.filter((p) => p.id !== id));
+      setDailySpecialPosts((prev) => prev.filter((p) => p.id !== id));
+      setFirestoreSpecialPosts((prev) => prev.filter((p) => p.id !== id));
+      setAllBackendSpecialsCache((prev) => prev.filter((p) => p.id !== id));
+
+      await Promise.all([
+        apiClient.deleteDailySpecialPost(id, token).catch(() => false),
+        firestoreService.deleteDailySpecialPost(id, imageOrPath).catch((fbErr) => {
+          console.warn('Direct Firestore daily special delete notice:', fbErr);
+        }),
+      ]);
+      await Promise.all([loadOwnerData(), loadDailySpecialPosts()]);
+    } catch (err) {
+      console.error('Delete daily special post error:', err);
+    }
+  };
+
   const handleAdminStatusUpdate = async (id: string, status: 'APPROVED' | 'REJECTED') => {
     if (!token) return;
     try {
@@ -727,6 +853,55 @@ export default function App() {
     isVegetarian,
     isHalal,
     searchQuery,
+  ]);
+
+  const allKnownDailySpecialPosts = React.useMemo(
+    () =>
+      partitionDailySpecialPosts(
+        mergeUniqueDailySpecialPosts(
+          allBackendSpecialsCache,
+          dailySpecialPosts,
+          firestoreSpecialPosts,
+          ownerDailySpecialPosts
+        ),
+        expiryClockMs
+      ).active,
+    [
+      allBackendSpecialsCache,
+      dailySpecialPosts,
+      firestoreSpecialPosts,
+      ownerDailySpecialPosts,
+      expiryClockMs,
+    ]
+  );
+
+  const displayedDailySpecialPosts = React.useMemo(() => {
+    if (currentTab === 'following') {
+      return filterDailySpecialPosts(allKnownDailySpecialPosts, {
+        followedShopIds: effectiveFollowedIds,
+        query: searchQuery,
+        shopsLookup: allKnownShops,
+        nowMs: expiryClockMs,
+      });
+    }
+    return filterDailySpecialPosts(allKnownDailySpecialPosts, {
+      shopId: selectedShopId,
+      country: selectedShopId ? undefined : selectedCountry,
+      regionId: selectedShopId ? undefined : selectedRegionId,
+      query: searchQuery,
+      shopsLookup: allKnownShops,
+      nowMs: expiryClockMs,
+    });
+  }, [
+    currentTab,
+    allKnownDailySpecialPosts,
+    effectiveFollowedIds,
+    searchQuery,
+    allKnownShops,
+    selectedShopId,
+    selectedCountry,
+    selectedRegionId,
+    expiryClockMs,
   ]);
 
   const displayedSavedItems = React.useMemo(
@@ -927,6 +1102,7 @@ export default function App() {
             <ShopProfileView
               shop={ownerShop}
               menuItems={ownerMenuItems}
+              dailySpecialPosts={ownerDailySpecialPosts}
               onBack={() => {
                 setSelectedShopId(null);
                 setCurrentTab('shop_overview');
@@ -939,6 +1115,7 @@ export default function App() {
             <ShopDashboard
               shop={ownerShop}
               menuItems={ownerMenuItems}
+              dailySpecialPosts={ownerDailySpecialPosts}
               activeSubTab={
                 (['shop_overview', 'shop_menus', 'shop_profile', 'shop_settings'].includes(currentTab)
                   ? currentTab
@@ -954,6 +1131,8 @@ export default function App() {
               onCreateMenuItem={handleCreateMenuItem}
               onUpdateMenuItem={handleUpdateMenuItem}
               onDeleteMenuItem={handleDeleteMenuItem}
+              onCreateDailySpecialPost={handleCreateDailySpecialPost}
+              onDeleteDailySpecialPost={handleDeleteDailySpecialPost}
             />
           )
         ) : (
@@ -978,27 +1157,87 @@ export default function App() {
             {/* Results Header with Current Region Indicator */}
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold text-stone-500 dark:text-stone-400 flex items-center gap-1.5">
-                <span>{displayedMenuItems.length} {t.dishes} in {selectedRegionName} {selectedFlag}</span>
+                {selectedMenuType === 'SPECIAL' ? (
+                  <span>
+                    {displayedDailySpecialPosts.length} {t.dailySpecialsCountLabel} in {selectedRegionName} {selectedFlag}
+                  </span>
+                ) : (
+                  <span>
+                    {displayedMenuItems.length} {t.dishes} in {selectedRegionName} {selectedFlag}
+                  </span>
+                )}
                 {searchQuery && <span>for "{searchQuery}"</span>}
               </span>
-              {(selectedMenuType !== 'ALL' || isVegetarian || isHalal || searchQuery || selectedCategory !== 'ALL') && (
+              {(selectedMenuType !== 'SPECIAL' || isVegetarian || isHalal || searchQuery || selectedCategory !== 'ALL') && (
                 <button
                   onClick={() => {
                     setSearchQuery('');
-                    setSelectedMenuType('ALL');
+                    setSelectedMenuType('SPECIAL');
                     setIsVegetarian(false);
                     setIsHalal(false);
                     setSelectedCategory('ALL');
                   }}
-                  className="text-xs font-bold text-amber-700 dark:text-amber-400 hover:underline"
+                  className="text-xs font-bold text-amber-700 dark:text-amber-400 hover:underline cursor-pointer"
                 >
                   {t.resetFilters}
                 </button>
               )}
             </div>
 
-            {/* Public Food Items Grid (AT LEAST TWO ITEMS PER ROW IN MOBILE UI!) */}
-            {displayedMenuItems.length === 0 ? (
+            {selectedMenuType === 'SPECIAL' ? (
+              displayedDailySpecialPosts.length === 0 ? (
+                <div className="bg-white dark:bg-stone-900 rounded-3xl border border-stone-200 dark:border-stone-800 p-10 sm:p-12 text-center text-xs text-stone-400 space-y-3">
+                  <Megaphone className="w-10 h-10 mx-auto text-rose-400 dark:text-rose-500" />
+                  <p className="font-semibold text-sm text-stone-700 dark:text-stone-300">
+                    {selectedRegionName} — {t.noDailySpecialPosts}
+                  </p>
+                  <p className="text-[11px] text-stone-500 dark:text-stone-400 max-w-md mx-auto leading-relaxed">
+                    Daily Special posts from kitchens stay live for 48 hours. Browse Weekly Highlights, Master Menu, or explore another region.
+                  </p>
+                  <div className="flex flex-wrap items-center justify-center gap-2.5 pt-1">
+                    <button
+                      onClick={() => setSelectedMenuType('WEEKLY')}
+                      className="px-4 py-2 bg-stone-100 hover:bg-stone-200 dark:bg-stone-800 dark:hover:bg-stone-700 text-stone-800 dark:text-stone-200 font-bold text-xs rounded-xl border border-stone-200 dark:border-stone-700 transition-transform active:scale-95 inline-flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <Sparkles className="w-3.5 h-3.5 text-amber-600" />
+                      <span>{t.weeklyMenus}</span>
+                    </button>
+                    <button
+                      onClick={openLocationModal}
+                      className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl shadow-xs transition-transform active:scale-95 inline-flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <MapPin className="w-3.5 h-3.5" />
+                      <span>Change Region</span>
+                    </button>
+                    {!isSignedIn && (
+                      <button
+                        onClick={() => {
+                          setAuthDefaultRole('SHOP_OWNER');
+                          setIsAuthModalOpen(true);
+                        }}
+                        className="px-4 py-2 bg-stone-100 hover:bg-stone-200 dark:bg-stone-800 dark:hover:bg-stone-700 text-stone-800 dark:text-stone-200 font-bold text-xs rounded-xl border border-stone-200 dark:border-stone-700 transition-transform active:scale-95 inline-flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <Store className="w-3.5 h-3.5 text-amber-600" />
+                        <span>Register Your Kitchen</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className="max-w-2xl mx-auto space-y-4">
+                  {displayedDailySpecialPosts.map((post) => (
+                    <DailySpecialFeedCard
+                      key={post.id}
+                      post={post}
+                      onSelectShop={(sId) => {
+                        setSelectedShopId(sId);
+                        setCurrentTab('shop_detail');
+                      }}
+                    />
+                  ))}
+                </div>
+              )
+            ) : displayedMenuItems.length === 0 ? (
               <div className="bg-white dark:bg-stone-900 rounded-3xl border border-stone-200 dark:border-stone-800 p-10 sm:p-12 text-center text-xs text-stone-400 space-y-3">
                 <Store className="w-10 h-10 mx-auto text-stone-300 dark:text-stone-600" />
                 <p className="font-semibold text-sm text-stone-700 dark:text-stone-300">
@@ -1085,7 +1324,13 @@ export default function App() {
                     }`}
                   >
                     <Sparkles className="w-3.5 h-3.5 text-amber-600" />
-                    <span>Dishes Feed ({displayedMenuItems.length})</span>
+                    <span>
+                      Dishes Feed (
+                      {selectedMenuType === 'SPECIAL'
+                        ? displayedDailySpecialPosts.length
+                        : displayedMenuItems.length}
+                      )
+                    </span>
                   </button>
                 </div>
               )}
@@ -1182,8 +1427,48 @@ export default function App() {
                   onCategoryChange={setSelectedCategory}
                 />
 
-                {/* Grid of Dishes STRICTLY from followed shops */}
-                {displayedMenuItems.length === 0 ? (
+                {/* Grid of Dishes or Daily Special Feed STRICTLY from followed shops */}
+                {selectedMenuType === 'SPECIAL' ? (
+                  displayedDailySpecialPosts.length === 0 ? (
+                    <div className="bg-white/80 dark:bg-stone-900/80 backdrop-blur-md rounded-3xl border border-stone-200 dark:border-stone-800 p-10 text-center text-xs text-stone-400 space-y-3">
+                      <p className="font-semibold text-stone-700 dark:text-stone-300">
+                        No active Daily Special posts (within 48h) from your followed shops.
+                      </p>
+                      <p className="text-[11px] text-stone-400 max-w-sm mx-auto">
+                        Check Weekly Highlights or explore more local food kitchens to expand your feed.
+                      </p>
+                      <div className="flex flex-wrap items-center justify-center gap-2 pt-2">
+                        <button
+                          onClick={() => setSelectedMenuType('WEEKLY')}
+                          className="px-4 py-2 bg-stone-100 hover:bg-stone-200 dark:bg-stone-800 dark:hover:bg-stone-700 text-stone-800 dark:text-stone-200 font-bold text-xs rounded-xl shadow-xs transition-transform active:scale-95 inline-flex items-center gap-1.5 cursor-pointer"
+                        >
+                          <Sparkles className="w-3.5 h-3.5 text-amber-600" />
+                          <span>{t.weeklyMenus}</span>
+                        </button>
+                        <button
+                          onClick={() => setCurrentTab('shops')}
+                          className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl shadow-xs transition-transform active:scale-95 inline-flex items-center gap-1.5 cursor-pointer"
+                        >
+                          <Store className="w-3.5 h-3.5" />
+                          <span>Discover More Shops</span>
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="max-w-2xl mx-auto space-y-4">
+                      {displayedDailySpecialPosts.map((post) => (
+                        <DailySpecialFeedCard
+                          key={post.id}
+                          post={post}
+                          onSelectShop={(sId) => {
+                            setSelectedShopId(sId);
+                            setCurrentTab('shop_detail');
+                          }}
+                        />
+                      ))}
+                    </div>
+                  )
+                ) : displayedMenuItems.length === 0 ? (
                   <div className="bg-white/80 dark:bg-stone-900/80 backdrop-blur-md rounded-3xl border border-stone-200 dark:border-stone-800 p-10 text-center text-xs text-stone-400 space-y-3">
                     <p className="font-semibold text-stone-700 dark:text-stone-300">
                       No active dishes currently matching filters from your followed shops.
@@ -1361,7 +1646,14 @@ export default function App() {
         {(currentTab === 'shop_detail' || (selectedShopId && currentTab !== 'admin')) && activeDetailShop && (
           <ShopProfileView
             shop={activeDetailShop}
-            menuItems={displayedMenuItems.filter((m) => m.shopId === activeDetailShop.id)}
+            menuItems={buildDisplayedMenuItems(
+              menuItems,
+              mergeUniqueMenuItems(firestoreItemsCache, allBackendItemsCache),
+              allKnownShops,
+              effectiveSavedIds,
+              { shopId: activeDetailShop.id }
+            )}
+            dailySpecialPosts={allKnownDailySpecialPosts.filter((p) => p.shopId === activeDetailShop.id)}
             onBack={() => {
               setSelectedShopId(null);
               setCurrentTab('feed');

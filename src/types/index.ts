@@ -76,7 +76,24 @@ export interface MenuItem {
   };
 }
 
+export interface DailySpecialPost {
+  id: string;
+  shopId: string;
+  shopName: string;
+  shopAvatarImage?: string;
+  shopCountry?: string;
+  shopRegion?: string;
+  shopCity?: string;
+  title: string;
+  post: string;
+  image?: string;
+  imageStoragePath?: string;
+  createdAt: string;
+  expiresAt: string;
+}
+
 export interface AuthSession {
   user: User;
   token: string;
 }
+

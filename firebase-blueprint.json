@@ -87,6 +87,27 @@
         "createdAt": { "type": "string", "maxLength": 64 }
       },
       "required": ["customerId", "shopId", "createdAt"]
+    },
+    "dailySpecialPost": {
+      "title": "DailySpecialPost",
+      "description": "Facebook-style Daily Special feed post that auto-expires and deletes after 48 hours",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "shopId": { "type": "string", "maxLength": 128 },
+        "shopName": { "type": "string", "maxLength": 160 },
+        "shopAvatarImage": { "type": "string", "maxLength": 1000 },
+        "shopCountry": { "type": "string", "maxLength": 100 },
+        "shopRegion": { "type": "string", "maxLength": 100 },
+        "shopCity": { "type": "string", "maxLength": 100 },
+        "title": { "type": "string", "maxLength": 160 },
+        "post": { "type": "string", "maxLength": 4000 },
+        "image": { "type": "string", "maxLength": 1000 },
+        "imageStoragePath": { "type": "string", "maxLength": 500 },
+        "createdAt": { "type": "string", "maxLength": 64 },
+        "expiresAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "shopId", "title", "post", "createdAt", "expiresAt"]
     }
   },
   "firestore": {
@@ -102,6 +123,10 @@
       "schema": "menuItem",
       "description": "Menu items across shops"
     },
+    "/daily_special_posts/{postId}": {
+      "schema": "dailySpecialPost",
+      "description": "48-hour Daily Special feed posts"
+    },
     "/saved_items/{savedId}": {
       "schema": "savedItem",
       "description": "Saved dishes bookmarked by customers"
@@ -112,3 +137,4 @@
     }
   }
 }
+

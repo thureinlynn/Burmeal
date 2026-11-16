@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Shop, MenuItem, MenuType } from '../types';
+import { Shop, MenuItem, MenuType, DailySpecialPost } from '../types';
 import { useLanguage } from '../context/LanguageContext';
 import { buildContactLinks } from '../utils/filter';
 import { getCountryFlag } from '../utils/countries';
@@ -9,9 +9,11 @@ import {
   getShopProfileImage,
   hasValidCoordinates,
 } from '../utils/shopLocationHelpers';
+import { partitionDailySpecialPosts } from '../utils/dailySpecialHelpers';
 import { buildShopSharePayload } from '../utils/shareHelpers';
 import { ShareButton } from './ShareButton';
 import { MenuCard } from './MenuCard';
+import { DailySpecialFeedCard } from './DailySpecialFeedCard';
 import {
   MapPin,
   Heart,
@@ -19,16 +21,15 @@ import {
   Phone,
   Store,
   ArrowLeft,
-  Calendar,
-  Clock,
   Sparkles,
-  Building,
   Navigation,
+  Megaphone,
 } from 'lucide-react';
 
 interface ShopProfileViewProps {
   shop: Shop;
   menuItems: MenuItem[];
+  dailySpecialPosts?: DailySpecialPost[];
   onBack: () => void;
   onFollowToggle: (shopId: string) => void;
   onToggleSave: (item: MenuItem) => void;
@@ -38,13 +39,14 @@ interface ShopProfileViewProps {
 export const ShopProfileView: React.FC<ShopProfileViewProps> = ({
   shop,
   menuItems,
+  dailySpecialPosts = [],
   onBack,
   onFollowToggle,
   onToggleSave,
   onSelectItem,
 }) => {
   const { t } = useLanguage();
-  const [selectedMenuType, setSelectedMenuType] = useState<MenuType | 'ALL'>('ALL');
+  const [selectedMenuType, setSelectedMenuType] = useState<MenuType>('SPECIAL');
   const [coverSrc, setCoverSrc] = useState<string>(() =>
     resolveCoverDesign(shop.coverImage, shop.country, shop.region)
   );
@@ -69,10 +71,27 @@ export const ShopProfileView: React.FC<ShopProfileViewProps> = ({
     shopName: shop.name,
   });
 
-  const filteredItems = menuItems.filter((i) => {
-    if (selectedMenuType === 'ALL') return true;
-    return i.menuType === selectedMenuType;
-  });
+  const activeSpecialPosts = React.useMemo(() => {
+    const shopOnly = dailySpecialPosts.filter((p) => p.shopId === shop.id);
+    return partitionDailySpecialPosts(shopOnly).active.map((p) => ({
+      ...p,
+      shopName: p.shopName || shop.name,
+      shopAvatarImage: p.shopAvatarImage || profileImageSrc,
+      shopCountry: p.shopCountry || shop.country,
+      shopRegion: p.shopRegion || shop.region,
+      shopCity: p.shopCity || shop.city,
+    }));
+  }, [dailySpecialPosts, shop, profileImageSrc]);
+
+  const weeklyItems = React.useMemo(
+    () => menuItems.filter((i) => i.menuType === 'WEEKLY'),
+    [menuItems]
+  );
+  const masterItems = React.useMemo(
+    () => menuItems.filter((i) => i.menuType === 'PERMANENT'),
+    [menuItems]
+  );
+  const filteredItems = selectedMenuType === 'WEEKLY' ? weeklyItems : masterItems;
 
   const countryFlag = getCountryFlag(shop.country);
   const directionsUrl = buildGoogleMapsDirectionsUrl(shop);
@@ -321,58 +340,102 @@ export const ShopProfileView: React.FC<ShopProfileViewProps> = ({
         </div>
       </div>
 
-      {/* 3 Menu Types Filter Tabs */}
+      {/* Menu Tabs (Daily Specials default, no All Menus) */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div className="flex items-center gap-1 bg-stone-100 dark:bg-stone-800 p-1 rounded-xl border border-stone-200 dark:border-stone-700">
+        <div className="flex flex-wrap items-center gap-1 bg-stone-100 dark:bg-stone-800 p-1 rounded-xl border border-stone-200 dark:border-stone-700">
           <button
-            onClick={() => setSelectedMenuType('ALL')}
-            className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
-              selectedMenuType === 'ALL'
-                ? 'bg-white dark:bg-stone-700 text-stone-900 dark:text-stone-100 shadow-xs'
-                : 'text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100'
-            }`}
-          >
-            {t.allMenus} ({menuItems.length})
-          </button>
-          <button
+            type="button"
             onClick={() => setSelectedMenuType('SPECIAL')}
-            className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
+            className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
               selectedMenuType === 'SPECIAL'
                 ? 'bg-rose-600 text-white shadow-xs'
                 : 'text-stone-600 dark:text-stone-400 hover:text-rose-600'
             }`}
           >
-            {t.dailySpecials}
+            {t.dailySpecials} ({activeSpecialPosts.length})
           </button>
           <button
+            type="button"
             onClick={() => setSelectedMenuType('WEEKLY')}
-            className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
+            className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
               selectedMenuType === 'WEEKLY'
                 ? 'bg-amber-600 text-white shadow-xs'
                 : 'text-stone-600 dark:text-stone-400 hover:text-amber-600'
             }`}
           >
-            {t.weeklyMenus}
+            {t.weeklyMenus} ({weeklyItems.length})
           </button>
           <button
+            type="button"
             onClick={() => setSelectedMenuType('PERMANENT')}
-            className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
+            className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
               selectedMenuType === 'PERMANENT'
-                ? 'bg-stone-800 text-white shadow-xs'
-                : 'text-stone-600 dark:text-stone-400 hover:text-stone-900'
+                ? 'bg-stone-800 dark:bg-stone-700 text-white shadow-xs'
+                : 'text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100'
             }`}
           >
-            {t.regularMaster}
+            {t.regularMaster} ({masterItems.length})
           </button>
         </div>
 
-        <span className="text-xs text-stone-400 dark:text-stone-500">
-          {filteredItems.length} {t.dishes}
+        <span className="text-xs text-stone-500 dark:text-stone-400 tabular-nums">
+          {selectedMenuType === 'SPECIAL'
+            ? `${activeSpecialPosts.length} ${t.dailySpecialsCountLabel}`
+            : `${filteredItems.length} ${t.dishes}`}
         </span>
       </div>
 
-      {/* Dishes Grid (at least 2 items per row in mobile UI) */}
-      {filteredItems.length === 0 ? (
+      {/* Content View: Facebook-style Feed for Daily Specials OR Dish Grid for Weekly / Master */}
+      {selectedMenuType === 'SPECIAL' ? (
+        activeSpecialPosts.length === 0 ? (
+          <div className="bg-white dark:bg-stone-900 rounded-2xl border border-stone-200 dark:border-stone-800 p-8 sm:p-10 text-center space-y-2.5">
+            <div className="w-11 h-11 rounded-2xl bg-rose-50 dark:bg-rose-950/50 text-rose-500 flex items-center justify-center mx-auto">
+              <Megaphone className="w-5 h-5" />
+            </div>
+            <p className="text-sm font-semibold text-stone-700 dark:text-stone-200">
+              {t.noDailySpecialPosts}
+            </p>
+            <p className="text-xs text-stone-500 dark:text-stone-400 max-w-md mx-auto">
+              Daily Special posts shared by {shop.name} stay visible here for 48 hours.
+              {weeklyItems.length > 0 || masterItems.length > 0
+                ? ' Browse Weekly Highlights or Master Menu below for regular kitchen offerings.'
+                : ''}
+            </p>
+            {(weeklyItems.length > 0 || masterItems.length > 0) && (
+              <div className="flex items-center justify-center gap-2 pt-2">
+                {weeklyItems.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setSelectedMenuType('WEEKLY')}
+                    className="px-3.5 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold transition-colors cursor-pointer"
+                  >
+                    View {t.weeklyMenus} ({weeklyItems.length})
+                  </button>
+                )}
+                {masterItems.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setSelectedMenuType('PERMANENT')}
+                    className="px-3.5 py-1.5 rounded-lg bg-stone-800 hover:bg-stone-900 text-white text-xs font-semibold transition-colors cursor-pointer"
+                  >
+                    View {t.regularMaster} ({masterItems.length})
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="max-w-2xl mx-auto space-y-4">
+            {activeSpecialPosts.map((post) => (
+              <DailySpecialFeedCard
+                key={post.id}
+                post={post}
+                hideVisitShopAction
+              />
+            ))}
+          </div>
+        )
+      ) : filteredItems.length === 0 ? (
         <div className="bg-white dark:bg-stone-900 rounded-xl border border-stone-200 dark:border-stone-800 p-8 text-center text-xs text-stone-400">
           {t.noDishesFound}
         </div>

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { MenuItem, MenuType, Shop } from '../types';
+import { DailySpecialPost, MenuItem, MenuType, Shop } from '../types';
 import { formatPrice } from '../utils/filter';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
@@ -12,14 +12,26 @@ import {
   getRegionsForCountry,
   matchRegionOptionName,
 } from '../utils/countries';
-import { removeShopProfilePicture, uploadShopProfilePicture } from '../services/supabaseClient';
+import {
+  removeDailySpecialImage,
+  removeShopProfilePicture,
+  uploadDailySpecialImage,
+  uploadShopProfilePicture,
+} from '../services/supabaseClient';
 import { getShopProfileImage, normalizeExternalImageUrl } from '../utils/shopLocationHelpers';
+import {
+  formatDailySpecialTimestamp,
+  formatRemainingTime,
+  partitionDailySpecialPosts,
+  validateDailySpecialInput,
+} from '../utils/dailySpecialHelpers';
 import {
   getLocalCountryCoverDesign,
   isDefaultCoverImage,
   resolveCoverDesign,
 } from '../utils/coverDesigns';
 import { ShopLocationPicker } from './ShopLocationPicker';
+import { DailySpecialFeedCard } from './DailySpecialFeedCard';
 import {
   LayoutDashboard,
   UtensilsCrossed,
@@ -55,11 +67,13 @@ import {
   Upload,
   Loader2,
   X,
+  Megaphone,
 } from 'lucide-react';
 
 interface ShopDashboardProps {
   shop: Shop;
   menuItems: MenuItem[];
+  dailySpecialPosts?: DailySpecialPost[];
   activeSubTab?: 'shop_overview' | 'shop_menus' | 'shop_profile' | 'shop_settings';
   onSubTabChange?: (tab: 'shop_overview' | 'shop_menus' | 'shop_profile' | 'shop_settings') => void;
   onVisitShop?: (shopId: string) => void;
@@ -68,6 +82,13 @@ interface ShopDashboardProps {
   onCreateMenuItem: (data: any) => Promise<void>;
   onUpdateMenuItem: (id: string, data: any) => Promise<void>;
   onDeleteMenuItem: (id: string) => Promise<void>;
+  onCreateDailySpecialPost?: (data: {
+    title: string;
+    post: string;
+    image?: string;
+    imageStoragePath?: string;
+  }) => Promise<void>;
+  onDeleteDailySpecialPost?: (id: string, imageOrPath?: string | null) => Promise<void>;
 }
 
 const DAYS_OF_WEEK = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -76,6 +97,7 @@ const DAYS_OF_WEEK = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 export const ShopDashboard: React.FC<ShopDashboardProps> = ({
   shop,
   menuItems,
+  dailySpecialPosts = [],
   activeSubTab = 'shop_overview',
   onSubTabChange,
   onVisitShop,
@@ -84,6 +106,8 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
   onCreateMenuItem,
   onUpdateMenuItem,
   onDeleteMenuItem,
+  onCreateDailySpecialPost,
+  onDeleteDailySpecialPost,
 }) => {
   const { lang, setLang, t } = useLanguage();
   const { theme, setTheme } = useTheme();
@@ -166,9 +190,9 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
     }
   };
 
-  const [menuFilter, setMenuFilter] = useState<MenuType | 'ALL'>('ALL');
+  const [menuFilter, setMenuFilter] = useState<MenuType>('SPECIAL');
 
-  // Dish modal
+  // Dish modal (Weekly Special & Master Menu items)
   const [isItemModalOpen, setIsItemModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<MenuItem | null>(null);
 
@@ -177,12 +201,23 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
   const [image, setImage] = useState('');
   const [price, setPrice] = useState('');
   const [category, setCategory] = useState('Noodles & Broth');
-  const [menuType, setMenuType] = useState<MenuType>('SPECIAL');
+  const [menuType, setMenuType] = useState<MenuType>('WEEKLY');
   const [isVegetarian, setIsVegetarian] = useState(false);
   const [isHalal, setIsHalal] = useState(false);
   const [specialDate, setSpecialDate] = useState(new Date().toISOString().slice(0, 10));
   const [availableDays, setAvailableDays] = useState<string[]>(['Mon', 'Wed', 'Fri']);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Daily Special Facebook-style Post Modal
+  const [isDailySpecialModalOpen, setIsDailySpecialModalOpen] = useState(false);
+  const [specialPostTitle, setSpecialPostTitle] = useState('');
+  const [specialPostBody, setSpecialPostBody] = useState('');
+  const [specialPostImage, setSpecialPostImage] = useState('');
+  const [specialPostImagePath, setSpecialPostImagePath] = useState('');
+  const [isUploadingSpecialImage, setIsUploadingSpecialImage] = useState(false);
+  const [specialPostError, setSpecialPostError] = useState('');
+  const [isSubmittingSpecialPost, setIsSubmittingSpecialPost] = useState(false);
+  const [deletingSpecialId, setDeletingSpecialId] = useState<string | null>(null);
 
   // Shop Profile state (Tab 3: Page Info)
   const [shopName, setShopName] = useState(shop.name);
@@ -254,19 +289,102 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
   const shopCountry = country || shop.country || 'Myanmar';
   const shopCurrency = getCurrencyForCountry(shopCountry);
 
-  const openCreateModal = (presetType: MenuType = 'SPECIAL') => {
+  const openCreateModal = (presetType: MenuType = 'WEEKLY') => {
     setEditingItem(null);
     setTitle('');
     setDescription('');
     setImage('/src/assets/images/burmeal_mohinga_dish_1793906770254.jpg');
     setPrice(shopCurrency.placeholder);
     setCategory('Noodles & Broth');
-    setMenuType(presetType);
+    setMenuType(presetType === 'PERMANENT' ? 'PERMANENT' : 'WEEKLY');
     setIsVegetarian(false);
     setIsHalal(false);
     setSpecialDate(new Date().toISOString().slice(0, 10));
     setAvailableDays(['Mon', 'Wed', 'Fri']);
     setIsItemModalOpen(true);
+  };
+
+  const openDailySpecialModal = () => {
+    setSpecialPostTitle('');
+    setSpecialPostBody('');
+    setSpecialPostImage('');
+    setSpecialPostImagePath('');
+    setSpecialPostError('');
+    setIsDailySpecialModalOpen(true);
+  };
+
+  const handleDailySpecialImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+
+    setSpecialPostError('');
+    setIsUploadingSpecialImage(true);
+    try {
+      if (specialPostImagePath || specialPostImage) {
+        await removeDailySpecialImage(specialPostImagePath || specialPostImage).catch(() => {});
+      }
+      const uploaded = await uploadDailySpecialImage(file, shop.id || user?.id || 'shop');
+      setSpecialPostImage(uploaded.publicUrl);
+      setSpecialPostImagePath(uploaded.storagePath);
+    } catch (err: any) {
+      setSpecialPostError(err?.message || 'Failed to upload Daily Special photo.');
+    } finally {
+      setIsUploadingSpecialImage(false);
+    }
+  };
+
+  const handleClearSpecialPostImage = async () => {
+    const target = specialPostImagePath || specialPostImage;
+    setSpecialPostImage('');
+    setSpecialPostImagePath('');
+    if (target) {
+      await removeDailySpecialImage(target).catch(() => {});
+    }
+  };
+
+  const handleCreateDailySpecialSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSpecialPostError('');
+    const validation = validateDailySpecialInput({
+      title: specialPostTitle,
+      post: specialPostBody,
+    });
+    if (!validation.valid) {
+      setSpecialPostError(validation.error || 'Please enter a title and post.');
+      return;
+    }
+    if (!onCreateDailySpecialPost) return;
+
+    setIsSubmittingSpecialPost(true);
+    try {
+      await onCreateDailySpecialPost({
+        title: specialPostTitle.trim(),
+        post: specialPostBody.trim(),
+        image: specialPostImage || undefined,
+        imageStoragePath: specialPostImagePath || undefined,
+      });
+      setIsDailySpecialModalOpen(false);
+      setSpecialPostTitle('');
+      setSpecialPostBody('');
+      setSpecialPostImage('');
+      setSpecialPostImagePath('');
+      onRefresh();
+    } catch (err: any) {
+      setSpecialPostError(err?.message || 'Could not publish Daily Special post.');
+    } finally {
+      setIsSubmittingSpecialPost(false);
+    }
+  };
+
+  const handleDeleteSpecialPost = async (post: DailySpecialPost) => {
+    if (!onDeleteDailySpecialPost) return;
+    setDeletingSpecialId(post.id);
+    try {
+      await onDeleteDailySpecialPost(post.id, post.imageStoragePath || post.image);
+    } finally {
+      setDeletingSpecialId(null);
+    }
   };
 
   const openEditModal = (item: MenuItem) => {
@@ -445,10 +563,31 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
     }
   };
 
-  const filteredItems = menuItems.filter((i) => {
-    if (menuFilter === 'ALL') return true;
-    return i.menuType === menuFilter;
-  });
+  const activeDailySpecials = React.useMemo(
+    () =>
+      partitionDailySpecialPosts(
+        dailySpecialPosts.filter((p) => p.shopId === shop.id)
+      ).active.map((p) => ({
+        ...p,
+        shopName: p.shopName || shop.name,
+        shopAvatarImage: p.shopAvatarImage || getShopProfileImage(shop),
+        shopCountry: p.shopCountry || shop.country,
+        shopRegion: p.shopRegion || shop.region,
+        shopCity: p.shopCity || shop.city,
+      })),
+    [dailySpecialPosts, shop]
+  );
+
+  const weeklyItemsList = React.useMemo(
+    () => menuItems.filter((i) => i.menuType === 'WEEKLY'),
+    [menuItems]
+  );
+  const regularItemsList = React.useMemo(
+    () => menuItems.filter((i) => i.menuType === 'PERMANENT'),
+    [menuItems]
+  );
+
+  const filteredItems = menuFilter === 'WEEKLY' ? weeklyItemsList : regularItemsList;
 
   return (
     <div className="space-y-6">
@@ -572,15 +711,11 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
 
       {/* ================= TAB 1: "HOME" (OVERVIEW & SALES INSIGHTS) ================= */}
       {currentTab === 'shop_overview' && (() => {
-        const todayStr = new Date().toISOString().slice(0, 10);
         const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
         const currentDayName = dayNames[new Date().getDay()];
 
-        const dailySpecials = menuItems.filter((m) => m.menuType === 'SPECIAL');
-        const weeklyItems = menuItems.filter((m) => m.menuType === 'WEEKLY');
-        const regularItems = menuItems.filter((m) => m.menuType === 'PERMANENT');
-
-        const todaysSpecial = dailySpecials.find((m) => m.specialDate === todayStr) || dailySpecials[0];
+        const weeklyItems = weeklyItemsList;
+        const regularItems = regularItemsList;
 
         const hasWa = Boolean(whatsappPhone || shop.whatsappPhone);
         const hasViber = Boolean(viberPhone || shop.viberPhone);
@@ -588,7 +723,6 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
         const hasFb = Boolean(facebookUrl || shop.facebookUrl);
         const hasPhone = Boolean(phoneNumber || shop.phoneNumber);
         const activeChannelsCount = [hasWa, hasViber, hasLine, hasFb, hasPhone].filter(Boolean).length;
-        const todayDateBadge = `${todayStr} (${currentDayName})`;
 
         return (
           <div className="space-y-6">
@@ -605,32 +739,32 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
                 </h1>
 
                 <p className="text-white/95 text-xs sm:text-sm mt-2 leading-relaxed max-w-2xl font-medium">
-                  Manage your multi-tier culinary offerings (Daily Specials, Weekly Rotating Menus, and Regular Master Dishes) and connect with hungry customers across your city.
+                  Post 48-hour Daily Special updates like a social feed, manage Weekly Highlights and Master Menu items, and connect with hungry customers across your region.
                 </p>
 
                 <div className="flex flex-wrap items-center gap-3 mt-6">
                   <button
                     type="button"
-                    onClick={() => openCreateModal('SPECIAL')}
-                    className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-white text-stone-900 font-bold text-xs sm:text-sm hover:bg-stone-50 transition-colors shadow-xs active:scale-98 cursor-pointer"
+                    onClick={openDailySpecialModal}
+                    className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-white text-stone-900 font-bold text-xs sm:text-sm hover:bg-stone-50 transition-colors shadow-xs active:scale-98 cursor-pointer whitespace-nowrap shrink-0"
                   >
-                    <Plus className="w-4 h-4 text-stone-900" />
-                    <span>+ Add Today's Special</span>
+                    <Megaphone className="w-4 h-4 text-rose-600" />
+                    <span>{t.dailySpecialButton}</span>
                   </button>
 
                   <button
                     type="button"
                     onClick={() => openCreateModal('WEEKLY')}
-                    className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-white/20 hover:bg-white/30 text-white font-semibold text-xs sm:text-sm transition-colors backdrop-blur-xs border border-white/20 active:scale-98 cursor-pointer"
+                    className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-white/20 hover:bg-white/30 text-white font-semibold text-xs sm:text-sm transition-colors backdrop-blur-xs border border-white/20 active:scale-98 cursor-pointer whitespace-nowrap shrink-0"
                   >
                     <Plus className="w-4 h-4 text-white" />
-                    <span>+ Add Weekly Dish</span>
+                    <span>+{t.addNewDish}</span>
                   </button>
 
                   <button
                     type="button"
                     onClick={() => onVisitShop && onVisitShop(shop.id)}
-                    className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-white/20 hover:bg-white/30 text-white font-semibold text-xs sm:text-sm transition-colors backdrop-blur-xs border border-white/20 active:scale-98 cursor-pointer"
+                    className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-white/20 hover:bg-white/30 text-white font-semibold text-xs sm:text-sm transition-colors backdrop-blur-xs border border-white/20 active:scale-98 cursor-pointer whitespace-nowrap shrink-0"
                   >
                     <Eye className="w-4 h-4 text-white" />
                     <span>View Public Storefront</span>
@@ -646,26 +780,26 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
 
             {/* 2. Top 4 Metric Cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
-              {/* Card 1: ACTIVE DISHES */}
+              {/* Card 1: ACTIVE DISHES & POSTS */}
               <div className="bg-white dark:bg-stone-850 rounded-2xl p-5 border border-stone-200 dark:border-stone-800 shadow-xs flex flex-col justify-between">
                 <div className="flex items-center justify-between">
                   <span className="text-[11px] font-bold tracking-wider uppercase text-stone-500 dark:text-stone-400">
-                    ACTIVE DISHES
+                    ACTIVE OFFERINGS
                   </span>
                   <div className="w-8 h-8 rounded-lg bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 flex items-center justify-center">
                     <UtensilsCrossed className="w-4 h-4" />
                   </div>
                 </div>
                 <div className="mt-3">
-                  <div className="text-3xl font-extrabold text-stone-900 dark:text-white font-display">
-                    {menuItems.length}
+                  <div className="text-3xl font-extrabold text-stone-900 dark:text-white font-display tabular-nums">
+                    {activeDailySpecials.length + weeklyItems.length + regularItems.length}
                   </div>
                   <div className="text-xs text-stone-500 dark:text-stone-400 mt-2 flex items-center gap-1.5 flex-wrap">
-                    <span className="text-rose-600 font-semibold">{dailySpecials.length} daily</span>
+                    <span className="text-rose-600 font-semibold">{activeDailySpecials.length} daily posts</span>
                     <span>·</span>
                     <span className="text-amber-600 font-semibold">{weeklyItems.length} weekly</span>
                     <span>·</span>
-                    <span className="text-stone-600 dark:text-stone-300 font-semibold">{regularItems.length} reg</span>
+                    <span className="text-stone-600 dark:text-stone-300 font-semibold">{regularItems.length} master</span>
                   </div>
                 </div>
               </div>
@@ -681,7 +815,7 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
                   </div>
                 </div>
                 <div className="mt-3">
-                  <div className="text-3xl font-extrabold text-stone-900 dark:text-white font-display">
+                  <div className="text-3xl font-extrabold text-stone-900 dark:text-white font-display tabular-nums">
                     {shop.followerCount ?? 0}
                   </div>
                   <p className="text-xs text-stone-500 dark:text-stone-400 mt-2 leading-relaxed">
@@ -764,82 +898,87 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
               </div>
             </div>
 
-            {/* 3. Middle Row: Today's Active Daily Special & Weekly Rotating Schedule Matrix */}
+            {/* 3. Middle Row: Active Daily Special Posts (48h Feed) & Weekly Rotating Schedule Matrix */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-              {/* Left: Today's Active Daily Special */}
+              {/* Left: Daily Special Feed Summary */}
               <div className="lg:col-span-5 bg-white dark:bg-stone-850 rounded-2xl p-5 sm:p-6 border border-stone-200 dark:border-stone-800 shadow-xs flex flex-col justify-between">
                 <div>
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-2">
-                      <span className="inline-block w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse shrink-0" />
+                      <span className="inline-block w-2.5 h-2.5 rounded-full bg-rose-500 shrink-0" />
                       <h3 className="font-bold text-sm sm:text-base text-stone-900 dark:text-white font-display">
-                        Today's Active Daily Special
+                        Daily Special Feed (48h)
                       </h3>
                     </div>
-                    <span className="text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-rose-50 dark:bg-rose-950/50 text-rose-600 dark:text-rose-400 border border-rose-100 dark:border-rose-900/40">
-                      {todayDateBadge}
-                    </span>
+                    <button
+                      type="button"
+                      onClick={openDailySpecialModal}
+                      className="text-xs font-semibold text-rose-600 dark:text-rose-400 hover:underline inline-flex items-center gap-1 cursor-pointer"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Post Special</span>
+                    </button>
                   </div>
 
-                  {todaysSpecial ? (
-                    <div className="mt-4 p-3.5 rounded-xl bg-stone-50 dark:bg-stone-900/60 border border-stone-200 dark:border-stone-800 flex items-start gap-3.5">
-                      <img
-                        src={todaysSpecial.image}
-                        alt={todaysSpecial.title}
-                        className="w-20 h-20 rounded-lg object-cover shrink-0 border border-stone-200 dark:border-stone-700 bg-stone-100"
-                        onError={(e) => {
-                          (e.currentTarget as HTMLImageElement).src = '/src/assets/images/burmeal_mohinga_dish_1793906770254.jpg';
-                        }}
-                      />
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-rose-600 text-white uppercase tracking-wider">
-                            DAILY SPECIAL
-                          </span>
-                          <span className="text-xs text-stone-500 dark:text-stone-400 font-medium truncate">
-                            {todaysSpecial.category}
-                          </span>
+                  {activeDailySpecials.length > 0 ? (
+                    <div className="mt-4 space-y-2.5">
+                      {activeDailySpecials.slice(0, 3).map((post) => (
+                        <div
+                          key={post.id}
+                          className="p-3 rounded-xl bg-stone-50 dark:bg-stone-900/60 border border-stone-200 dark:border-stone-800 flex items-start gap-3"
+                        >
+                          {post.image ? (
+                            <img
+                              src={post.image}
+                              alt={post.title}
+                              referrerPolicy="no-referrer"
+                              className="w-14 h-14 rounded-lg object-cover shrink-0 border border-stone-200 dark:border-stone-700 bg-stone-100"
+                            />
+                          ) : (
+                            <div className="w-14 h-14 rounded-lg shrink-0 border border-rose-200 dark:border-rose-900/50 bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 flex items-center justify-center">
+                              <Megaphone className="w-5 h-5" />
+                            </div>
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <h4 className="font-bold text-xs sm:text-sm text-stone-900 dark:text-white truncate">
+                              {post.title}
+                            </h4>
+                            <p className="text-[11px] text-stone-500 dark:text-stone-400 mt-0.5 line-clamp-2 leading-relaxed">
+                              {post.post}
+                            </p>
+                            <div className="mt-1.5 flex items-center gap-1.5 text-[10px] text-stone-500 dark:text-stone-400 flex-wrap">
+                              <span className="font-medium text-stone-600 dark:text-stone-300">
+                                {formatDailySpecialTimestamp(post.createdAt)}
+                              </span>
+                              <span>·</span>
+                              <span className="text-rose-600 dark:text-rose-400 font-semibold tabular-nums">
+                                {formatRemainingTime(post)}
+                              </span>
+                            </div>
+                          </div>
                         </div>
-                        <h4 className="font-bold text-sm sm:text-base text-stone-900 dark:text-white mt-1 truncate">
-                          {todaysSpecial.title}
-                        </h4>
-                        <p className="text-xs text-stone-500 dark:text-stone-400 mt-1 line-clamp-2 leading-relaxed">
-                          {todaysSpecial.description}
-                        </p>
-                        <div className="mt-2.5 flex items-center justify-between">
-                          <span className="font-extrabold text-base text-amber-600 dark:text-amber-500 font-display">
-                            {formatPrice(todaysSpecial.price, shopCountry)}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => openEditModal(todaysSpecial)}
-                            className="text-xs font-semibold text-stone-700 dark:text-stone-300 hover:text-amber-600 dark:hover:text-amber-400 underline cursor-pointer"
-                          >
-                            Edit Special
-                          </button>
-                        </div>
-                      </div>
+                      ))}
                     </div>
                   ) : (
                     <div className="mt-4 p-6 rounded-xl bg-stone-50 dark:bg-stone-900/40 border border-dashed border-stone-300 dark:border-stone-700 text-center">
                       <p className="text-xs text-stone-500 dark:text-stone-400">
-                        No daily special designated for today.
+                        No active Daily Special posts right now.
                       </p>
                       <button
                         type="button"
-                        onClick={() => openCreateModal('SPECIAL')}
-                        className="mt-3 text-xs font-semibold text-amber-600 hover:text-amber-700 inline-flex items-center gap-1 cursor-pointer"
+                        onClick={openDailySpecialModal}
+                        className="mt-3 text-xs font-semibold text-rose-600 hover:text-rose-700 inline-flex items-center gap-1 cursor-pointer"
                       >
-                        <Plus className="w-3.5 h-3.5" />
-                        <span>Add Today's Special</span>
+                        <Megaphone className="w-3.5 h-3.5" />
+                        <span>Post Daily Special (48h)</span>
                       </button>
                     </div>
                   )}
                 </div>
 
                 <div className="mt-5 pt-3.5 border-t border-stone-100 dark:border-stone-800 flex items-center justify-between text-xs">
-                  <span className="text-stone-500 dark:text-stone-400">
-                    Total Daily Specials in catalog: {dailySpecials.length}
+                  <span className="text-stone-500 dark:text-stone-400 tabular-nums">
+                    Active Daily Special posts: {activeDailySpecials.length}
                   </span>
                   <button
                     type="button"
@@ -849,7 +988,7 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
                     }}
                     className="font-semibold text-amber-600 dark:text-amber-500 hover:text-amber-700 dark:hover:text-amber-400 inline-flex items-center gap-1 cursor-pointer"
                   >
-                    <span>Manage Specials</span>
+                    <span>Manage Feed</span>
                     <span>→</span>
                   </button>
                 </div>
@@ -1117,57 +1256,96 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
       {/* ================= TAB 2: "MENU MANAGEMENT" ================= */}
       {currentTab === 'shop_menus' && (
         <div className="space-y-6">
-          {/* Action bar */}
+          {/* Action bar: Daily Special tab first, no All Menus, Daily Special button beside +Add New Item */}
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
             <div className="flex flex-wrap items-center gap-1.5 bg-stone-100 dark:bg-stone-800 p-1 rounded-xl border border-stone-200 dark:border-stone-700">
               <button
-                onClick={() => setMenuFilter('ALL')}
-                className={`flex-1 sm:flex-none px-3 py-1.5 sm:py-1 text-xs font-medium rounded-lg text-center ${
-                  menuFilter === 'ALL'
-                    ? 'bg-white dark:bg-stone-700 font-semibold text-stone-900 dark:text-white shadow-xs'
-                    : 'text-stone-600 dark:text-stone-300'
-                }`}
-              >
-                All ({menuItems.length})
-              </button>
-              <button
+                type="button"
                 onClick={() => setMenuFilter('SPECIAL')}
-                className={`flex-1 sm:flex-none px-3 py-1.5 sm:py-1 text-xs font-medium rounded-lg text-center ${
+                className={`flex-1 sm:flex-none px-3 py-1.5 sm:py-1 text-xs font-medium rounded-lg text-center whitespace-nowrap shrink-0 cursor-pointer ${
                   menuFilter === 'SPECIAL' ? 'bg-rose-600 font-semibold text-white shadow-xs' : 'text-stone-600 dark:text-stone-300'
                 }`}
               >
-                Today's ({menuItems.filter((m) => m.menuType === 'SPECIAL').length})
+                {t.dailySpecials} ({activeDailySpecials.length})
               </button>
               <button
+                type="button"
                 onClick={() => setMenuFilter('WEEKLY')}
-                className={`flex-1 sm:flex-none px-3 py-1.5 sm:py-1 text-xs font-medium rounded-lg text-center ${
+                className={`flex-1 sm:flex-none px-3 py-1.5 sm:py-1 text-xs font-medium rounded-lg text-center whitespace-nowrap shrink-0 cursor-pointer ${
                   menuFilter === 'WEEKLY' ? 'bg-amber-600 font-semibold text-white shadow-xs' : 'text-stone-600 dark:text-stone-300'
                 }`}
               >
-                Weekly ({menuItems.filter((m) => m.menuType === 'WEEKLY').length})
+                Weekly ({weeklyItemsList.length})
               </button>
               <button
+                type="button"
                 onClick={() => setMenuFilter('PERMANENT')}
-                className={`flex-1 sm:flex-none px-3 py-1.5 sm:py-1 text-xs font-medium rounded-lg text-center ${
+                className={`flex-1 sm:flex-none px-3 py-1.5 sm:py-1 text-xs font-medium rounded-lg text-center whitespace-nowrap shrink-0 cursor-pointer ${
                   menuFilter === 'PERMANENT'
                     ? 'bg-stone-800 dark:bg-stone-600 font-semibold text-white shadow-xs'
                     : 'text-stone-600 dark:text-stone-300'
                 }`}
               >
-                Master ({menuItems.filter((m) => m.menuType === 'PERMANENT').length})
+                Master ({regularItemsList.length})
               </button>
             </div>
 
-            <button
-              onClick={() => openCreateModal(menuFilter !== 'ALL' ? menuFilter : 'SPECIAL')}
-              className="flex items-center justify-center gap-1.5 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold rounded-xl shadow-xs transition-colors shrink-0"
-            >
-              <Plus className="w-4 h-4" />
-              <span>{t.addNewDish}</span>
-            </button>
+            <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
+              <button
+                type="button"
+                onClick={openDailySpecialModal}
+                className="flex items-center justify-center gap-1.5 px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold rounded-xl shadow-xs transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+              >
+                <Megaphone className="w-4 h-4" />
+                <span>{t.dailySpecialButton}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => openCreateModal(menuFilter === 'PERMANENT' ? 'PERMANENT' : 'WEEKLY')}
+                className="flex items-center justify-center gap-1.5 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold rounded-xl shadow-xs transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+              >
+                <Plus className="w-4 h-4" />
+                <span>+{t.addNewDish}</span>
+              </button>
+            </div>
           </div>
 
-          {/* Menu Items Container */}
+          {menuFilter === 'SPECIAL' ? (
+            activeDailySpecials.length === 0 ? (
+              <div className="bg-white dark:bg-stone-900 rounded-2xl border border-stone-200 dark:border-stone-800 p-10 text-center space-y-3">
+                <div className="w-12 h-12 rounded-2xl bg-rose-50 dark:bg-rose-950/50 text-rose-500 flex items-center justify-center mx-auto">
+                  <Megaphone className="w-6 h-6" />
+                </div>
+                <h3 className="text-sm font-bold text-stone-900 dark:text-stone-100">
+                  No Active Daily Special Posts
+                </h3>
+                <p className="text-xs text-stone-500 dark:text-stone-400 max-w-md mx-auto leading-relaxed">
+                  Share unlimited Daily Special updates with a title, post details, and optional photo. Posts &amp; uploaded images automatically delete after 48 hours.
+                </p>
+                <button
+                  type="button"
+                  onClick={openDailySpecialModal}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold rounded-xl shadow-xs cursor-pointer"
+                >
+                  <Megaphone className="w-4 h-4" />
+                  <span>{t.dailySpecialButton}</span>
+                </button>
+              </div>
+            ) : (
+              <div className="max-w-2xl mx-auto space-y-4">
+                {activeDailySpecials.map((post) => (
+                  <DailySpecialFeedCard
+                    key={post.id}
+                    post={post}
+                    onDelete={handleDeleteSpecialPost}
+                    isDeleting={deletingSpecialId === post.id}
+                    hideVisitShopAction
+                  />
+                ))}
+              </div>
+            )
+          ) : (
           <div className="bg-white dark:bg-stone-900 rounded-2xl border border-stone-200 dark:border-stone-800 overflow-hidden shadow-xs transition-colors">
             {/* Desktop Table View (md and up) */}
             <div className="hidden md:block overflow-x-auto">
@@ -1396,6 +1574,7 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
               )}
             </div>
           </div>
+          )}
         </div>
       )}
 
@@ -2184,7 +2363,7 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
         </div>
       )}
 
-      {/* Item Modal (Create / Edit Dish with Menu Type Selector: Today's Special, Weekly Special, Master Menu) */}
+      {/* Item Modal (Create / Edit Regular Menu Items: Weekly Special or Master Menu) */}
       {isItemModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
           <div className="bg-white dark:bg-stone-900 rounded-2xl max-w-lg w-full p-6 shadow-2xl relative border border-stone-200 dark:border-stone-800 max-h-[90vh] overflow-y-auto">
@@ -2192,7 +2371,7 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
               {editingItem ? t.editDish : t.addNewDish}
             </h2>
             <p className="text-xs text-stone-500 dark:text-stone-400 mb-4">
-              Select one of the 3 menu classifications: Today's Special, Weekly Special, or standard Master Menu.
+              Add a dish to your Weekly Highlights or Master Menu. (Use the Daily Special button for 48-hour feed updates.)
             </p>
 
             <form onSubmit={handleSaveItem} className="space-y-4">
@@ -2201,22 +2380,11 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
                 <label className="block text-xs font-semibold text-stone-700 dark:text-stone-300 mb-1.5">
                   Menu Type Classification *
                 </label>
-                <div className="grid grid-cols-3 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setMenuType('SPECIAL')}
-                    className={`py-2 px-2 text-xs font-semibold rounded-lg border text-center transition-all ${
-                      menuType === 'SPECIAL'
-                        ? 'bg-rose-50 dark:bg-rose-950/60 border-rose-500 text-rose-900 dark:text-rose-300 font-bold'
-                        : 'border-stone-200 dark:border-stone-700 text-stone-600 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-stone-800'
-                    }`}
-                  >
-                    Today's Special
-                  </button>
+                <div className="grid grid-cols-2 gap-2">
                   <button
                     type="button"
                     onClick={() => setMenuType('WEEKLY')}
-                    className={`py-2 px-2 text-xs font-semibold rounded-lg border text-center transition-all ${
+                    className={`py-2 px-2 text-xs font-semibold rounded-lg border text-center transition-all cursor-pointer ${
                       menuType === 'WEEKLY'
                         ? 'bg-amber-50 dark:bg-amber-950/60 border-amber-500 text-amber-900 dark:text-amber-300 font-bold'
                         : 'border-stone-200 dark:border-stone-700 text-stone-600 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-stone-800'
@@ -2227,7 +2395,7 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
                   <button
                     type="button"
                     onClick={() => setMenuType('PERMANENT')}
-                    className={`py-2 px-2 text-xs font-semibold rounded-lg border text-center transition-all ${
+                    className={`py-2 px-2 text-xs font-semibold rounded-lg border text-center transition-all cursor-pointer ${
                       menuType === 'PERMANENT'
                         ? 'bg-stone-800 dark:bg-stone-700 border-stone-800 dark:border-stone-600 text-white font-bold'
                         : 'border-stone-200 dark:border-stone-700 text-stone-600 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-stone-800'
@@ -2237,21 +2405,6 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
                   </button>
                 </div>
               </div>
-
-              {menuType === 'SPECIAL' && (
-                <div className="p-3 bg-rose-50/70 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 rounded-lg">
-                  <label className="block text-xs font-semibold text-rose-900 dark:text-rose-300 mb-1">
-                    Special Feature Date (YYYY-MM-DD)
-                  </label>
-                  <input
-                    type="date"
-                    required
-                    value={specialDate}
-                    onChange={(e) => setSpecialDate(e.target.value)}
-                    className="w-full text-xs px-3 py-1.5 bg-white dark:bg-stone-800 border border-rose-300 dark:border-rose-800 text-stone-900 dark:text-stone-100 rounded-lg focus:outline-none"
-                  />
-                </div>
-              )}
 
               {menuType === 'WEEKLY' && (
                 <div className="p-3 bg-amber-50/70 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 rounded-lg">
@@ -2424,6 +2577,164 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
           </div>
         </div>
       )}
+
+      {/* Facebook-style Daily Special Post Modal (Title + Post + Supabase Image Upload, 48h auto-delete) */}
+      {isDailySpecialModalOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="daily-special-modal-title"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs"
+        >
+          <div className="bg-white dark:bg-stone-900 rounded-2xl max-w-lg w-full p-6 shadow-2xl relative border border-stone-200 dark:border-stone-800 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-start justify-between gap-3 mb-3">
+              <div>
+                <h2
+                  id="daily-special-modal-title"
+                  className="text-xl font-bold font-display text-stone-900 dark:text-stone-100 flex items-center gap-2"
+                >
+                  <Megaphone className="w-5 h-5 text-rose-600" />
+                  <span>{t.dailySpecialButton}</span>
+                </h2>
+                <p className="text-xs text-stone-500 dark:text-stone-400 mt-1">
+                  {t.dailySpecial48hNotice}
+                </p>
+              </div>
+              <button
+                type="button"
+                aria-label="Close Daily Special modal"
+                onClick={() => setIsDailySpecialModalOpen(false)}
+                className="p-1.5 rounded-lg text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 hover:bg-stone-100 dark:hover:bg-stone-800 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateDailySpecialSubmit} className="space-y-4">
+              <div>
+                <label
+                  htmlFor="daily-special-title-input"
+                  className="block text-xs font-semibold text-stone-700 dark:text-stone-300 mb-1"
+                >
+                  {t.dailySpecialTitle} *
+                </label>
+                <input
+                  id="daily-special-title-input"
+                  type="text"
+                  required
+                  maxLength={160}
+                  value={specialPostTitle}
+                  onChange={(e) => setSpecialPostTitle(e.target.value)}
+                  placeholder="e.g. Fresh Pot of Mohinga Ready Until 6 PM"
+                  className="w-full text-xs sm:text-sm px-3.5 py-2.5 bg-stone-50 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-xl focus:outline-none focus:border-rose-500 text-stone-900 dark:text-stone-100"
+                />
+              </div>
+
+              <div>
+                <label
+                  htmlFor="daily-special-post-input"
+                  className="block text-xs font-semibold text-stone-700 dark:text-stone-300 mb-1"
+                >
+                  {t.dailySpecialPost} *
+                </label>
+                <textarea
+                  id="daily-special-post-input"
+                  rows={4}
+                  required
+                  value={specialPostBody}
+                  onChange={(e) => setSpecialPostBody(e.target.value)}
+                  placeholder="Write what you cooked today, portions available, pickup window, or pricing details..."
+                  className="w-full text-xs sm:text-sm px-3.5 py-2.5 bg-stone-50 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-xl focus:outline-none focus:border-rose-500 text-stone-900 dark:text-stone-100 leading-relaxed"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-stone-700 dark:text-stone-300 mb-1.5">
+                  {t.dailySpecialPhoto}
+                </label>
+
+                {specialPostImage ? (
+                  <div className="relative rounded-xl overflow-hidden border border-stone-200 dark:border-stone-700 bg-stone-100 dark:bg-stone-800">
+                    <img
+                      src={specialPostImage}
+                      alt="Daily Special preview"
+                      className="w-full max-h-60 object-cover block"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleClearSpecialPostImage}
+                      className="absolute top-2 right-2 inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-black/75 hover:bg-black text-white text-xs font-semibold cursor-pointer"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Remove</span>
+                    </button>
+                  </div>
+                ) : (
+                  <label
+                    className={`flex flex-col items-center justify-center gap-2 p-5 rounded-xl border border-dashed border-stone-300 dark:border-stone-700 bg-stone-50 dark:bg-stone-800/60 hover:border-rose-400 transition-colors ${
+                      isUploadingSpecialImage ? 'opacity-70 cursor-wait' : 'cursor-pointer'
+                    }`}
+                  >
+                    {isUploadingSpecialImage ? (
+                      <>
+                        <Loader2 className="w-6 h-6 text-rose-600 animate-spin" />
+                        <span className="text-xs font-semibold text-stone-700 dark:text-stone-300">
+                          Uploading photo to Supabase...
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="w-6 h-6 text-stone-400" />
+                        <span className="text-xs font-semibold text-stone-700 dark:text-stone-300">
+                          Choose photo to upload (JPG, PNG, WEBP, max 5 MB)
+                        </span>
+                        <span className="text-[11px] text-stone-500 dark:text-stone-400">
+                          Stored in Supabase Storage for 48 hours
+                        </span>
+                      </>
+                    )}
+                    <input
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp,image/gif"
+                      disabled={isUploadingSpecialImage}
+                      onChange={handleDailySpecialImageUpload}
+                      className="hidden"
+                    />
+                  </label>
+                )}
+              </div>
+
+              {specialPostError && (
+                <div
+                  role="alert"
+                  className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300 text-xs flex items-start gap-2"
+                >
+                  <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                  <span>{specialPostError}</span>
+                </div>
+              )}
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-stone-200 dark:border-stone-800">
+                <button
+                  type="button"
+                  onClick={() => setIsDailySpecialModalOpen(false)}
+                  className="px-4 py-2 text-xs font-semibold text-stone-600 dark:text-stone-300 hover:text-stone-900 rounded-lg cursor-pointer"
+                >
+                  {t.cancel}
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmittingSpecialPost || isUploadingSpecialImage}
+                  className="px-5 py-2 bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs rounded-xl transition-colors shadow-xs disabled:opacity-60 cursor-pointer"
+                >
+                  {isSubmittingSpecialPost ? 'Publishing...' : t.publishDailySpecial}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
+

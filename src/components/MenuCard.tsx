@@ -32,10 +32,10 @@ export const MenuCard: React.FC<MenuCardProps> = ({
   return (
     <div
       onClick={() => onSelectItem(item)}
-      className="bg-white rounded-xl border border-stone-200 overflow-hidden flex flex-col hover:border-amber-400 hover:shadow-md transition-all duration-200 cursor-pointer group"
+      className="bg-white dark:bg-stone-900 rounded-xl border border-stone-200 dark:border-stone-800 overflow-hidden flex flex-col hover:border-amber-400 dark:hover:border-amber-500 hover:shadow-md transition-all duration-200 cursor-pointer group"
     >
       {/* Visual Image Header */}
-      <div className="relative aspect-[4/3] w-full overflow-hidden bg-stone-100">
+      <div className="relative aspect-[4/3] w-full overflow-hidden bg-stone-100 dark:bg-stone-800">
         <img
           src={item.image}
           alt={item.title}
@@ -126,14 +126,14 @@ export const MenuCard: React.FC<MenuCardProps> = ({
       <div className="p-3 sm:p-4 flex-1 flex flex-col justify-between">
         <div>
           {/* Shop and Category unboxed metadata with dot separator */}
-          <div className="flex items-center gap-1.5 text-[11px] text-stone-500 mb-1">
+          <div className="flex items-center gap-1.5 text-[11px] text-stone-500 dark:text-stone-400 mb-1">
             {item.shopName && (
               <button
                 onClick={(e) => {
                   e.stopPropagation();
                   onSelectShop && onSelectShop(item.shopId);
                 }}
-                className="font-semibold text-amber-700 hover:underline hover:text-amber-800 transition-colors truncate max-w-[120px] sm:max-w-[160px]"
+                className="font-semibold text-amber-700 dark:text-amber-400 hover:underline hover:text-amber-800 transition-colors truncate max-w-[120px] sm:max-w-[160px]"
               >
                 {item.shopName}
               </button>
@@ -147,24 +147,24 @@ export const MenuCard: React.FC<MenuCardProps> = ({
             <span className="truncate">{item.category}</span>
           </div>
 
-          <h3 className="font-bold text-xs sm:text-sm text-stone-900 group-hover:text-amber-700 transition-colors line-clamp-1 mb-1">
+          <h3 className="font-bold text-xs sm:text-sm text-stone-900 dark:text-stone-100 group-hover:text-amber-700 dark:group-hover:text-amber-400 transition-colors line-clamp-1 mb-1">
             {item.title}
           </h3>
 
-          <p className="text-stone-600 text-[11px] sm:text-xs line-clamp-2 mb-2 leading-relaxed">
+          <p className="text-stone-600 dark:text-stone-400 text-[11px] sm:text-xs line-clamp-2 mb-2 leading-relaxed">
             {item.description}
           </p>
 
           {/* Schedule availability */}
           {item.menuType === 'SPECIAL' && item.specialDate && (
-            <div className="flex items-center gap-1 text-[10px] sm:text-xs text-rose-700 font-medium mb-2 bg-rose-50 px-1.5 py-0.5 rounded">
+            <div className="flex items-center gap-1 text-[10px] sm:text-xs text-rose-700 dark:text-rose-300 font-medium mb-2 bg-rose-50 dark:bg-rose-950/40 px-1.5 py-0.5 rounded">
               <Calendar className="w-3 h-3 shrink-0" />
               <span className="truncate">{t.servedOn}: {item.specialDate}</span>
             </div>
           )}
 
           {item.menuType === 'WEEKLY' && item.availableDays && item.availableDays.length > 0 && (
-            <div className="flex items-center gap-1 text-[10px] sm:text-xs text-amber-800 font-medium mb-2 bg-amber-50 px-1.5 py-0.5 rounded">
+            <div className="flex items-center gap-1 text-[10px] sm:text-xs text-amber-800 dark:text-amber-300 font-medium mb-2 bg-amber-50 dark:bg-amber-950/40 px-1.5 py-0.5 rounded">
               <Clock className="w-3 h-3 shrink-0" />
               <span className="truncate">{item.availableDays.join(', ')}</span>
             </div>
@@ -172,11 +172,11 @@ export const MenuCard: React.FC<MenuCardProps> = ({
         </div>
 
         {/* Bottom card action: Visit Shop & Order Link (NO direct contact on items!) */}
-        <div className="pt-2 border-t border-stone-100 flex items-center justify-between text-xs">
-          <span className="text-[10px] text-stone-400 font-medium">
+        <div className="pt-2 border-t border-stone-100 dark:border-stone-800 flex items-center justify-between text-xs">
+          <span className="text-[10px] text-stone-400 dark:text-stone-500 font-medium">
             Tap for Details
           </span>
-          <span className="text-amber-700 font-semibold text-[11px] flex items-center gap-0.5 group-hover:translate-x-0.5 transition-transform">
+          <span className="text-amber-700 dark:text-amber-400 font-semibold text-[11px] flex items-center gap-0.5 group-hover:translate-x-0.5 transition-transform">
             <span>{t.contactShop}</span>
             <ArrowRight className="w-3 h-3" />
           </span>

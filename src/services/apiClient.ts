@@ -1,5 +1,10 @@
-import { User, Shop, MenuItem, MenuType } from '../types/index';
+import { User, Shop, MenuItem, MenuType, DailySpecialPost } from '../types/index';
 import { matchesRegionFilter } from '../utils/filter';
+import {
+  computeDailySpecialExpiry,
+  filterDailySpecialPosts,
+  partitionDailySpecialPosts,
+} from '../utils/dailySpecialHelpers';
 
 const TOKEN_KEY = 'burmeal_token';
 const SHOP_ID_KEY = 'burmeal_shop_id';
@@ -24,6 +29,7 @@ interface LocalDelta {
   customMenuItems: MenuItem[];
   updatedMenuItems: Record<string, Partial<MenuItem>>;
   deletedMenuItemIds: string[];
+  customDailySpecials: DailySpecialPost[];
   follows: { customerId: string; shopId: string }[];
   savedItems: { customerId: string; itemId: string }[];
   customUsers: User[];
@@ -35,6 +41,7 @@ const DEFAULT_DELTA: LocalDelta = {
   customMenuItems: [],
   updatedMenuItems: {},
   deletedMenuItemIds: [],
+  customDailySpecials: [],
   follows: [],
   savedItems: [],
   customUsers: [],
@@ -46,12 +53,14 @@ function getLocalDelta(): LocalDelta {
     const raw = localStorage.getItem(REAL_DELTA_KEY);
     if (!raw) return { ...DEFAULT_DELTA };
     const parsed = JSON.parse(raw);
+    const { active } = partitionDailySpecialPosts(parsed.customDailySpecials || []);
     return {
       customShops: parsed.customShops || [],
       updatedShops: parsed.updatedShops || {},
       customMenuItems: parsed.customMenuItems || [],
       updatedMenuItems: parsed.updatedMenuItems || {},
       deletedMenuItemIds: parsed.deletedMenuItemIds || [],
+      customDailySpecials: active,
       follows: parsed.follows || [],
       savedItems: parsed.savedItems || [],
       customUsers: parsed.customUsers || [],
@@ -152,12 +161,14 @@ function saveLocalDb(state: DbState) {
   const baseUserIds = new Set(BASE_MOCK_USERS.map((u) => u.id));
   const customUsers = state.users.filter((u) => !baseUserIds.has(u.id));
 
+  const prevDelta = getLocalDelta();
   saveLocalDelta({
     customShops,
     updatedShops,
     customMenuItems,
     updatedMenuItems,
     deletedMenuItemIds,
+    customDailySpecials: prevDelta.customDailySpecials || [],
     follows: state.follows,
     savedItems: state.savedItems,
     customUsers,
@@ -898,4 +909,128 @@ export const apiClient = {
     }
     return false;
   },
+
+  // Daily Special Posts (Facebook-style 48h feed)
+  async getDailySpecialPosts(
+    params?: {
+      shopId?: string | null;
+      query?: string;
+      feedType?: 'FOLLOWED';
+      country?: string;
+      regionId?: string;
+    },
+    token?: string | null
+  ): Promise<DailySpecialPost[]> {
+    try {
+      const sp = new URLSearchParams();
+      if (params?.shopId) sp.append('shopId', params.shopId);
+      if (params?.query) sp.append('query', params.query);
+      if (params?.feedType) sp.append('feedType', params.feedType);
+      if (params?.country) sp.append('country', params.country);
+      if (params?.regionId) sp.append('regionId', params.regionId);
+
+      const headers: Record<string, string> = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      const res = await fetch(`/api/daily-specials${sp.toString() ? `?${sp.toString()}` : ''}`, {
+        headers,
+      });
+      if (res.ok) {
+        const ct = res.headers.get('content-type') || '';
+        if (ct.includes('application/json')) {
+          const json = await res.json();
+          if (json && Array.isArray(json.posts)) {
+            return partitionDailySpecialPosts(json.posts).active;
+          }
+        }
+      }
+    } catch {}
+
+    const delta = getLocalDelta();
+    const db = getLocalDb();
+    return filterDailySpecialPosts(delta.customDailySpecials || [], {
+      shopId: params?.shopId,
+      country: params?.country,
+      regionId: params?.regionId,
+      query: params?.query,
+      shopsLookup: db.shops,
+    });
+  },
+
+  async createDailySpecialPost(
+    data: Partial<DailySpecialPost>,
+    token?: string | null
+  ): Promise<DailySpecialPost> {
+    try {
+      if (token) {
+        const res = await fetch('/api/daily-specials', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(data),
+        });
+        if (res.ok) {
+          const ct = res.headers.get('content-type') || '';
+          if (ct.includes('application/json')) {
+            const created = await res.json();
+            if (created?.post) {
+              const delta = getLocalDelta();
+              delta.customDailySpecials = [
+                created.post,
+                ...delta.customDailySpecials.filter((p) => p.id !== created.post.id),
+              ];
+              saveLocalDelta(delta);
+              return created.post;
+            }
+          }
+        }
+      }
+    } catch {}
+
+    const db = getLocalDb();
+    const targetShop = db.shops.find((s) => s.id === data.shopId);
+    const createdAt = data.createdAt || new Date().toISOString();
+    const newPost: DailySpecialPost = {
+      id: data.id || `dsp_${Date.now()}`,
+      shopId: data.shopId || targetShop?.id || '',
+      shopName: data.shopName || targetShop?.name || 'Local Kitchen',
+      shopAvatarImage: data.shopAvatarImage || targetShop?.profileImageUrl || targetShop?.avatarImage,
+      shopCountry: data.shopCountry || targetShop?.country,
+      shopRegion: data.shopRegion || targetShop?.region,
+      shopCity: data.shopCity || targetShop?.city,
+      title: (data.title || '').trim(),
+      post: (data.post || '').trim(),
+      image: data.image || '',
+      imageStoragePath: data.imageStoragePath || '',
+      createdAt,
+      expiresAt: data.expiresAt || computeDailySpecialExpiry(createdAt),
+    };
+
+    const delta = getLocalDelta();
+    delta.customDailySpecials = [
+      newPost,
+      ...delta.customDailySpecials.filter((p) => p.id !== newPost.id),
+    ];
+    saveLocalDelta(delta);
+    return newPost;
+  },
+
+  async deleteDailySpecialPost(id: string, token?: string | null): Promise<boolean> {
+    try {
+      if (token) {
+        await fetch(`/api/daily-specials/${id}`, {
+          method: 'DELETE',
+          headers: { Authorization: `Bearer ${token}` },
+        });
+      }
+    } catch {}
+
+    const delta = getLocalDelta();
+    delta.customDailySpecials = delta.customDailySpecials.filter((p) => p.id !== id);
+    saveLocalDelta(delta);
+    return true;
+  },
 };
+

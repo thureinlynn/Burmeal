@@ -59,6 +59,17 @@ export function buildShopSharePayload(
   return { title, text, url };
 }
 
+export function buildDailySpecialSharePayload(
+  post: { shopId: string; shopName: string; title: string },
+  currentHref: string
+): SharePayload {
+  const url = buildShareUrl(currentHref, { type: 'shop', id: post.shopId });
+  const title = `${post.title} — ${post.shopName} | BurMeal`;
+  const text = `Daily Special from ${post.shopName}: "${post.title}" on BurMeal!`;
+  return { title, text, url };
+}
+
+
 export type ShareOutcome = 'shared' | 'copied' | 'cancelled' | 'failed';
 
 export async function executeShare(

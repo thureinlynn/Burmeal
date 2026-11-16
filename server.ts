@@ -3,17 +3,90 @@ import { createServer as createViteServer } from 'vite';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import path from 'path';
-import { db, initDb } from './src/server/db.js';
+import { createClient } from '@supabase/supabase-js';
+import {
+  db,
+  initDb,
+  getExpiredDailySpecialPostsFromDb,
+  deleteDailySpecialPostFromDb,
+} from './src/server/db.js';
 import {
   syncShopToFirestore,
   syncMenuItemToFirestore,
   deleteMenuItemFromFirestore,
+  syncDailySpecialToFirestore,
+  deleteDailySpecialFromFirestore,
   syncUserToFirestore,
   syncFollowToFirestore,
   syncSavedItemToFirestore,
 } from './src/server/firestoreSync.js';
+import {
+  computeDailySpecialExpiry,
+  isDailySpecialExpired,
+  validateDailySpecialInput,
+} from './src/utils/dailySpecialHelpers.js';
+import { extractSupabaseStoragePath } from './src/utils/shopLocationHelpers.js';
 
 initDb();
+
+const SUPABASE_URL = process.env.VITE_SUPABASE_URL || 'https://oiyejybkorjvxsispjkg.supabase.co';
+const SUPABASE_KEY =
+  process.env.VITE_SUPABASE_ANON_KEY ||
+  process.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
+  'sb_publishable_SC_QZXfTRt-ifQ1DCyT2TQ_hXsQe32t';
+const SHOP_PROFILES_BUCKET = 'shop-profiles';
+
+const serverSupabase =
+  SUPABASE_URL && SUPABASE_KEY ? createClient(SUPABASE_URL, SUPABASE_KEY) : null;
+
+async function removeServerSupabaseImages(urlsOrPaths: Array<string | null | undefined>) {
+  if (!serverSupabase) return;
+  const paths = Array.from(
+    new Set(
+      urlsOrPaths
+        .map((v) => {
+          if (!v || !v.trim()) return null;
+          const clean = v.trim();
+          return (
+            extractSupabaseStoragePath(clean, SHOP_PROFILES_BUCKET) ||
+            (clean.startsWith('public/daily-special-') ? clean : null)
+          );
+        })
+        .filter((p): p is string => Boolean(p))
+    )
+  );
+  if (paths.length === 0) return;
+  try {
+    await serverSupabase.storage.from(SHOP_PROFILES_BUCKET).remove(paths);
+  } catch (err) {
+    console.warn('Server Supabase storage cleanup notice:', err);
+  }
+}
+
+async function cleanupExpiredDailySpecials() {
+  try {
+    const nowIso = new Date().toISOString();
+    const expired = getExpiredDailySpecialPostsFromDb(nowIso);
+    if (expired.length === 0) return;
+
+    const paths = expired.flatMap((row) => [row.image_storage_path, row.image]);
+    await removeServerSupabaseImages(paths);
+
+    await Promise.all(
+      expired.map(async (row) => {
+        deleteDailySpecialPostFromDb(row.id);
+        await deleteDailySpecialFromFirestore(row.id);
+      })
+    );
+  } catch (err) {
+    console.warn('cleanupExpiredDailySpecials notice:', err);
+  }
+}
+
+cleanupExpiredDailySpecials();
+setInterval(() => {
+  cleanupExpiredDailySpecials();
+}, 15 * 60 * 1000);
 
 const app = express();
 const PORT = 3000;
@@ -1175,6 +1248,207 @@ app.get('/api/saved-items', (req: Request, res: Response) => {
   } catch (err) {
     console.error('Error fetching saved items:', err);
     return res.status(500).json({ error: 'Failed to fetch saved items' });
+  }
+});
+
+// 16. Daily Special Posts (Facebook-style feed with 48h automatic expiration)
+function formatDailySpecialPostRow(row: any) {
+  return {
+    id: row.id,
+    shopId: row.shop_id,
+    shopName: row.shop_name || row.joined_shop_name || 'Local Kitchen',
+    shopAvatarImage:
+      row.shop_avatar_image || row.joined_profile_image_url || row.joined_avatar_image || undefined,
+    shopCountry: row.shop_country || row.joined_country || undefined,
+    shopRegion: row.shop_region || row.joined_region || undefined,
+    shopCity: row.shop_city || row.joined_city || undefined,
+    title: row.title,
+    post: row.post,
+    image: row.image || undefined,
+    imageStoragePath: row.image_storage_path || undefined,
+    createdAt: row.created_at,
+    expiresAt: row.expires_at,
+  };
+}
+
+app.get('/api/daily-specials', async (req: Request, res: Response) => {
+  try {
+    await cleanupExpiredDailySpecials();
+    const user = getAuthenticatedUser(req);
+    const { shopId, query: searchQ, feedType, country, regionId } = req.query;
+    const nowIso = new Date().toISOString();
+
+    let sql = `
+      SELECT d.*,
+             s.name as joined_shop_name,
+             s.avatar_image as joined_avatar_image,
+             s.profile_image_url as joined_profile_image_url,
+             s.country as joined_country,
+             s.region as joined_region,
+             s.city as joined_city,
+             s.status as shop_status
+      FROM daily_special_posts d
+      JOIN shops s ON d.shop_id = s.id
+      WHERE d.expires_at > ?
+    `;
+    const params: any[] = [nowIso];
+
+    if (user?.role !== 'ADMIN' && !shopId) {
+      sql += ` AND s.status = 'APPROVED'`;
+    }
+
+    if (shopId) {
+      sql += ` AND d.shop_id = ?`;
+      params.push(String(shopId));
+    } else if (feedType === 'FOLLOWED') {
+      if (!user) {
+        return res.json({ posts: [] });
+      }
+      const followRows = db
+        .prepare('SELECT shop_id FROM follows WHERE customer_id = ?')
+        .all(user.id) as any[];
+      if (followRows.length === 0) {
+        return res.json({ posts: [] });
+      }
+      const placeholders = followRows.map(() => '?').join(',');
+      sql += ` AND d.shop_id IN (${placeholders})`;
+      for (const fr of followRows) params.push(fr.shop_id);
+    } else {
+      sql += buildRegionSqlClause(regionId as string | undefined, country as string | undefined);
+    }
+
+    if (searchQ && String(searchQ).trim()) {
+      const like = `%${String(searchQ).trim()}%`;
+      sql += ` AND (d.title LIKE ? OR d.post LIKE ? OR s.name LIKE ?)`;
+      params.push(like, like, like);
+    }
+
+    sql += ` ORDER BY d.created_at DESC`;
+
+    const rows = db.prepare(sql).all(...params) as any[];
+    const activePosts = rows
+      .map(formatDailySpecialPostRow)
+      .filter((p) => !isDailySpecialExpired(p));
+
+    return res.json({ posts: activePosts });
+  } catch (err) {
+    console.error('Error fetching daily special posts:', err);
+    return res.status(500).json({ error: 'Failed to fetch daily special posts' });
+  }
+});
+
+app.post('/api/daily-specials', async (req: Request, res: Response) => {
+  try {
+    const user = getAuthenticatedUser(req);
+    if (!user) return res.status(401).json({ error: 'Unauthorized' });
+
+    const { id: requestedId, shopId, title, post, image, imageStoragePath } = req.body;
+    const validation = validateDailySpecialInput({ title, post });
+    if (!shopId || !validation.valid) {
+      return res.status(400).json({ error: validation.error || 'Required fields missing.' });
+    }
+
+    const shop = db
+      .prepare(
+        `
+      SELECT s.*, u.email as owner_email
+      FROM shops s
+      LEFT JOIN users u ON s.owner_id = u.id
+      WHERE s.id = ?
+    `
+      )
+      .get(shopId) as any;
+    if (!shop) return res.status(404).json({ error: 'Shop not found' });
+
+    const emailMatches =
+      Boolean(shop.owner_email && user.email) &&
+      shop.owner_email.toLowerCase() === user.email.toLowerCase();
+    if (shop.owner_id !== user.id && !emailMatches && user.role !== 'ADMIN') {
+      return res.status(403).json({ error: 'Unauthorized to post daily specials for this shop.' });
+    }
+
+    const postId =
+      typeof requestedId === 'string' && requestedId.trim()
+        ? requestedId.trim()
+        : `dsp_${Date.now()}_${crypto.randomUUID().slice(0, 6)}`;
+    const createdAt = new Date().toISOString();
+    const expiresAt = computeDailySpecialExpiry(createdAt);
+    const shopAvatar = shop.profile_image_url || shop.avatar_image || '';
+
+    db.prepare(
+      `
+      INSERT OR REPLACE INTO daily_special_posts (
+        id, shop_id, shop_name, shop_avatar_image, shop_country, shop_region, shop_city,
+        title, post, image, image_storage_path, created_at, expires_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `
+    ).run(
+      postId,
+      shop.id,
+      shop.name,
+      shopAvatar,
+      shop.country || '',
+      shop.region || '',
+      shop.city || '',
+      String(title).trim(),
+      String(post).trim(),
+      image ? String(image).trim() : '',
+      imageStoragePath ? String(imageStoragePath).trim() : '',
+      createdAt,
+      expiresAt
+    );
+
+    const createdRow = db
+      .prepare('SELECT * FROM daily_special_posts WHERE id = ?')
+      .get(postId) as any;
+    const formatted = formatDailySpecialPostRow(createdRow);
+    await syncDailySpecialToFirestore(formatted);
+
+    return res.json({ success: true, id: postId, post: formatted });
+  } catch (err) {
+    console.error('Error creating daily special post:', err);
+    return res.status(500).json({ error: 'Failed to publish daily special post' });
+  }
+});
+
+app.delete('/api/daily-specials/:id', async (req: Request, res: Response) => {
+  try {
+    const user = getAuthenticatedUser(req);
+    if (!user) return res.status(401).json({ error: 'Unauthorized' });
+
+    const existing = db
+      .prepare(
+        `
+      SELECT d.*, s.owner_id, u.email as owner_email
+      FROM daily_special_posts d
+      JOIN shops s ON d.shop_id = s.id
+      LEFT JOIN users u ON s.owner_id = u.id
+      WHERE d.id = ?
+    `
+      )
+      .get(req.params.id) as any;
+
+    if (!existing) {
+      await deleteDailySpecialFromFirestore(req.params.id);
+      return res.json({ success: true });
+    }
+
+    const emailMatches =
+      Boolean(existing.owner_email && user.email) &&
+      existing.owner_email.toLowerCase() === user.email.toLowerCase();
+    if (existing.owner_id !== user.id && !emailMatches && user.role !== 'ADMIN') {
+      return res.status(403).json({ error: 'Unauthorized to delete this daily special post.' });
+    }
+
+    await removeServerSupabaseImages([existing.image_storage_path, existing.image]);
+    deleteDailySpecialPostFromDb(req.params.id);
+    await deleteDailySpecialFromFirestore(req.params.id);
+
+    return res.json({ success: true });
+  } catch (err) {
+    console.error('Error deleting daily special post:', err);
+    return res.status(500).json({ error: 'Failed to delete daily special post' });
   }
 });
 

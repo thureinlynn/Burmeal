@@ -95,6 +95,23 @@ export function initDb() {
       FOREIGN KEY(customer_id) REFERENCES users(id) ON DELETE CASCADE,
       FOREIGN KEY(item_id) REFERENCES menu_items(id) ON DELETE CASCADE
     );
+
+    CREATE TABLE IF NOT EXISTS daily_special_posts (
+      id TEXT PRIMARY KEY,
+      shop_id TEXT NOT NULL,
+      shop_name TEXT NOT NULL,
+      shop_avatar_image TEXT,
+      shop_country TEXT,
+      shop_region TEXT,
+      shop_city TEXT,
+      title TEXT NOT NULL,
+      post TEXT NOT NULL,
+      image TEXT,
+      image_storage_path TEXT,
+      created_at TEXT NOT NULL,
+      expires_at TEXT NOT NULL,
+      FOREIGN KEY(shop_id) REFERENCES shops(id) ON DELETE CASCADE
+    );
   `);
 
   // Safe migration for newly added columns if table pre-existed
@@ -180,3 +197,28 @@ function purgeMockSeedData() {
     console.error('Failed to purge legacy mock seed rows:', err);
   }
 }
+
+export function getExpiredDailySpecialPostsFromDb(nowIso: string): Array<{
+  id: string;
+  image: string | null;
+  image_storage_path: string | null;
+}> {
+  try {
+    return db
+      .prepare(
+        `SELECT id, image, image_storage_path FROM daily_special_posts WHERE expires_at <= ?`
+      )
+      .all(nowIso) as Array<{
+      id: string;
+      image: string | null;
+      image_storage_path: string | null;
+    }>;
+  } catch {
+    return [];
+  }
+}
+
+export function deleteDailySpecialPostFromDb(id: string): void {
+  db.prepare(`DELETE FROM daily_special_posts WHERE id = ?`).run(id);
+}
+
