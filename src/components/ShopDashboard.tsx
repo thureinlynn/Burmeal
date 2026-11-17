@@ -1123,8 +1123,8 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
                     Dishes rotated on fixed days of the week for customer predictability:
                   </p>
 
-                  {/* 7 Day Cards Row */}
-                  <div className="grid grid-cols-7 gap-1.5 sm:gap-2 mt-4">
+                  {/* 7 Day Cards Row (horizontal scrollable row on mobile, 7-col grid on md+) */}
+                  <div className="flex flex-nowrap items-stretch gap-2 mt-4 overflow-x-auto pb-1.5 snap-x snap-mandatory md:grid md:grid-cols-7 md:overflow-visible md:pb-0">
                     {DAYS_OF_WEEK.map((day) => {
                       const isToday = day === currentDayName;
                       const isSelected = selectedMatrixDay === day;
@@ -1139,7 +1139,7 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
                           key={day}
                           type="button"
                           onClick={() => setSelectedMatrixDay(isSelected ? null : day)}
-                          className={`flex flex-col items-center justify-between p-2 sm:p-2.5 rounded-xl border text-center transition-all cursor-pointer min-h-[96px] ${
+                          className={`snap-start shrink-0 min-w-[96px] md:min-w-0 flex flex-col items-center justify-between p-2.5 rounded-xl border text-center transition-all cursor-pointer min-h-[80px] md:min-h-[96px] ${
                             isSelected
                               ? 'border-amber-500 bg-amber-500/10 dark:bg-amber-500/20 ring-2 ring-amber-500/30'
                               : isToday
@@ -1147,7 +1147,7 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
                               : 'border-stone-200 dark:border-stone-700 bg-stone-50/60 dark:bg-stone-800/50 hover:bg-stone-100 dark:hover:bg-stone-800'
                           }`}
                         >
-                          <div>
+                          <div className="flex items-center justify-center gap-1 md:block">
                             <span className={`text-[11px] font-bold block ${isToday ? 'text-amber-700 dark:text-amber-400' : 'text-stone-700 dark:text-stone-300'}`}>
                               {day}
                             </span>
@@ -1158,24 +1158,24 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
                             )}
                           </div>
 
-                          <div className="my-1.5 flex flex-col items-center">
+                          <div className="my-1 flex flex-col items-center">
                             {hasItems ? (
                               <>
                                 <div className="w-6 h-6 rounded-full bg-amber-600 text-white text-[11px] font-bold flex items-center justify-center shadow-xs">
                                   {dayItems.length}
                                 </div>
-                                <span className="text-[10px] text-stone-600 dark:text-stone-300 truncate max-w-[42px] sm:max-w-[56px] block mt-1 font-medium">
+                                <span className="text-[10px] text-stone-600 dark:text-stone-300 truncate max-w-[76px] md:max-w-[56px] block mt-1 font-medium">
                                   {previewDish.title.slice(0, 7)}...
                                 </span>
                               </>
                             ) : (
-                              <span className="text-stone-400 dark:text-stone-600 text-sm font-semibold my-1">
+                              <span className="text-stone-400 dark:text-stone-600 text-sm font-semibold my-0.5">
                                 —
                               </span>
                             )}
                           </div>
 
-                          <span className="text-[9px] text-stone-400 dark:text-stone-500 font-medium">
+                          <span className="text-[10px] md:text-[9px] text-stone-500 dark:text-stone-400 font-medium whitespace-nowrap">
                             {dayItems.length} dishes
                           </span>
                         </button>
