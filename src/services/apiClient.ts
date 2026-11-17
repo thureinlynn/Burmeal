@@ -7,6 +7,7 @@ import {
   filterDailySpecialPosts,
   partitionDailySpecialPosts,
 } from '../utils/dailySpecialHelpers';
+import { validateMenuItemLimit } from '../utils/menuLimitHelpers';
 
 const TOKEN_KEY = 'burmeal_token';
 const SHOP_ID_KEY = 'burmeal_shop_id';
@@ -450,32 +451,51 @@ export const apiClient = {
               id: created.id || created.itemId || data.id || 'item_' + Date.now(),
             };
             const db = getLocalDb();
-            db.menuItems.unshift(normalizedItem);
+            db.menuItems = [
+              normalizedItem,
+              ...db.menuItems.filter((m) => m.id !== normalizedItem.id),
+            ];
             saveLocalDb(db);
             return normalizedItem;
           }
+        } else if (res.status >= 400 && res.status < 500) {
+          const errBody = await res.json().catch(() => ({}));
+          const apiErr = new Error(errBody.error || `Failed to create menu item (${res.status})`);
+          (apiErr as any).isApiError = true;
+          throw apiErr;
         }
       }
-    } catch {}
+    } catch (err: any) {
+      if (err?.isApiError) throw err;
+    }
 
     // Client fallback
     const db = getLocalDb();
-    const newId = data.id || 'item_' + Date.now();
     const targetShop = db.shops.find((s) => s.id === data.shopId);
+    const resolvedShopId = data.shopId || targetShop?.id || '';
+    const resolvedMenuType: MenuType = data.menuType || 'WEEKLY';
+    const newId = data.id || 'item_' + Date.now();
+
+    const shopExistingItems = db.menuItems.filter((m) => m.shopId === resolvedShopId);
+    const limitCheck = validateMenuItemLimit(shopExistingItems, resolvedMenuType, newId);
+    if (!limitCheck.allowed) {
+      throw new Error(limitCheck.error);
+    }
+
     const newItem: MenuItem = {
       id: newId,
-      shopId: data.shopId || targetShop?.id || '',
+      shopId: resolvedShopId,
       shopName: data.shopName || targetShop?.name || '',
       title: data.title || 'Untitled Dish',
       description: data.description || '',
       image: data.image || '/src/assets/images/burmeal_mohinga_dish_1793906770254.jpg',
       price: typeof data.price === 'number' ? data.price : parseFloat(data.price as any) || 5.0,
       category: data.category || 'Noodles & Broth',
-      menuType: data.menuType || 'SPECIAL',
+      menuType: resolvedMenuType,
       isVegetarian: Boolean(data.isVegetarian),
       isHalal: Boolean(data.isHalal),
-      specialDate: data.specialDate || (data.menuType === 'SPECIAL' ? new Date().toISOString().slice(0, 10) : undefined),
-      availableDays: data.availableDays || (data.menuType === 'WEEKLY' ? ['Mon', 'Wed', 'Fri'] : undefined),
+      specialDate: data.specialDate || (resolvedMenuType === 'SPECIAL' ? new Date().toISOString().slice(0, 10) : undefined),
+      availableDays: data.availableDays || (resolvedMenuType === 'WEEKLY' ? ['Mon', 'Wed', 'Fri'] : undefined),
       createdAt: new Date().toISOString(),
       isSaved: false,
     };
@@ -498,15 +518,38 @@ export const apiClient = {
           body: JSON.stringify(data),
         });
         if (res.ok) {
-          // Success from backend
+          const db = getLocalDb();
+          const idx = db.menuItems.findIndex((m) => m.id === id);
+          if (idx !== -1) {
+            db.menuItems[idx] = { ...db.menuItems[idx], ...data };
+            saveLocalDb(db);
+          }
+          return true;
+        } else if (res.status >= 400 && res.status < 500) {
+          const errBody = await res.json().catch(() => ({}));
+          const apiErr = new Error(errBody.error || `Failed to update menu item (${res.status})`);
+          (apiErr as any).isApiError = true;
+          throw apiErr;
         }
       }
-    } catch {}
+    } catch (err: any) {
+      if (err?.isApiError) throw err;
+    }
 
     const db = getLocalDb();
     const idx = db.menuItems.findIndex((m) => m.id === id);
     if (idx !== -1) {
-      db.menuItems[idx] = { ...db.menuItems[idx], ...data };
+      const existing = db.menuItems[idx];
+      const nextMenuType = data.menuType || existing.menuType;
+      const limitCheck = validateMenuItemLimit(
+        db.menuItems.filter((m) => m.shopId === existing.shopId),
+        nextMenuType,
+        id
+      );
+      if (!limitCheck.allowed) {
+        throw new Error(limitCheck.error);
+      }
+      db.menuItems[idx] = { ...existing, ...data };
       saveLocalDb(db);
       return true;
     }

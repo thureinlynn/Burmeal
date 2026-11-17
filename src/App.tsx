@@ -24,6 +24,7 @@ import {
 } from './utils/dailySpecialHelpers';
 import { parseShareTargetFromSearch } from './utils/shareHelpers';
 import { buildNewShopForOwner } from './utils/authHelpers';
+import { validateMenuItemLimit } from './utils/menuLimitHelpers';
 import { COUNTRIES, getDefaultRegionNameForCountry } from './utils/countries';
 import { Navbar } from './components/Navbar';
 import { BottomNav } from './components/BottomNav';
@@ -664,6 +665,13 @@ export default function App() {
   const handleCreateMenuItem = async (data: any) => {
     const targetShopId = ownerShop?.id || shopId;
     if (!targetShopId) return;
+
+    const shopExistingItems = ownerMenuItems.filter((m) => m.shopId === targetShopId);
+    const limitCheck = validateMenuItemLimit(shopExistingItems, data.menuType);
+    if (!limitCheck.allowed) {
+      throw new Error(limitCheck.error);
+    }
+
     try {
       const canonicalId =
         data.id || `item_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
@@ -679,38 +687,48 @@ export default function App() {
         createdAt: data.createdAt || new Date().toISOString(),
       };
 
-      const [, fsCreated] = await Promise.all([
-        apiClient.createMenuItem(fullPayload, token).catch(() => fullPayload),
-        firestoreService.createMenuItem(fullPayload).catch((fbErr) => {
-          console.warn('Direct Firestore item write notice:', fbErr);
-          return fullPayload;
-        }),
-      ]);
+      const apiCreated = await apiClient.createMenuItem(fullPayload, token);
+      const finalItem = apiCreated || fullPayload;
+      await firestoreService.createMenuItem(finalItem).catch((fbErr) => {
+        console.warn('Direct Firestore item write notice:', fbErr);
+        return finalItem;
+      });
 
-      const finalItem = fsCreated || fullPayload;
       setOwnerMenuItems((prev) => mergeUniqueMenuItems([finalItem], prev));
       setFirestoreItemsCache((prev) => mergeUniqueMenuItems([finalItem], prev));
 
       await Promise.all([loadOwnerData(), loadMenuItems()]);
     } catch (err) {
       console.error('Create menu item error:', err);
+      throw err;
     }
   };
 
   const handleUpdateMenuItem = async (id: string, data: any) => {
+    const existing = ownerMenuItems.find((m) => m.id === id);
+    const targetShopId = existing?.shopId || ownerShop?.id || shopId;
+    const targetMenuType = data.menuType || existing?.menuType;
+
+    if (targetShopId && targetMenuType) {
+      const shopExistingItems = ownerMenuItems.filter((m) => m.shopId === targetShopId);
+      const limitCheck = validateMenuItemLimit(shopExistingItems, targetMenuType, id);
+      if (!limitCheck.allowed) {
+        throw new Error(limitCheck.error);
+      }
+    }
+
     try {
+      await apiClient.updateMenuItem(id, data, token);
       setOwnerMenuItems((prev) => prev.map((m) => (m.id === id ? { ...m, ...data } : m)));
       setFirestoreItemsCache((prev) => prev.map((m) => (m.id === id ? { ...m, ...data } : m)));
 
-      await Promise.all([
-        apiClient.updateMenuItem(id, data, token).catch(() => false),
-        firestoreService.updateMenuItem(id, data).catch((fbErr) => {
-          console.warn('Direct Firestore item update notice:', fbErr);
-        }),
-      ]);
+      await firestoreService.updateMenuItem(id, data).catch((fbErr) => {
+        console.warn('Direct Firestore item update notice:', fbErr);
+      });
       await Promise.all([loadOwnerData(), loadMenuItems()]);
     } catch (err) {
       console.error('Update menu item error:', err);
+      throw err;
     }
   };
 

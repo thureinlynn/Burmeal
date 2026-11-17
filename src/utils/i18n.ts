@@ -123,6 +123,8 @@ export const translations = {
     saveChanges: 'Save Changes',
     createDish: 'Create Dish',
     deleteDish: 'Delete Dish',
+    menuItemLimitNotice: 'Weekly and Regular menus are each limited to 6 items per shop.',
+    menuLimitReached: '6/6 Limit Reached',
     shopInfoUpdated: 'Shop profile updated successfully!',
 
     // Settings View
@@ -274,6 +276,8 @@ export const translations = {
     saveChanges: 'ပြင်ဆင်ချက်သိမ်းမည်',
     createDish: 'ဟင်းပွဲအသစ်ဖန်တီးမည်',
     deleteDish: 'ဖျက်မည်',
+    menuItemLimitNotice: 'အပတ်စဉ်မီနူးနှင့် ပုံမှန်မီနူး တစ်ခုချင်းစီတွင် အများဆုံး ၆ ခုအထိသာ ထည့်သွင်းနိုင်ပါသည်။',
+    menuLimitReached: '၆/၆ အရေအတွက် ပြည့်ပါပြီ',
     shopInfoUpdated: 'ဆိုင်ပရိုဖိုင် အောင်မြင်စွာ ပြင်ဆင်ပြီးပါပြီ။',
 
     // Settings View
