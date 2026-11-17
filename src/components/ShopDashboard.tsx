@@ -27,11 +27,6 @@ import {
   validateDailySpecialInput,
 } from '../utils/dailySpecialHelpers';
 import {
-  MENU_ITEM_MAX_PER_TYPE,
-  getMenuSlotSummary,
-  validateMenuItemLimit,
-} from '../utils/menuLimitHelpers';
-import {
   getLocalCountryCoverDesign,
   isDefaultCoverImage,
   resolveCoverDesign,
@@ -226,7 +221,6 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
   const [specialDate, setSpecialDate] = useState(new Date().toISOString().slice(0, 10));
   const [availableDays, setAvailableDays] = useState<string[]>(['Mon', 'Wed', 'Fri']);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [itemFormError, setItemFormError] = useState('');
 
   // Daily Special Facebook-style Post Modal
   const [isDailySpecialModalOpen, setIsDailySpecialModalOpen] = useState(false);
@@ -311,30 +305,17 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
   const shopCurrency = getCurrencyForCountry(shopCountry);
 
   const openCreateModal = (presetType: MenuType = 'WEEKLY') => {
-    const summary = getMenuSlotSummary(menuItems);
-    let nextType: MenuType = presetType === 'PERMANENT' ? 'PERMANENT' : 'WEEKLY';
-    if (nextType === 'WEEKLY' && summary.isWeeklyFull && !summary.isRegularFull) {
-      nextType = 'PERMANENT';
-    } else if (nextType === 'PERMANENT' && summary.isRegularFull && !summary.isWeeklyFull) {
-      nextType = 'WEEKLY';
-    }
-
     setEditingItem(null);
     setTitle('');
     setDescription('');
     setImage('/src/assets/images/burmeal_mohinga_dish_1793906770254.jpg');
     setPrice(shopCurrency.placeholder);
     setCategory('Noodles & Broth');
-    setMenuType(nextType);
+    setMenuType(presetType === 'PERMANENT' ? 'PERMANENT' : 'WEEKLY');
     setIsVegetarian(false);
     setIsHalal(false);
     setSpecialDate(new Date().toISOString().slice(0, 10));
     setAvailableDays(['Mon', 'Wed', 'Fri']);
-    setItemFormError(
-      summary.areBothFull
-        ? `Both Weekly (${MENU_ITEM_MAX_PER_TYPE}/${MENU_ITEM_MAX_PER_TYPE}) and Regular Menu (${MENU_ITEM_MAX_PER_TYPE}/${MENU_ITEM_MAX_PER_TYPE}) have reached the 6-item limit.`
-        : ''
-    );
     setIsItemModalOpen(true);
   };
 
@@ -503,20 +484,11 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
     setIsHalal(item.isHalal);
     setSpecialDate(item.specialDate || new Date().toISOString().slice(0, 10));
     setAvailableDays(item.availableDays || []);
-    setItemFormError('');
     setIsItemModalOpen(true);
   };
 
   const handleSaveItem = async (e: React.FormEvent) => {
     e.preventDefault();
-    setItemFormError('');
-
-    const limitCheck = validateMenuItemLimit(menuItems, menuType, editingItem?.id);
-    if (!limitCheck.allowed) {
-      setItemFormError(limitCheck.error || 'Menu item limit reached.');
-      return;
-    }
-
     setIsSubmitting(true);
     try {
       const payload = {
@@ -540,8 +512,6 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
       }
       setIsItemModalOpen(false);
       onRefresh();
-    } catch (err: any) {
-      setItemFormError(err?.message || 'Could not save dish. Please check menu item limits.');
     } finally {
       setIsSubmitting(false);
     }
@@ -687,8 +657,6 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
 
   const canPostDailySpecial = canCreateDailySpecialPost(activeDailySpecials, shop.id);
   const singleActiveSpecial = activeDailySpecials[0] || null;
-
-  const slotSummary = React.useMemo(() => getMenuSlotSummary(menuItems), [menuItems]);
 
   const weeklyItemsList = React.useMemo(
     () => menuItems.filter((i) => i.menuType === 'WEEKLY'),
@@ -891,22 +859,10 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
                   <button
                     type="button"
                     onClick={() => openCreateModal('WEEKLY')}
-                    disabled={slotSummary.areBothFull}
-                    title={
-                      slotSummary.areBothFull
-                        ? t.menuLimitReached
-                        : t.addNewDish
-                    }
-                    className={`inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl font-semibold text-xs sm:text-sm transition-colors backdrop-blur-xs border whitespace-nowrap shrink-0 ${
-                      slotSummary.areBothFull
-                        ? 'bg-stone-900/40 text-white/60 border-white/10 cursor-not-allowed'
-                        : 'bg-white/20 dark:bg-stone-950/35 hover:bg-white/30 dark:hover:bg-stone-950/55 text-white border-white/20 dark:border-stone-300/20 active:scale-98 cursor-pointer'
-                    }`}
+                    className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-white/20 dark:bg-stone-950/35 hover:bg-white/30 dark:hover:bg-stone-950/55 text-white font-semibold text-xs sm:text-sm transition-colors backdrop-blur-xs border border-white/20 dark:border-stone-300/20 active:scale-98 cursor-pointer whitespace-nowrap shrink-0"
                   >
-                    <Plus className="w-4 h-4 text-current" />
-                    <span>
-                      {slotSummary.areBothFull ? `${t.addNewDish} (6/6 Full)` : `+${t.addNewDish}`}
-                    </span>
+                    <Plus className="w-4 h-4 text-white" />
+                    <span>+{t.addNewDish}</span>
                   </button>
 
                   <button
@@ -942,16 +898,12 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
                   <div className="text-3xl font-extrabold text-stone-900 dark:text-stone-100 font-display tabular-nums">
                     {activeDailySpecials.length + weeklyItems.length + regularItems.length}
                   </div>
-                  <div className="text-xs text-stone-500 dark:text-stone-400 mt-2 flex items-center gap-1.5 flex-wrap tabular-nums">
-                    <span className="text-rose-600 font-semibold">{activeDailySpecials.length}/1 daily</span>
+                  <div className="text-xs text-stone-500 dark:text-stone-400 mt-2 flex items-center gap-1.5 flex-wrap">
+                    <span className="text-rose-600 font-semibold">{activeDailySpecials.length} daily post</span>
                     <span>·</span>
-                    <span className="text-amber-600 font-semibold">
-                      {weeklyItems.length}/{MENU_ITEM_MAX_PER_TYPE} weekly
-                    </span>
+                    <span className="text-amber-600 font-semibold">{weeklyItems.length} weekly</span>
                     <span>·</span>
-                    <span className="text-stone-600 dark:text-stone-300 font-semibold">
-                      {regularItems.length}/{MENU_ITEM_MAX_PER_TYPE} regular
-                    </span>
+                    <span className="text-stone-600 dark:text-stone-300 font-semibold">{regularItems.length} regular</span>
                   </div>
                 </div>
               </div>
@@ -1160,16 +1112,10 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
                     <button
                       type="button"
                       onClick={() => openCreateModal('WEEKLY')}
-                      disabled={slotSummary.isWeeklyFull}
-                      title={slotSummary.isWeeklyFull ? t.menuLimitReached : 'Add Weekly Dish'}
-                      className={`text-xs font-semibold inline-flex items-center gap-1 ${
-                        slotSummary.isWeeklyFull
-                          ? 'text-stone-400 dark:text-stone-500 cursor-not-allowed'
-                          : 'text-amber-600 hover:text-amber-700 dark:text-amber-500 dark:hover:text-amber-400 cursor-pointer'
-                      }`}
+                      className="text-xs font-semibold text-amber-600 hover:text-amber-700 dark:text-amber-500 dark:hover:text-amber-400 inline-flex items-center gap-1 cursor-pointer"
                     >
                       <Plus className="w-3.5 h-3.5" />
-                      <span>{slotSummary.isWeeklyFull ? 'Weekly Full (6/6)' : 'Add Dish'}</span>
+                      <span>Add Dish</span>
                     </button>
                   </div>
 
@@ -1299,8 +1245,8 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
                 </div>
 
                 <div className="mt-5 pt-3.5 border-t border-stone-100 dark:border-stone-800 flex items-center justify-between text-xs">
-                  <span className="text-stone-500 dark:text-stone-400 tabular-nums">
-                    Weekly dishes total: {weeklyItems.length} / {MENU_ITEM_MAX_PER_TYPE}
+                  <span className="text-stone-500 dark:text-stone-400">
+                    Weekly dishes total: {weeklyItems.length}
                   </span>
                   <button
                     type="button"
@@ -1388,8 +1334,8 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
                       <UtensilsCrossed className="w-4 h-4 text-amber-600" />
                       <h4 className="font-bold text-sm text-stone-900 dark:text-stone-100">Regular Menu Dishes</h4>
                     </div>
-                    <span className="text-xs font-bold text-stone-500 dark:text-stone-400 tabular-nums">
-                      {regularItems.length} / {MENU_ITEM_MAX_PER_TYPE} dishes
+                    <span className="text-xs font-bold text-stone-500 dark:text-stone-400">
+                      {regularItems.length} dishes
                     </span>
                   </div>
 
@@ -1401,18 +1347,10 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
                 <button
                   type="button"
                   onClick={() => openCreateModal('PERMANENT')}
-                  disabled={slotSummary.isRegularFull}
-                  title={slotSummary.isRegularFull ? t.menuLimitReached : 'Add Regular Dish'}
-                  className={`mt-4 pt-3 border-t border-stone-100 dark:border-stone-800 text-xs font-semibold inline-flex items-center gap-1 ${
-                    slotSummary.isRegularFull
-                      ? 'text-stone-400 dark:text-stone-500 cursor-not-allowed'
-                      : 'text-amber-600 hover:text-amber-700 dark:text-amber-500 dark:hover:text-amber-400 cursor-pointer'
-                  }`}
+                  className="mt-4 pt-3 border-t border-stone-100 dark:border-stone-800 text-xs font-semibold text-amber-600 hover:text-amber-700 dark:text-amber-500 dark:hover:text-amber-400 inline-flex items-center gap-1 cursor-pointer"
                 >
-                  <span>
-                    {slotSummary.isRegularFull ? 'Regular Menu Full (6/6)' : '+ Add Regular Dish'}
-                  </span>
-                  {!slotSummary.isRegularFull && <span>→</span>}
+                  <span>+ Add Regular Dish</span>
+                  <span>→</span>
                 </button>
               </div>
             </div>
@@ -1459,19 +1397,10 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
                 <button
                   type="button"
                   onClick={() => openCreateModal(menuFilter === 'PERMANENT' ? 'PERMANENT' : 'WEEKLY')}
-                  disabled={slotSummary.areBothFull}
-                  title={slotSummary.areBothFull ? t.menuLimitReached : t.addNewDish}
-                  data-testid="add-new-dish-button"
-                  className={`flex items-center justify-center gap-1.5 px-4 py-2 text-xs font-semibold rounded-xl shadow-xs transition-colors whitespace-nowrap shrink-0 ${
-                    slotSummary.areBothFull
-                      ? 'bg-stone-200 dark:bg-stone-800 text-stone-500 dark:text-stone-400 border border-stone-300 dark:border-stone-700 cursor-not-allowed'
-                      : 'bg-amber-600 hover:bg-amber-700 text-white cursor-pointer'
-                  }`}
+                  className="flex items-center justify-center gap-1.5 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold rounded-xl shadow-xs transition-colors whitespace-nowrap shrink-0 cursor-pointer"
                 >
                   <Plus className="w-4 h-4" />
-                  <span>
-                    {slotSummary.areBothFull ? `${t.addNewDish} (6/6 Full)` : `+${t.addNewDish}`}
-                  </span>
+                  <span>+{t.addNewDish}</span>
                 </button>
               </div>
             </div>
@@ -1489,49 +1418,42 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
           </div>
 
           {/* Menu Tabs (Moved Daily Special out: All Menu, Weekly, Regular Menu) */}
-          <div className="space-y-1.5">
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-              <div className="flex flex-wrap items-center gap-1.5 bg-stone-100 dark:bg-stone-800 p-1 rounded-xl border border-stone-200 dark:border-stone-700">
-                <button
-                  type="button"
-                  onClick={() => setMenuFilter('ALL')}
-                  className={`flex-1 sm:flex-none px-3 py-1.5 sm:py-1 text-xs font-medium rounded-lg text-center whitespace-nowrap shrink-0 cursor-pointer tabular-nums ${
-                    menuFilter === 'ALL' ? 'bg-amber-700 font-semibold text-white shadow-xs' : 'text-stone-600 dark:text-stone-300'
-                  }`}
-                >
-                  {t.allMenus} ({allMenuItemsList.length}/{MENU_ITEM_MAX_PER_TYPE * 2})
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setMenuFilter('WEEKLY')}
-                  className={`flex-1 sm:flex-none px-3 py-1.5 sm:py-1 text-xs font-medium rounded-lg text-center whitespace-nowrap shrink-0 cursor-pointer tabular-nums ${
-                    menuFilter === 'WEEKLY' ? 'bg-amber-600 font-semibold text-white shadow-xs' : 'text-stone-600 dark:text-stone-300'
-                  }`}
-                >
-                  Weekly ({weeklyItemsList.length}/{MENU_ITEM_MAX_PER_TYPE})
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setMenuFilter('PERMANENT')}
-                  className={`flex-1 sm:flex-none px-3 py-1.5 sm:py-1 text-xs font-medium rounded-lg text-center whitespace-nowrap shrink-0 cursor-pointer tabular-nums ${
-                    menuFilter === 'PERMANENT'
-                      ? 'bg-stone-800 dark:bg-stone-600 font-semibold text-white shadow-xs'
-                      : 'text-stone-600 dark:text-stone-300'
-                  }`}
-                >
-                  {t.regularMaster} ({regularItemsList.length}/{MENU_ITEM_MAX_PER_TYPE})
-                </button>
-              </div>
-
-              <span className="text-xs text-stone-500 dark:text-stone-400 tabular-nums self-end sm:self-auto">
-                {menuFilter === 'ALL'
-                  ? `${filteredItems.length} ${t.dishes}`
-                  : `${filteredItems.length} / ${MENU_ITEM_MAX_PER_TYPE} ${t.dishes}`}
-              </span>
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-1.5 bg-stone-100 dark:bg-stone-800 p-1 rounded-xl border border-stone-200 dark:border-stone-700">
+              <button
+                type="button"
+                onClick={() => setMenuFilter('ALL')}
+                className={`flex-1 sm:flex-none px-3 py-1.5 sm:py-1 text-xs font-medium rounded-lg text-center whitespace-nowrap shrink-0 cursor-pointer ${
+                  menuFilter === 'ALL' ? 'bg-amber-700 font-semibold text-white shadow-xs' : 'text-stone-600 dark:text-stone-300'
+                }`}
+              >
+                {t.allMenus} ({allMenuItemsList.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setMenuFilter('WEEKLY')}
+                className={`flex-1 sm:flex-none px-3 py-1.5 sm:py-1 text-xs font-medium rounded-lg text-center whitespace-nowrap shrink-0 cursor-pointer ${
+                  menuFilter === 'WEEKLY' ? 'bg-amber-600 font-semibold text-white shadow-xs' : 'text-stone-600 dark:text-stone-300'
+                }`}
+              >
+                Weekly ({weeklyItemsList.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setMenuFilter('PERMANENT')}
+                className={`flex-1 sm:flex-none px-3 py-1.5 sm:py-1 text-xs font-medium rounded-lg text-center whitespace-nowrap shrink-0 cursor-pointer ${
+                  menuFilter === 'PERMANENT'
+                    ? 'bg-stone-800 dark:bg-stone-600 font-semibold text-white shadow-xs'
+                    : 'text-stone-600 dark:text-stone-300'
+                }`}
+              >
+                {t.regularMaster} ({regularItemsList.length})
+              </button>
             </div>
-            <p className="text-[11px] text-stone-500 dark:text-stone-400">
-              {t.menuItemLimitNotice}
-            </p>
+
+            <span className="text-xs text-stone-500 dark:text-stone-400 tabular-nums self-end sm:self-auto">
+              {filteredItems.length} {t.dishes}
+            </span>
           </div>
 
           <div className="space-y-4">
@@ -2569,7 +2491,7 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
               {editingItem ? t.editDish : t.addNewDish}
             </h2>
             <p className="text-xs text-stone-500 dark:text-stone-400 mb-4">
-              {t.menuItemLimitNotice}
+              Add a dish to your Weekly Highlights or Regular Menu. (Use the Daily Special button for your 48-hour storefront highlight.)
             </p>
 
             <form onSubmit={handleSaveItem} className="space-y-4">
@@ -2579,52 +2501,28 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
                   Menu Type Classification *
                 </label>
                 <div className="grid grid-cols-2 gap-2">
-                  {(() => {
-                    const weeklyLocked = slotSummary.isWeeklyFull && editingItem?.menuType !== 'WEEKLY';
-                    const regularLocked = slotSummary.isRegularFull && editingItem?.menuType !== 'PERMANENT';
-                    return (
-                      <>
-                        <button
-                          type="button"
-                          disabled={weeklyLocked}
-                          onClick={() => {
-                            setItemFormError('');
-                            setMenuType('WEEKLY');
-                          }}
-                          title={weeklyLocked ? t.menuLimitReached : 'Weekly Special'}
-                          data-testid="modal-menu-type-weekly"
-                          className={`py-2 px-2 text-xs font-semibold rounded-lg border text-center transition-all tabular-nums ${
-                            weeklyLocked
-                              ? 'border-stone-200 dark:border-stone-800 bg-stone-100 dark:bg-stone-800/50 text-stone-400 dark:text-stone-500 cursor-not-allowed'
-                              : menuType === 'WEEKLY'
-                              ? 'bg-amber-50 dark:bg-amber-950/60 border-amber-500 text-amber-900 dark:text-amber-300 font-bold cursor-pointer'
-                              : 'border-stone-200 dark:border-stone-700 text-stone-600 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-stone-800 cursor-pointer'
-                          }`}
-                        >
-                          Weekly ({slotSummary.weeklyCount}/{MENU_ITEM_MAX_PER_TYPE})
-                        </button>
-                        <button
-                          type="button"
-                          disabled={regularLocked}
-                          onClick={() => {
-                            setItemFormError('');
-                            setMenuType('PERMANENT');
-                          }}
-                          title={regularLocked ? t.menuLimitReached : 'Regular Menu'}
-                          data-testid="modal-menu-type-regular"
-                          className={`py-2 px-2 text-xs font-semibold rounded-lg border text-center transition-all tabular-nums ${
-                            regularLocked
-                              ? 'border-stone-200 dark:border-stone-800 bg-stone-100 dark:bg-stone-800/50 text-stone-400 dark:text-stone-500 cursor-not-allowed'
-                              : menuType === 'PERMANENT'
-                              ? 'bg-stone-800 dark:bg-stone-700 border-stone-800 dark:border-stone-600 text-white font-bold cursor-pointer'
-                              : 'border-stone-200 dark:border-stone-700 text-stone-600 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-stone-800 cursor-pointer'
-                          }`}
-                        >
-                          Regular Menu ({slotSummary.regularCount}/{MENU_ITEM_MAX_PER_TYPE})
-                        </button>
-                      </>
-                    );
-                  })()}
+                  <button
+                    type="button"
+                    onClick={() => setMenuType('WEEKLY')}
+                    className={`py-2 px-2 text-xs font-semibold rounded-lg border text-center transition-all cursor-pointer ${
+                      menuType === 'WEEKLY'
+                        ? 'bg-amber-50 dark:bg-amber-950/60 border-amber-500 text-amber-900 dark:text-amber-300 font-bold'
+                        : 'border-stone-200 dark:border-stone-700 text-stone-600 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-stone-800'
+                    }`}
+                  >
+                    Weekly Special
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMenuType('PERMANENT')}
+                    className={`py-2 px-2 text-xs font-semibold rounded-lg border text-center transition-all cursor-pointer ${
+                      menuType === 'PERMANENT'
+                        ? 'bg-stone-800 dark:bg-stone-700 border-stone-800 dark:border-stone-600 text-white font-bold'
+                        : 'border-stone-200 dark:border-stone-700 text-stone-600 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-stone-800'
+                    }`}
+                  >
+                    Regular Menu
+                  </button>
                 </div>
               </div>
 
@@ -2779,35 +2677,18 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
                 </label>
               </div>
 
-              {itemFormError && (
-                <div
-                  role="alert"
-                  data-testid="dish-limit-error"
-                  className="p-3 bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300 text-xs rounded-xl flex items-center gap-2 font-medium"
-                >
-                  <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
-                  <span>{itemFormError}</span>
-                </div>
-              )}
-
               <div className="flex items-center justify-end gap-2 pt-3 border-t border-stone-200 dark:border-stone-800">
                 <button
                   type="button"
-                  onClick={() => {
-                    setItemFormError('');
-                    setIsItemModalOpen(false);
-                  }}
-                  className="px-4 py-2 text-xs font-semibold text-stone-600 dark:text-stone-300 hover:text-stone-900 dark:hover:text-stone-100 rounded-lg cursor-pointer"
+                  onClick={() => setIsItemModalOpen(false)}
+                  className="px-4 py-2 text-xs font-semibold text-stone-600 dark:text-stone-300 hover:text-stone-900 rounded-lg"
                 >
                   {t.cancel}
                 </button>
                 <button
                   type="submit"
-                  disabled={
-                    isSubmitting ||
-                    !validateMenuItemLimit(menuItems, menuType, editingItem?.id).allowed
-                  }
-                  className="px-5 py-2 bg-amber-600 hover:bg-amber-700 text-white font-semibold text-xs rounded-lg transition-colors shadow-xs disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                  disabled={isSubmitting}
+                  className="px-5 py-2 bg-amber-600 hover:bg-amber-700 text-white font-semibold text-xs rounded-lg transition-colors shadow-xs"
                 >
                   {isSubmitting ? '...' : editingItem ? t.saveChanges : t.createDish}
                 </button>

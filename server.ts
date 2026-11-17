@@ -26,10 +26,6 @@ import {
   validateDailySpecialInput,
 } from './src/utils/dailySpecialHelpers.js';
 import { extractSupabaseStoragePath } from './src/utils/shopLocationHelpers.js';
-import {
-  isLimitedMenuType,
-  validateMenuItemLimit,
-} from './src/utils/menuLimitHelpers.js';
 
 initDb();
 
@@ -1038,23 +1034,6 @@ app.post('/api/menu-items', (req: Request, res: Response) => {
       typeof requestedId === 'string' && requestedId.trim()
         ? requestedId.trim()
         : 'item_' + crypto.randomUUID().slice(0, 8);
-
-    if (isLimitedMenuType(menuType)) {
-      const existingShopItems = db
-        .prepare('SELECT id, menu_type as menuType FROM menu_items WHERE shop_id = ?')
-        .all(shopId) as Array<{ id: string; menuType: 'WEEKLY' | 'PERMANENT' | 'SPECIAL' }>;
-      const limitCheck = validateMenuItemLimit(existingShopItems, menuType, itemId);
-      if (!limitCheck.allowed) {
-        return res.status(409).json({
-          error: limitCheck.error,
-          code: 'MENU_ITEM_LIMIT_REACHED',
-          menuType,
-          limit: limitCheck.maxLimit,
-          currentCount: limitCheck.currentCount,
-        });
-      }
-    }
-
     const now = new Date().toISOString();
 
     db.prepare(`
@@ -1129,23 +1108,6 @@ app.put('/api/menu-items/:id', (req: Request, res: Response) => {
       specialDate,
       availableDays,
     } = req.body;
-
-    const targetMenuType = menuType !== undefined ? menuType : existing.menu_type;
-    if (isLimitedMenuType(targetMenuType)) {
-      const existingShopItems = db
-        .prepare('SELECT id, menu_type as menuType FROM menu_items WHERE shop_id = ?')
-        .all(existing.shop_id) as Array<{ id: string; menuType: 'WEEKLY' | 'PERMANENT' | 'SPECIAL' }>;
-      const limitCheck = validateMenuItemLimit(existingShopItems, targetMenuType, existing.id);
-      if (!limitCheck.allowed) {
-        return res.status(409).json({
-          error: limitCheck.error,
-          code: 'MENU_ITEM_LIMIT_REACHED',
-          menuType: targetMenuType,
-          limit: limitCheck.maxLimit,
-          currentCount: limitCheck.currentCount,
-        });
-      }
-    }
 
     db.prepare(`
       UPDATE menu_items
