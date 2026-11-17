@@ -4,6 +4,9 @@ import { getCountryFlag } from '../utils/countries';
 import {
   formatDailySpecialTimestamp,
   formatRemainingTime,
+  getDailySpecialToggleLabel,
+  hasLineClampOverflow,
+  shouldShowDailySpecialMoreToggle,
 } from '../utils/dailySpecialHelpers';
 import { buildDailySpecialSharePayload } from '../utils/shareHelpers';
 import { ShareButton } from './ShareButton';
@@ -28,6 +31,37 @@ export const DailySpecialFeedCard: React.FC<DailySpecialFeedCardProps> = ({
 }) => {
   const [avatarFailed, setAvatarFailed] = React.useState(false);
   const [imageFailed, setImageFailed] = React.useState(false);
+  const [isPostExpanded, setIsPostExpanded] = React.useState(false);
+  const [isPostOverflowing, setIsPostOverflowing] = React.useState(false);
+  const postParagraphRef = React.useRef<HTMLParagraphElement | null>(null);
+
+  React.useEffect(() => {
+    setIsPostExpanded(false);
+  }, [post.id, post.post]);
+
+  React.useLayoutEffect(() => {
+    const el = postParagraphRef.current;
+    if (!el || isPostExpanded) return;
+
+    const measure = () => {
+      setIsPostOverflowing(hasLineClampOverflow(el.scrollHeight, el.clientHeight));
+    };
+
+    measure();
+
+    if (typeof ResizeObserver !== 'undefined') {
+      const observer = new ResizeObserver(measure);
+      observer.observe(el);
+      return () => observer.disconnect();
+    }
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('resize', measure);
+      return () => window.removeEventListener('resize', measure);
+    }
+  }, [post.post, isPostExpanded]);
+
+  const showMoreToggle = shouldShowDailySpecialMoreToggle(isPostExpanded, isPostOverflowing);
 
   const countryFlag = getCountryFlag(post.shopCountry);
   const uploadTimestamp = formatDailySpecialTimestamp(post.createdAt);
@@ -141,13 +175,30 @@ export const DailySpecialFeedCard: React.FC<DailySpecialFeedCardProps> = ({
       </div>
 
       {/* Post Title & Prose */}
-      <div className="px-4 sm:px-5 pb-3.5 space-y-2">
-        <h3 className="text-base sm:text-lg font-bold font-display text-stone-900 dark:text-stone-100 leading-snug">
+      <div className="px-4 sm:px-5 pb-3.5">
+        <h3 className="text-base sm:text-lg font-bold font-display text-stone-900 dark:text-stone-100 leading-snug mb-2">
           {post.title}
         </h3>
-        <p className="text-sm text-stone-700 dark:text-stone-300 whitespace-pre-line leading-relaxed">
+        <p
+          ref={postParagraphRef}
+          data-testid={`daily-special-body-${post.id}`}
+          className={`text-sm text-stone-700 dark:text-stone-300 whitespace-pre-line leading-relaxed ${
+            isPostExpanded ? '' : 'line-clamp-3'
+          }`}
+        >
           {post.post}
         </p>
+        {showMoreToggle && (
+          <button
+            type="button"
+            onClick={() => setIsPostExpanded((prev) => !prev)}
+            data-testid={`daily-special-more-${post.id}`}
+            aria-expanded={isPostExpanded}
+            className="mt-0.5 inline-block text-xs font-semibold text-amber-700 dark:text-amber-400 hover:text-amber-800 dark:hover:text-amber-300 hover:underline cursor-pointer"
+          >
+            {getDailySpecialToggleLabel(isPostExpanded)}
+          </button>
+        )}
       </div>
 
       {/* Optional Uploaded Photo */}

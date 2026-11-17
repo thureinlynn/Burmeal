@@ -17,8 +17,8 @@ import {
 } from './utils/userDataHelpers';
 import {
   applyDailySpecialPostUpdate,
+  canCreateDailySpecialPost,
   computeDailySpecialExpiry,
-  filterDailySpecialPosts,
   mergeUniqueDailySpecialPosts,
   partitionDailySpecialPosts,
 } from './utils/dailySpecialHelpers';
@@ -32,7 +32,6 @@ import { MenuCard } from './components/MenuCard';
 import { ItemDetailModal } from './components/ItemDetailModal';
 import { ShopProfileView } from './components/ShopProfileView';
 import { ShopDashboard } from './components/ShopDashboard';
-import { DailySpecialFeedCard } from './components/DailySpecialFeedCard';
 import { ScrollLoadMoreSentinel } from './components/ScrollLoadMoreSentinel';
 import { PAGE_LIMITS } from './utils/paginationHelpers';
 import { useInfiniteScrollLimit } from './hooks/useInfiniteScrollLimit';
@@ -58,7 +57,6 @@ import {
   Bookmark,
   Store,
   MapPin,
-  Megaphone,
 } from 'lucide-react';
 
 export default function App() {
@@ -104,9 +102,9 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [gmpQuotaExceeded, setGmpQuotaExceeded] = useState(false);
 
-  // Search & Filters ('SPECIAL' Daily Specials is the default view)
+  // Search & Filters ('ALL' = Weekly Highlights + Regular Menu is the default view)
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedMenuType, setSelectedMenuType] = useState<MenuType>('SPECIAL');
+  const [selectedMenuType, setSelectedMenuType] = useState<MenuType>('ALL');
   const [isVegetarian, setIsVegetarian] = useState(false);
   const [isHalal, setIsHalal] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState('ALL');
@@ -742,6 +740,17 @@ export default function App() {
   }) => {
     const targetShopId = ownerShop?.id || shopId;
     if (!targetShopId) return;
+
+    const existingPool = mergeUniqueDailySpecialPosts(
+      ownerDailySpecialPosts,
+      dailySpecialPosts,
+      firestoreSpecialPosts,
+      allBackendSpecialsCache
+    );
+    if (!canCreateDailySpecialPost(existingPool, targetShopId, Date.now())) {
+      throw new Error(t.dailySpecialLimitReached);
+    }
+
     try {
       const createdAt = new Date().toISOString();
       const canonicalId = `dsp_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
@@ -761,15 +770,13 @@ export default function App() {
         expiresAt: computeDailySpecialExpiry(createdAt),
       };
 
-      const [apiCreated] = await Promise.all([
-        apiClient.createDailySpecialPost(fullPost, token).catch(() => fullPost),
-        firestoreService.createDailySpecialPost(fullPost).catch((fbErr) => {
-          console.warn('Direct Firestore daily special write notice:', fbErr);
-          return fullPost;
-        }),
-      ]);
-
+      const apiCreated = await apiClient.createDailySpecialPost(fullPost, token);
       const finalPost = apiCreated || fullPost;
+      await firestoreService.createDailySpecialPost(finalPost).catch((fbErr) => {
+        console.warn('Direct Firestore daily special write notice:', fbErr);
+        return finalPost;
+      });
+
       setOwnerDailySpecialPosts((prev) =>
         partitionDailySpecialPosts(mergeUniqueDailySpecialPosts([finalPost], prev)).active
       );
@@ -783,6 +790,7 @@ export default function App() {
       await Promise.all([loadOwnerData(), loadDailySpecialPosts()]);
     } catch (err) {
       console.error('Create daily special post error:', err);
+      throw err;
     }
   };
 
@@ -980,58 +988,21 @@ export default function App() {
     ]
   );
 
-  const displayedDailySpecialPosts = React.useMemo(() => {
-    if (currentTab === 'following') {
-      return filterDailySpecialPosts(allKnownDailySpecialPosts, {
-        followedShopIds: effectiveFollowedIds,
-        query: searchQuery,
-        shopsLookup: allKnownShops,
-        nowMs: expiryClockMs,
-      });
-    }
-    return filterDailySpecialPosts(allKnownDailySpecialPosts, {
-      shopId: selectedShopId,
-      country: selectedShopId ? undefined : selectedCountry,
-      regionId: selectedShopId ? undefined : selectedRegionId,
-      query: searchQuery,
-      shopsLookup: allKnownShops,
-      nowMs: expiryClockMs,
-    });
-  }, [
-    currentTab,
-    allKnownDailySpecialPosts,
-    effectiveFollowedIds,
-    searchQuery,
-    allKnownShops,
-    selectedShopId,
-    selectedCountry,
-    selectedRegionId,
-    expiryClockMs,
-  ]);
-
   const displayedSavedItems = React.useMemo(
     () => filterSavedMenuItems(allKnownItems, effectiveSavedIds, allKnownShops),
     [allKnownItems, effectiveSavedIds, allKnownShops]
   );
 
   // Scroll-triggered incremental pagination:
-  // - Daily Specials: 10 initially + 10 per scroll
-  // - Weekly Highlights & Master Menu: 14 initially + 14 per scroll
+  // - All Menu / Weekly Highlights & Regular Menu: 14 initially + 14 per scroll
   // - Shops, Saved, Followed Shops: 10 initially + 10 per scroll
   const isConsumerView = user?.role !== 'SHOP_OWNER' && !selectedShopId;
-
-  const paginatedHomeSpecials = useInfiniteScrollLimit(
-    displayedDailySpecialPosts,
-    PAGE_LIMITS.DAILY_SPECIAL,
-    `feed:SPECIAL:${selectedCountry}:${selectedRegionId}:${searchQuery}`,
-    isConsumerView && currentTab === 'feed' && selectedMenuType === 'SPECIAL'
-  );
 
   const paginatedHomeDishes = useInfiniteScrollLimit(
     displayedMenuItems,
     PAGE_LIMITS.WEEKLY_AND_MASTER,
     `feed:${selectedMenuType}:${selectedCategory}:${isVegetarian}:${isHalal}:${selectedCountry}:${selectedRegionId}:${searchQuery}`,
-    isConsumerView && currentTab === 'feed' && selectedMenuType !== 'SPECIAL'
+    isConsumerView && currentTab === 'feed'
   );
 
   const paginatedFollowedShops = useInfiniteScrollLimit(
@@ -1041,24 +1012,11 @@ export default function App() {
     isConsumerView && currentTab === 'following' && followingViewMode === 'SHOPS'
   );
 
-  const paginatedFollowingSpecials = useInfiniteScrollLimit(
-    displayedDailySpecialPosts,
-    PAGE_LIMITS.DAILY_SPECIAL,
-    `following:SPECIAL:${searchQuery}:${user?.id || 'anon'}`,
-    isConsumerView &&
-      currentTab === 'following' &&
-      followingViewMode === 'DISHES' &&
-      selectedMenuType === 'SPECIAL'
-  );
-
   const paginatedFollowingDishes = useInfiniteScrollLimit(
     displayedMenuItems,
     PAGE_LIMITS.WEEKLY_AND_MASTER,
     `following:${selectedMenuType}:${selectedCategory}:${isVegetarian}:${isHalal}:${searchQuery}:${user?.id || 'anon'}`,
-    isConsumerView &&
-      currentTab === 'following' &&
-      followingViewMode === 'DISHES' &&
-      selectedMenuType !== 'SPECIAL'
+    isConsumerView && currentTab === 'following' && followingViewMode === 'DISHES'
   );
 
   const paginatedSavedItems = useInfiniteScrollLimit(
@@ -1324,22 +1282,16 @@ export default function App() {
             {/* Results Header with Current Region Indicator */}
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold text-stone-500 dark:text-stone-400 flex items-center gap-1.5">
-                {selectedMenuType === 'SPECIAL' ? (
-                  <span>
-                    {displayedDailySpecialPosts.length} {t.dailySpecialsCountLabel} in {selectedRegionName} {selectedFlag}
-                  </span>
-                ) : (
-                  <span>
-                    {displayedMenuItems.length} {t.dishes} in {selectedRegionName} {selectedFlag}
-                  </span>
-                )}
+                <span>
+                  {displayedMenuItems.length} {t.dishes} in {selectedRegionName} {selectedFlag}
+                </span>
                 {searchQuery && <span>for "{searchQuery}"</span>}
               </span>
-              {(selectedMenuType !== 'SPECIAL' || isVegetarian || isHalal || searchQuery || selectedCategory !== 'ALL') && (
+              {(selectedMenuType !== 'ALL' || isVegetarian || isHalal || searchQuery || selectedCategory !== 'ALL') && (
                 <button
                   onClick={() => {
                     setSearchQuery('');
-                    setSelectedMenuType('SPECIAL');
+                    setSelectedMenuType('ALL');
                     setIsVegetarian(false);
                     setIsHalal(false);
                     setSelectedCategory('ALL');
@@ -1351,69 +1303,7 @@ export default function App() {
               )}
             </div>
 
-            {selectedMenuType === 'SPECIAL' ? (
-              displayedDailySpecialPosts.length === 0 ? (
-                <div className="bg-white dark:bg-stone-900 rounded-3xl border border-stone-200 dark:border-stone-800 p-10 sm:p-12 text-center text-xs text-stone-400 space-y-3">
-                  <Megaphone className="w-10 h-10 mx-auto text-rose-400 dark:text-rose-500" />
-                  <p className="font-semibold text-sm text-stone-700 dark:text-stone-300">
-                    {selectedRegionName} — {t.noDailySpecialPosts}
-                  </p>
-                  <p className="text-[11px] text-stone-500 dark:text-stone-400 max-w-md mx-auto leading-relaxed">
-                    Daily Special posts from kitchens stay live for 48 hours. Browse Weekly Highlights, Master Menu, or explore another region.
-                  </p>
-                  <div className="flex flex-wrap items-center justify-center gap-2.5 pt-1">
-                    <button
-                      onClick={() => setSelectedMenuType('WEEKLY')}
-                      className="px-4 py-2 bg-stone-100 hover:bg-stone-200 dark:bg-stone-800 dark:hover:bg-stone-700 text-stone-800 dark:text-stone-200 font-bold text-xs rounded-xl border border-stone-200 dark:border-stone-700 transition-transform active:scale-95 inline-flex items-center gap-1.5 cursor-pointer"
-                    >
-                      <Sparkles className="w-3.5 h-3.5 text-amber-600" />
-                      <span>{t.weeklyMenus}</span>
-                    </button>
-                    <button
-                      onClick={openLocationModal}
-                      className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl shadow-xs transition-transform active:scale-95 inline-flex items-center gap-1.5 cursor-pointer"
-                    >
-                      <MapPin className="w-3.5 h-3.5" />
-                      <span>Change Region</span>
-                    </button>
-                    {!isSignedIn && (
-                      <button
-                        onClick={() => {
-                          setAuthDefaultRole('SHOP_OWNER');
-                          setIsAuthModalOpen(true);
-                        }}
-                        className="px-4 py-2 bg-stone-100 hover:bg-stone-200 dark:bg-stone-800 dark:hover:bg-stone-700 text-stone-800 dark:text-stone-200 font-bold text-xs rounded-xl border border-stone-200 dark:border-stone-700 transition-transform active:scale-95 inline-flex items-center gap-1.5 cursor-pointer"
-                      >
-                        <Store className="w-3.5 h-3.5 text-amber-600" />
-                        <span>Register Your Kitchen</span>
-                      </button>
-                    )}
-                  </div>
-                </div>
-              ) : (
-                <div className="max-w-2xl mx-auto space-y-4">
-                  {paginatedHomeSpecials.visibleItems.map((post) => (
-                    <DailySpecialFeedCard
-                      key={post.id}
-                      post={post}
-                      onSelectShop={(sId) => {
-                        setSelectedShopId(sId);
-                        setCurrentTab('shop_detail');
-                      }}
-                    />
-                  ))}
-                  <ScrollLoadMoreSentinel
-                    sentinelRef={paginatedHomeSpecials.sentinelRef}
-                    visibleCount={paginatedHomeSpecials.visibleCount}
-                    totalCount={paginatedHomeSpecials.totalCount}
-                    pageSize={PAGE_LIMITS.DAILY_SPECIAL}
-                    hasMore={paginatedHomeSpecials.hasMore}
-                    onLoadMore={paginatedHomeSpecials.loadMore}
-                    itemLabel="posts"
-                  />
-                </div>
-              )
-            ) : displayedMenuItems.length === 0 ? (
+            {displayedMenuItems.length === 0 ? (
               <div className="bg-white dark:bg-stone-900 rounded-3xl border border-stone-200 dark:border-stone-800 p-10 sm:p-12 text-center text-xs text-stone-400 space-y-3">
                 <Store className="w-10 h-10 mx-auto text-stone-300 dark:text-stone-600" />
                 <p className="font-semibold text-sm text-stone-700 dark:text-stone-300">
@@ -1512,11 +1402,7 @@ export default function App() {
                   >
                     <Sparkles className="w-3.5 h-3.5 text-amber-600" />
                     <span>
-                      Dishes Feed (
-                      {selectedMenuType === 'SPECIAL'
-                        ? displayedDailySpecialPosts.length
-                        : displayedMenuItems.length}
-                      )
+                      Dishes Feed ({displayedMenuItems.length})
                     </span>
                   </button>
                 </div>
@@ -1623,57 +1509,8 @@ export default function App() {
                   onCategoryChange={setSelectedCategory}
                 />
 
-                {/* Grid of Dishes or Daily Special Feed STRICTLY from followed shops */}
-                {selectedMenuType === 'SPECIAL' ? (
-                  displayedDailySpecialPosts.length === 0 ? (
-                    <div className="bg-white/80 dark:bg-stone-900/80 backdrop-blur-md rounded-3xl border border-stone-200 dark:border-stone-800 p-10 text-center text-xs text-stone-400 space-y-3">
-                      <p className="font-semibold text-stone-700 dark:text-stone-300">
-                        No active Daily Special posts (within 48h) from your followed shops.
-                      </p>
-                      <p className="text-[11px] text-stone-400 max-w-sm mx-auto">
-                        Check Weekly Highlights or explore more local food kitchens to expand your feed.
-                      </p>
-                      <div className="flex flex-wrap items-center justify-center gap-2 pt-2">
-                        <button
-                          onClick={() => setSelectedMenuType('WEEKLY')}
-                          className="px-4 py-2 bg-stone-100 hover:bg-stone-200 dark:bg-stone-800 dark:hover:bg-stone-700 text-stone-800 dark:text-stone-200 font-bold text-xs rounded-xl shadow-xs transition-transform active:scale-95 inline-flex items-center gap-1.5 cursor-pointer"
-                        >
-                          <Sparkles className="w-3.5 h-3.5 text-amber-600" />
-                          <span>{t.weeklyMenus}</span>
-                        </button>
-                        <button
-                          onClick={() => setCurrentTab('shops')}
-                          className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl shadow-xs transition-transform active:scale-95 inline-flex items-center gap-1.5 cursor-pointer"
-                        >
-                          <Store className="w-3.5 h-3.5" />
-                          <span>Discover More Shops</span>
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="max-w-2xl mx-auto space-y-4">
-                      {paginatedFollowingSpecials.visibleItems.map((post) => (
-                        <DailySpecialFeedCard
-                          key={post.id}
-                          post={post}
-                          onSelectShop={(sId) => {
-                            setSelectedShopId(sId);
-                            setCurrentTab('shop_detail');
-                          }}
-                        />
-                      ))}
-                      <ScrollLoadMoreSentinel
-                        sentinelRef={paginatedFollowingSpecials.sentinelRef}
-                        visibleCount={paginatedFollowingSpecials.visibleCount}
-                        totalCount={paginatedFollowingSpecials.totalCount}
-                        pageSize={PAGE_LIMITS.DAILY_SPECIAL}
-                        hasMore={paginatedFollowingSpecials.hasMore}
-                        onLoadMore={paginatedFollowingSpecials.loadMore}
-                        itemLabel="posts"
-                      />
-                    </div>
-                  )
-                ) : displayedMenuItems.length === 0 ? (
+                {/* Grid of Dishes STRICTLY from followed shops */}
+                {displayedMenuItems.length === 0 ? (
                   <div className="bg-white/80 dark:bg-stone-900/80 backdrop-blur-md rounded-3xl border border-stone-200 dark:border-stone-800 p-10 text-center text-xs text-stone-400 space-y-3">
                     <p className="font-semibold text-stone-700 dark:text-stone-300">
                       No active dishes currently matching filters from your followed shops.

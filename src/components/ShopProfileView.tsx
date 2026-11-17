@@ -49,7 +49,7 @@ export const ShopProfileView: React.FC<ShopProfileViewProps> = ({
   onSelectItem,
 }) => {
   const { t } = useLanguage();
-  const [selectedMenuType, setSelectedMenuType] = useState<MenuType>('SPECIAL');
+  const [selectedMenuType, setSelectedMenuType] = useState<MenuType>('ALL');
   const [coverSrc, setCoverSrc] = useState<string>(() =>
     resolveCoverDesign(shop.coverImage, shop.country, shop.region)
   );
@@ -74,40 +74,45 @@ export const ShopProfileView: React.FC<ShopProfileViewProps> = ({
     shopName: shop.name,
   });
 
-  const activeSpecialPosts = React.useMemo(() => {
+  const singleActiveSpecialPost = React.useMemo(() => {
     const shopOnly = dailySpecialPosts.filter((p) => p.shopId === shop.id);
-    return partitionDailySpecialPosts(shopOnly).active.map((p) => ({
+    const active = partitionDailySpecialPosts(shopOnly).active;
+    if (active.length === 0) return null;
+    const p = active[0];
+    return {
       ...p,
       shopName: p.shopName || shop.name,
       shopAvatarImage: p.shopAvatarImage || profileImageSrc,
       shopCountry: p.shopCountry || shop.country,
       shopRegion: p.shopRegion || shop.region,
       shopCity: p.shopCity || shop.city,
-    }));
+    };
   }, [dailySpecialPosts, shop, profileImageSrc]);
 
   const weeklyItems = React.useMemo(
     () => menuItems.filter((i) => i.menuType === 'WEEKLY'),
     [menuItems]
   );
-  const masterItems = React.useMemo(
+  const regularItems = React.useMemo(
     () => menuItems.filter((i) => i.menuType === 'PERMANENT'),
     [menuItems]
   );
-  const filteredItems = selectedMenuType === 'WEEKLY' ? weeklyItems : masterItems;
-
-  const paginatedSpecials = useInfiniteScrollLimit(
-    activeSpecialPosts,
-    PAGE_LIMITS.DAILY_SPECIAL,
-    `${shop.id}:SPECIAL`,
-    selectedMenuType === 'SPECIAL'
+  const allMenuItems = React.useMemo(
+    () => menuItems.filter((i) => i.menuType === 'WEEKLY' || i.menuType === 'PERMANENT'),
+    [menuItems]
   );
+  const filteredItems =
+    selectedMenuType === 'WEEKLY'
+      ? weeklyItems
+      : selectedMenuType === 'PERMANENT'
+      ? regularItems
+      : allMenuItems;
 
   const paginatedDishes = useInfiniteScrollLimit(
     filteredItems,
     PAGE_LIMITS.WEEKLY_AND_MASTER,
     `${shop.id}:${selectedMenuType}`,
-    selectedMenuType !== 'SPECIAL'
+    true
   );
 
   const countryFlag = getCountryFlag(shop.country);
@@ -357,19 +362,38 @@ export const ShopProfileView: React.FC<ShopProfileViewProps> = ({
         </div>
       </div>
 
-      {/* Menu Tabs (Daily Specials default, no All Menus) */}
+      {/* Single Active Daily Special Post (Moved out of menu tabs: shown at end of contact, before All Item / Weekly Highlights / Regular Menu) */}
+      {singleActiveSpecialPost && (
+        <section aria-label={t.dailySpecialButton} className="space-y-2.5">
+          <div className="flex items-center justify-between px-1">
+            <h2 className="text-sm font-bold font-display text-stone-900 dark:text-stone-100 flex items-center gap-2 uppercase tracking-wide">
+              <Megaphone className="w-4 h-4 text-rose-600 dark:text-rose-400" />
+              <span>{t.dailySpecialButton}</span>
+            </h2>
+            <span className="text-[11px] font-medium text-stone-500 dark:text-stone-400">
+              48h update
+            </span>
+          </div>
+          <DailySpecialFeedCard
+            post={singleActiveSpecialPost}
+            hideVisitShopAction
+          />
+        </section>
+      )}
+
+      {/* Menu Tabs (All Item default, Weekly Highlights, Regular Menu) */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex flex-wrap items-center gap-1 bg-stone-100 dark:bg-stone-800 p-1 rounded-xl border border-stone-200 dark:border-stone-700">
           <button
             type="button"
-            onClick={() => setSelectedMenuType('SPECIAL')}
+            onClick={() => setSelectedMenuType('ALL')}
             className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
-              selectedMenuType === 'SPECIAL'
-                ? 'bg-rose-600 text-white shadow-xs'
-                : 'text-stone-600 dark:text-stone-400 hover:text-rose-600'
+              selectedMenuType === 'ALL'
+                ? 'bg-amber-700 text-white shadow-xs'
+                : 'text-stone-600 dark:text-stone-400 hover:text-amber-700 dark:hover:text-amber-400'
             }`}
           >
-            {t.dailySpecials} ({activeSpecialPosts.length})
+            {t.allItems} ({allMenuItems.length})
           </button>
           <button
             type="button"
@@ -391,77 +415,17 @@ export const ShopProfileView: React.FC<ShopProfileViewProps> = ({
                 : 'text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100'
             }`}
           >
-            {t.regularMaster} ({masterItems.length})
+            {t.regularMaster} ({regularItems.length})
           </button>
         </div>
 
         <span className="text-xs text-stone-500 dark:text-stone-400 tabular-nums">
-          {selectedMenuType === 'SPECIAL'
-            ? `${activeSpecialPosts.length} ${t.dailySpecialsCountLabel}`
-            : `${filteredItems.length} ${t.dishes}`}
+          {filteredItems.length} {t.dishes}
         </span>
       </div>
 
-      {/* Content View: Facebook-style Feed for Daily Specials OR Dish Grid for Weekly / Master */}
-      {selectedMenuType === 'SPECIAL' ? (
-        activeSpecialPosts.length === 0 ? (
-          <div className="bg-white dark:bg-stone-900 rounded-2xl border border-stone-200 dark:border-stone-800 p-8 sm:p-10 text-center space-y-2.5">
-            <div className="w-11 h-11 rounded-2xl bg-rose-50 dark:bg-rose-950/50 text-rose-500 flex items-center justify-center mx-auto">
-              <Megaphone className="w-5 h-5" />
-            </div>
-            <p className="text-sm font-semibold text-stone-700 dark:text-stone-200">
-              {t.noDailySpecialPosts}
-            </p>
-            <p className="text-xs text-stone-500 dark:text-stone-400 max-w-md mx-auto">
-              Daily Special posts shared by {shop.name} stay visible here for 48 hours.
-              {weeklyItems.length > 0 || masterItems.length > 0
-                ? ' Browse Weekly Highlights or Master Menu below for regular kitchen offerings.'
-                : ''}
-            </p>
-            {(weeklyItems.length > 0 || masterItems.length > 0) && (
-              <div className="flex items-center justify-center gap-2 pt-2">
-                {weeklyItems.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => setSelectedMenuType('WEEKLY')}
-                    className="px-3.5 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold transition-colors cursor-pointer"
-                  >
-                    View {t.weeklyMenus} ({weeklyItems.length})
-                  </button>
-                )}
-                {masterItems.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => setSelectedMenuType('PERMANENT')}
-                    className="px-3.5 py-1.5 rounded-lg bg-stone-800 hover:bg-stone-900 text-white text-xs font-semibold transition-colors cursor-pointer"
-                  >
-                    View {t.regularMaster} ({masterItems.length})
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
-        ) : (
-          <div className="max-w-2xl mx-auto space-y-4">
-            {paginatedSpecials.visibleItems.map((post) => (
-              <DailySpecialFeedCard
-                key={post.id}
-                post={post}
-                hideVisitShopAction
-              />
-            ))}
-            <ScrollLoadMoreSentinel
-              sentinelRef={paginatedSpecials.sentinelRef}
-              visibleCount={paginatedSpecials.visibleCount}
-              totalCount={paginatedSpecials.totalCount}
-              pageSize={PAGE_LIMITS.DAILY_SPECIAL}
-              hasMore={paginatedSpecials.hasMore}
-              onLoadMore={paginatedSpecials.loadMore}
-              itemLabel="posts"
-            />
-          </div>
-        )
-      ) : filteredItems.length === 0 ? (
+      {/* Dish Grid for All Item / Weekly Highlights / Regular Menu */}
+      {filteredItems.length === 0 ? (
         <div className="bg-white dark:bg-stone-900 rounded-xl border border-stone-200 dark:border-stone-800 p-8 text-center text-xs text-stone-400">
           {t.noDishesFound}
         </div>

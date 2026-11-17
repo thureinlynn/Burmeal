@@ -2,7 +2,7 @@ export type UserRole = 'CUSTOMER' | 'SHOP_OWNER' | 'ADMIN';
 
 export type ShopApprovalStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
 
-export type MenuType = 'SPECIAL' | 'WEEKLY' | 'PERMANENT';
+export type MenuType = 'ALL' | 'SPECIAL' | 'WEEKLY' | 'PERMANENT';
 
 export interface User {
   id: string;

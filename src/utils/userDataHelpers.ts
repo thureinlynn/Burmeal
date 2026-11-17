@@ -188,7 +188,11 @@ export function filterFollowedMenuItems(
   return allItems
     .filter((item) => {
       if (!followedIds.has(item.shopId)) return false;
-      if (filters?.menuType && filters.menuType !== 'ALL' && item.menuType !== filters.menuType) {
+      if (filters?.menuType === 'ALL') {
+        if (item.menuType !== 'WEEKLY' && item.menuType !== 'PERMANENT') {
+          return false;
+        }
+      } else if (filters?.menuType && item.menuType !== filters.menuType) {
         return false;
       }
       if (filters?.category && filters.category !== 'ALL' && item.category !== filters.category) {

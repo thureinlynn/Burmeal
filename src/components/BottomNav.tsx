@@ -3,7 +3,6 @@ import { useLanguage } from '../context/LanguageContext';
 import {
   Home,
   Heart,
-  Bookmark,
   User,
   LayoutDashboard,
   UtensilsCrossed,
@@ -61,17 +60,18 @@ export const BottomNav: React.FC<BottomNavProps> = ({
             <span className="text-[10px] leading-tight truncate max-w-[55px]">{t.navFollowing}</span>
           </button>
 
-          {/* Tab 3: Saved Items */}
+          {/* Tab 3: Shops */}
           <button
-            onClick={() => onSelectTab('saved')}
+            type="button"
+            onClick={() => onSelectTab('shops')}
             className={`flex flex-col items-center justify-center py-1 transition-colors ${
-              currentTab === 'saved'
+              currentTab === 'shops'
                 ? 'text-amber-600 dark:text-amber-400 font-bold'
-                : 'text-stone-500 dark:text-stone-400 hover:text-stone-800'
+                : 'text-stone-500 dark:text-stone-400 hover:text-stone-800 dark:hover:text-stone-200'
             }`}
           >
-            <Bookmark className="w-4 h-4 mb-0.5" />
-            <span className="text-[10px] leading-tight truncate max-w-[55px]">{t.navSaved}</span>
+            <Store className="w-4 h-4 mb-0.5" />
+            <span className="text-[10px] leading-tight truncate max-w-[55px]">{t.navShops}</span>
           </button>
 
           {/* Tab 4: Customer Profile */}

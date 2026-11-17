@@ -175,12 +175,13 @@ export const Navbar: React.FC<NavbarProps> = ({
             )}
           </nav>
 
-          {/* Zone 3: Combined Auth button, Theme toggle, Language */}
+          {/* Zone 3: Desktop Theme toggle, Mobile Saved button, Auth button */}
           <div className="flex items-center gap-2 shrink-0">
-            {/* Dark / Light Mode quick toggle button */}
+            {/* Dark / Light Mode quick toggle button (Desktop only — replaced by Saved on mobile) */}
             <button
+              type="button"
               onClick={toggleTheme}
-              className="p-1.5 sm:p-2 rounded-lg text-stone-500 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors"
+              className="hidden md:flex p-1.5 sm:p-2 rounded-lg text-stone-500 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors cursor-pointer"
               title={theme === 'dark' ? t.lightMode : t.darkMode}
               aria-label="Toggle dark mode"
             >
@@ -190,6 +191,23 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <Moon className="w-4 h-4 text-stone-600" />
               )}
             </button>
+
+            {/* Mobile Saved button (replaces Dark Theme toggle on mobile header) */}
+            {user?.role !== 'SHOP_OWNER' && (
+              <button
+                type="button"
+                onClick={() => onSelectTab('saved')}
+                className={`md:hidden p-2 rounded-xl border transition-colors cursor-pointer ${
+                  currentTab === 'saved'
+                    ? 'bg-amber-50 dark:bg-amber-950/60 border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-300'
+                    : 'bg-stone-50/90 dark:bg-stone-800/80 border-stone-200/80 dark:border-stone-700 text-stone-600 dark:text-stone-300 hover:text-stone-900 dark:hover:text-stone-100'
+                }`}
+                title={t.navSaved}
+                aria-label={t.navSaved}
+              >
+                <Bookmark className={`w-4 h-4 ${currentTab === 'saved' ? 'fill-current' : ''}`} />
+              </button>
+            )}
 
             {/* User Account Badge or Sign In Button */}
             {user ? (
@@ -206,11 +224,14 @@ export const Navbar: React.FC<NavbarProps> = ({
               </div>
             ) : (
               <button
+                type="button"
                 onClick={() => onOpenAuth('CUSTOMER')}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold shadow-xs transition-all active:scale-95 cursor-pointer"
+                aria-label={t.signIn}
+                title={t.signIn}
+                className="flex items-center justify-center gap-1.5 p-2 md:px-3 md:py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold shadow-xs transition-all active:scale-95 cursor-pointer"
               >
-                <LogIn className="w-3.5 h-3.5" />
-                <span>{t.signIn}</span>
+                <LogIn className="w-4 h-4 md:w-3.5 md:h-3.5" />
+                <span className="hidden md:inline">{t.signIn}</span>
               </button>
             )}
           </div>

@@ -68,6 +68,12 @@ test('filterMenuItems filters by menu type', () => {
   const permanent = filterMenuItems(mockItems, { menuType: 'PERMANENT' });
   assert.equal(permanent.length, 1);
   assert.equal(permanent[0].title, 'Crispy Samosa Thoke');
+
+  const allMenu = filterMenuItems(mockItems, { menuType: 'ALL' });
+  assert.deepEqual(
+    allMenu.map((i) => i.menuType),
+    ['PERMANENT', 'WEEKLY']
+  );
 });
 
 test('filterMenuItems filters by dietary requirements', () => {

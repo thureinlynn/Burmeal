@@ -126,8 +126,12 @@ export function filterMenuItems(items: MenuItem[], params: FeedFilterParams): Me
       }
     }
 
-    // Menu type filter
-    if (params.menuType && params.menuType !== 'ALL') {
+    // Menu type filter: 'ALL' represents combined Weekly Highlights + Regular Menu (excludes Daily Specials)
+    if (params.menuType === 'ALL') {
+      if (item.menuType !== 'WEEKLY' && item.menuType !== 'PERMANENT') {
+        return false;
+      }
+    } else if (params.menuType) {
       if (item.menuType !== params.menuType) {
         return false;
       }

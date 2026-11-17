@@ -232,3 +232,43 @@ export function applyDailySpecialPostUpdate(
   };
 }
 
+export function hasLineClampOverflow(
+  scrollHeight: number,
+  clientHeight: number,
+  tolerancePx: number = 1
+): boolean {
+  if (!Number.isFinite(scrollHeight) || !Number.isFinite(clientHeight)) return false;
+  return scrollHeight > clientHeight + tolerancePx;
+}
+
+export function shouldShowDailySpecialMoreToggle(
+  isExpanded: boolean,
+  hasOverflow: boolean
+): boolean {
+  return Boolean(isExpanded || hasOverflow);
+}
+
+export function getDailySpecialToggleLabel(isExpanded: boolean): 'less' | 'more' {
+  return isExpanded ? 'less' : 'more';
+}
+
+export const DAILY_SPECIAL_MAX_ACTIVE_PER_SHOP = 1;
+
+export function getActiveDailySpecialsForShop<T extends { id: string; shopId: string; createdAt: string; expiresAt?: string }>(
+  posts: T[],
+  shopId: string,
+  nowMs: number = Date.now()
+): T[] {
+  if (!shopId) return [];
+  const shopPosts = posts.filter((p) => p.shopId === shopId);
+  return partitionDailySpecialPosts(shopPosts, nowMs).active;
+}
+
+export function canCreateDailySpecialPost<T extends { id: string; shopId: string; createdAt: string; expiresAt?: string }>(
+  posts: T[],
+  shopId: string,
+  nowMs: number = Date.now()
+): boolean {
+  if (!shopId) return false;
+  return getActiveDailySpecialsForShop(posts, shopId, nowMs).length < DAILY_SPECIAL_MAX_ACTIVE_PER_SHOP;
+}

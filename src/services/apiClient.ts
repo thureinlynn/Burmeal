@@ -2,6 +2,7 @@ import { User, Shop, MenuItem, MenuType, DailySpecialPost } from '../types/index
 import { matchesRegionFilter } from '../utils/filter';
 import {
   applyDailySpecialPostUpdate,
+  canCreateDailySpecialPost,
   computeDailySpecialExpiry,
   filterDailySpecialPosts,
   partitionDailySpecialPosts,
@@ -964,6 +965,7 @@ export const apiClient = {
     data: Partial<DailySpecialPost>,
     token?: string | null
   ): Promise<DailySpecialPost> {
+    let clientError: Error | null = null;
     try {
       if (token) {
         const res = await fetch('/api/daily-specials', {
@@ -974,8 +976,8 @@ export const apiClient = {
           },
           body: JSON.stringify(data),
         });
+        const ct = res.headers.get('content-type') || '';
         if (res.ok) {
-          const ct = res.headers.get('content-type') || '';
           if (ct.includes('application/json')) {
             const created = await res.json();
             if (created?.post) {
@@ -988,16 +990,35 @@ export const apiClient = {
               return created.post;
             }
           }
+        } else if (res.status >= 400 && res.status < 500) {
+          let errMessage = 'Could not publish Daily Special post.';
+          if (ct.includes('application/json')) {
+            const errJson = await res.json().catch(() => null);
+            if (errJson?.error) errMessage = errJson.error;
+          }
+          clientError = new Error(errMessage);
         }
       }
     } catch {}
 
+    if (clientError) {
+      throw clientError;
+    }
+
     const db = getLocalDb();
     const targetShop = db.shops.find((s) => s.id === data.shopId);
+    const resolvedShopId = data.shopId || targetShop?.id || '';
+    const delta = getLocalDelta();
+    if (!canCreateDailySpecialPost(delta.customDailySpecials || [], resolvedShopId)) {
+      throw new Error(
+        'Only 1 active Daily Special post is allowed at a time. Wait 48 hours for it to expire or delete your current post first.'
+      );
+    }
+
     const createdAt = data.createdAt || new Date().toISOString();
     const newPost: DailySpecialPost = {
       id: data.id || `dsp_${Date.now()}`,
-      shopId: data.shopId || targetShop?.id || '',
+      shopId: resolvedShopId,
       shopName: data.shopName || targetShop?.name || 'Local Kitchen',
       shopAvatarImage: data.shopAvatarImage || targetShop?.profileImageUrl || targetShop?.avatarImage,
       shopCountry: data.shopCountry || targetShop?.country,
@@ -1011,7 +1032,6 @@ export const apiClient = {
       expiresAt: data.expiresAt || computeDailySpecialExpiry(createdAt),
     };
 
-    const delta = getLocalDelta();
     delta.customDailySpecials = [
       newPost,
       ...delta.customDailySpecials.filter((p) => p.id !== newPost.id),

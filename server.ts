@@ -882,6 +882,8 @@ app.get('/api/menu-items', (req: Request, res: Response) => {
 
     if (menuType && menuType !== 'ALL') {
       sql += ` AND m.menu_type = '${menuType}'`;
+    } else if (menuType === 'ALL') {
+      sql += ` AND m.menu_type IN ('WEEKLY', 'PERMANENT')`;
     }
 
     if (category && category !== 'ALL') {
@@ -1365,6 +1367,20 @@ app.post('/api/daily-specials', async (req: Request, res: Response) => {
       shop.owner_email.toLowerCase() === user.email.toLowerCase();
     if (shop.owner_id !== user.id && !emailMatches && user.role !== 'ADMIN') {
       return res.status(403).json({ error: 'Unauthorized to post daily specials for this shop.' });
+    }
+
+    await cleanupExpiredDailySpecials();
+    const existingForShop = db
+      .prepare('SELECT * FROM daily_special_posts WHERE shop_id = ?')
+      .all(shop.id) as any[];
+    const activeForShop = existingForShop
+      .map(formatDailySpecialPostRow)
+      .filter((p) => !isDailySpecialExpired(p));
+    if (activeForShop.length >= 1) {
+      return res.status(409).json({
+        error:
+          'Only 1 active Daily Special post is allowed at a time. Wait 48 hours for it to expire or delete the current post first.',
+      });
     }
 
     const postId =

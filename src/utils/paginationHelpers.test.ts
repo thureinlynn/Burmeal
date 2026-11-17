@@ -19,8 +19,9 @@ describe('paginationHelpers', () => {
     assert.equal(PAGE_LIMITS.FOLLOWED_SHOPS, 10);
   });
 
-  it('returns 10 for Daily Specials and 14 for Weekly Highlights and Master Menu', () => {
+  it('returns 10 for Daily Specials and 14 for All Menu, Weekly Highlights, and Regular Menu', () => {
     assert.equal(getPageSizeForMenuType('SPECIAL'), 10);
+    assert.equal(getPageSizeForMenuType('ALL'), 14);
     assert.equal(getPageSizeForMenuType('WEEKLY'), 14);
     assert.equal(getPageSizeForMenuType('PERMANENT'), 14);
   });

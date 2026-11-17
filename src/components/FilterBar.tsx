@@ -55,19 +55,19 @@ export const FilterBar: React.FC<FilterBarProps> = ({
           )}
         </div>
 
-        {/* Menu Sections & Dietary Badges (Daily Specials default, no All Menus) */}
+        {/* Menu Sections & Dietary Badges (All Menu = Weekly Highlights + Regular Menu) */}
         <div className="flex flex-wrap items-center justify-between gap-2.5 pt-2 border-t border-stone-200/60 dark:border-stone-700/60">
           <div className="flex flex-wrap items-center gap-1 bg-stone-100/80 dark:bg-stone-800/80 backdrop-blur-xs p-1 rounded-xl border border-stone-200/80 dark:border-stone-700/80">
             <button
               type="button"
-              onClick={() => onMenuTypeChange('SPECIAL')}
+              onClick={() => onMenuTypeChange('ALL')}
               className={`px-3 py-1.5 text-[11px] sm:text-xs font-semibold rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
-                selectedMenuType === 'SPECIAL'
-                  ? 'bg-rose-600 text-white shadow-xs'
-                  : 'text-stone-600 dark:text-stone-300 hover:text-rose-600 dark:hover:text-rose-400'
+                selectedMenuType === 'ALL'
+                  ? 'bg-amber-700 text-white shadow-xs'
+                  : 'text-stone-600 dark:text-stone-300 hover:text-amber-700 dark:hover:text-amber-400'
               }`}
             >
-              {t.dailySpecials}
+              {t.allMenus}
             </button>
             <button
               type="button"
@@ -93,47 +93,45 @@ export const FilterBar: React.FC<FilterBarProps> = ({
             </button>
           </div>
 
-          {selectedMenuType !== 'SPECIAL' && (
-            <div className="flex flex-wrap items-center gap-2">
-              <select
-                value={selectedCategory}
-                onChange={(e) => onCategoryChange(e.target.value)}
-                className="text-[11px] sm:text-xs bg-stone-50 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-lg px-2 py-1 text-stone-700 dark:text-stone-200 font-medium focus:outline-none"
-              >
-                {CATEGORIES.map((cat) => (
-                  <option key={cat} value={cat}>
-                    {cat === 'ALL' ? t.allCategories : cat}
-                  </option>
-                ))}
-              </select>
+          <div className="flex flex-wrap items-center gap-2">
+            <select
+              value={selectedCategory}
+              onChange={(e) => onCategoryChange(e.target.value)}
+              className="text-[11px] sm:text-xs bg-stone-50 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-lg px-2 py-1 text-stone-700 dark:text-stone-200 font-medium focus:outline-none"
+            >
+              {CATEGORIES.map((cat) => (
+                <option key={cat} value={cat}>
+                  {cat === 'ALL' ? t.allCategories : cat}
+                </option>
+              ))}
+            </select>
 
-              <button
-                type="button"
-                onClick={onVegetarianToggle}
-                className={`flex items-center gap-1 px-2 py-1 text-[11px] sm:text-xs font-medium rounded-lg border transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
-                  isVegetarian
-                    ? 'bg-emerald-50 dark:bg-emerald-950/60 border-emerald-300 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 font-bold'
-                    : 'bg-white dark:bg-stone-800 border-stone-200 dark:border-stone-700 text-stone-600 dark:text-stone-300 hover:border-emerald-300'
-                }`}
-              >
-                <Leaf className={`w-3 h-3 ${isVegetarian ? 'text-emerald-600' : 'text-stone-400'}`} />
-                <span>{t.vegetarian}</span>
-              </button>
+            <button
+              type="button"
+              onClick={onVegetarianToggle}
+              className={`flex items-center gap-1 px-2 py-1 text-[11px] sm:text-xs font-medium rounded-lg border transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                isVegetarian
+                  ? 'bg-emerald-50 dark:bg-emerald-950/60 border-emerald-300 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 font-bold'
+                  : 'bg-white dark:bg-stone-800 border-stone-200 dark:border-stone-700 text-stone-600 dark:text-stone-300 hover:border-emerald-300'
+              }`}
+            >
+              <Leaf className={`w-3 h-3 ${isVegetarian ? 'text-emerald-600' : 'text-stone-400'}`} />
+              <span>{t.vegetarian}</span>
+            </button>
 
-              <button
-                type="button"
-                onClick={onHalalToggle}
-                className={`flex items-center gap-1 px-2 py-1 text-[11px] sm:text-xs font-medium rounded-lg border transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
-                  isHalal
-                    ? 'bg-sky-50 dark:bg-sky-950/60 border-sky-300 dark:border-sky-800 text-sky-800 dark:text-sky-300 font-bold'
-                    : 'bg-white dark:bg-stone-800 border-stone-200 dark:border-stone-700 text-stone-600 dark:text-stone-300 hover:border-sky-300'
-                }`}
-              >
-                <ShieldCheck className={`w-3 h-3 ${isHalal ? 'text-sky-600' : 'text-stone-400'}`} />
-                <span>{t.halal}</span>
-              </button>
-            </div>
-          )}
+            <button
+              type="button"
+              onClick={onHalalToggle}
+              className={`flex items-center gap-1 px-2 py-1 text-[11px] sm:text-xs font-medium rounded-lg border transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                isHalal
+                  ? 'bg-sky-50 dark:bg-sky-950/60 border-sky-300 dark:border-sky-800 text-sky-800 dark:text-sky-300 font-bold'
+                  : 'bg-white dark:bg-stone-800 border-stone-200 dark:border-stone-700 text-stone-600 dark:text-stone-300 hover:border-sky-300'
+              }`}
+            >
+              <ShieldCheck className={`w-3 h-3 ${isHalal ? 'text-sky-600' : 'text-stone-400'}`} />
+              <span>{t.halal}</span>
+            </button>
+          </div>
         </div>
       </div>
     </div>

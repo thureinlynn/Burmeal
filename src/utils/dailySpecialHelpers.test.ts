@@ -10,6 +10,12 @@ import {
   validateDailySpecialInput,
   formatRemainingTime,
   buildSupabaseDailySpecialPath,
+  hasLineClampOverflow,
+  shouldShowDailySpecialMoreToggle,
+  getDailySpecialToggleLabel,
+  DAILY_SPECIAL_MAX_ACTIVE_PER_SHOP,
+  getActiveDailySpecialsForShop,
+  canCreateDailySpecialPost,
 } from './dailySpecialHelpers';
 import type { DailySpecialPost, Shop } from '../types';
 
@@ -184,5 +190,52 @@ describe('dailySpecialHelpers', () => {
 
     const checkNowMs = Date.parse('2026-11-17T08:00:00.000Z');
     assert.equal(formatRemainingTime(updated, checkNowMs), formatRemainingTime(original, checkNowMs));
+  });
+
+  it('detects 3-line overflow and controls more/less link visibility cleanly', () => {
+    assert.equal(hasLineClampOverflow(68, 68), false);
+    assert.equal(hasLineClampOverflow(69, 68), false);
+    assert.equal(hasLineClampOverflow(114, 68), true);
+
+    assert.equal(shouldShowDailySpecialMoreToggle(false, false), false);
+    assert.equal(shouldShowDailySpecialMoreToggle(false, true), true);
+    assert.equal(shouldShowDailySpecialMoreToggle(true, false), true);
+
+    assert.equal(getDailySpecialToggleLabel(false), 'more');
+    assert.equal(getDailySpecialToggleLabel(true), 'less');
+  });
+
+  it('enforces a strict 1 active Daily Special post limit per shop until expired or deleted', () => {
+    assert.equal(DAILY_SPECIAL_MAX_ACTIVE_PER_SHOP, 1);
+
+    const createdAt = '2026-11-16T10:00:00.000Z';
+    const expiresAt = computeDailySpecialExpiry(createdAt);
+    const activePost: DailySpecialPost = {
+      id: 'dsp_active_1',
+      shopId: 'shop_1',
+      shopName: 'Pyay Thu Lay',
+      title: 'Today Special',
+      post: 'Fresh pot ready',
+      createdAt,
+      expiresAt,
+    };
+    const otherShopPost: DailySpecialPost = {
+      ...activePost,
+      id: 'dsp_other_1',
+      shopId: 'shop_2',
+    };
+
+    const during48h = Date.parse('2026-11-17T10:00:00.000Z');
+    const after48h = Date.parse('2026-11-18T10:00:00.000Z');
+
+    assert.equal(canCreateDailySpecialPost([otherShopPost], 'shop_1', during48h), true);
+    assert.equal(canCreateDailySpecialPost([activePost, otherShopPost], 'shop_1', during48h), false);
+    assert.equal(getActiveDailySpecialsForShop([activePost, otherShopPost], 'shop_1', during48h).length, 1);
+
+    // Allowed once deleted
+    assert.equal(canCreateDailySpecialPost([otherShopPost], 'shop_1', during48h), true);
+
+    // Allowed once 48h TTL expires
+    assert.equal(canCreateDailySpecialPost([activePost], 'shop_1', after48h), true);
   });
 });
