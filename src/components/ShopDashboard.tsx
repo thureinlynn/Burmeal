@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { DailySpecialPost, MenuItem, MenuType, Shop } from '../types';
 import { formatPrice } from '../utils/filter';
 import { useLanguage } from '../context/LanguageContext';
@@ -255,6 +255,10 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
   const [specialPostError, setSpecialPostError] = useState('');
   const [isSubmittingSpecialPost, setIsSubmittingSpecialPost] = useState(false);
   const [deletingSpecialId, setDeletingSpecialId] = useState<string | null>(null);
+  const [dishSaveSuccessMessage, setDishSaveSuccessMessage] = useState<string | null>(null);
+  const dishSaveTimerRef = useRef<number | null>(null);
+  const [deletingItemTarget, setDeletingItemTarget] = useState<MenuItem | null>(null);
+  const [deletingSpecialPostTarget, setDeletingSpecialPostTarget] = useState<DailySpecialPost | null>(null);
 
   // Shop Profile state (Tab 3: Page Info)
   const [shopName, setShopName] = useState(shop.name);
@@ -515,13 +519,30 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
     }
   };
 
-  const handleDeleteSpecialPost = async (post: DailySpecialPost) => {
-    if (!onDeleteDailySpecialPost) return;
+  const handleDeleteSpecialPostRequest = (post: DailySpecialPost) => {
+    setDeletingSpecialPostTarget(post);
+  };
+
+  const confirmDeleteSpecialPost = async () => {
+    const post = deletingSpecialPostTarget;
+    if (!post || !onDeleteDailySpecialPost) return;
     setDeletingSpecialId(post.id);
+    setDeletingSpecialPostTarget(null);
     try {
       await onDeleteDailySpecialPost(post.id, post.imageStoragePath || post.image);
     } finally {
       setDeletingSpecialId(null);
+    }
+  };
+
+  const confirmDeleteMenuItem = async () => {
+    const item = deletingItemTarget;
+    if (!item) return;
+    setDeletingItemTarget(null);
+    try {
+      await onDeleteMenuItem(item.id);
+    } catch (err) {
+      // ignore
     }
   };
 
@@ -615,9 +636,17 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
 
       if (editingItem) {
         await onUpdateMenuItem(editingItem.id, payload);
+        setDishSaveSuccessMessage('Done: Menu item updated successfully!');
       } else {
         await onCreateMenuItem(payload);
+        setDishSaveSuccessMessage('Done: New menu item added successfully!');
       }
+      if (dishSaveTimerRef.current) window.clearTimeout(dishSaveTimerRef.current);
+      dishSaveTimerRef.current = window.setTimeout(() => {
+        setDishSaveSuccessMessage(null);
+        dishSaveTimerRef.current = null;
+      }, 4500);
+
       setTempUploadedItemImageUrl('');
       setItemImageUploadError('');
       setIsItemModalOpen(false);
@@ -1634,7 +1663,7 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
                 key={singleActiveSpecial.id}
                 post={singleActiveSpecial}
                 onEdit={onUpdateDailySpecialPost ? openEditDailySpecialModal : undefined}
-                onDelete={handleDeleteSpecialPost}
+                onDelete={handleDeleteSpecialPostRequest}
                 onViewImage={onViewImage}
                 isDeleting={deletingSpecialId === singleActiveSpecial.id}
                 hideVisitShopAction
@@ -1847,7 +1876,7 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
                               <Edit2 className="w-3.5 h-3.5" />
                             </button>
                             <button
-                              onClick={() => onDeleteMenuItem(item.id)}
+                              onClick={() => setDeletingItemTarget(item)}
                               className="p-1.5 text-rose-500 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded"
                               title="Delete dish"
                             >
@@ -1989,7 +2018,7 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
                         </button>
                         <button
                           type="button"
-                          onClick={() => onDeleteMenuItem(item.id)}
+                          onClick={() => setDeletingItemTarget(item)}
                           className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 hover:bg-rose-100 text-xs font-semibold transition-colors"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
@@ -3473,6 +3502,90 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Confirm Delete Menu Item Dialog */}
+      {deletingItemTarget && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs"
+        >
+          <div className="bg-white dark:bg-stone-900 rounded-2xl max-w-sm w-full p-6 shadow-2xl relative border border-stone-200 dark:border-stone-800 space-y-4">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-xl bg-rose-50 dark:bg-rose-950/50 text-rose-600 dark:text-rose-400 flex items-center justify-center shrink-0">
+                <Trash2 className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold font-display text-stone-900 dark:text-stone-100">
+                  Confirm Delete Dish
+                </h3>
+                <p className="text-xs text-stone-500 dark:text-stone-400 mt-1 leading-relaxed">
+                  Are you sure you want to delete <strong className="text-stone-800 dark:text-stone-200">"{deletingItemTarget.title}"</strong>? This action cannot be undone.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-stone-100 dark:border-stone-800">
+              <button
+                type="button"
+                onClick={() => setDeletingItemTarget(null)}
+                className="px-4 py-2 text-xs font-semibold text-stone-600 dark:text-stone-300 hover:text-stone-900 dark:hover:text-stone-100 rounded-lg cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmDeleteMenuItem}
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs rounded-xl transition-colors shadow-xs cursor-pointer"
+              >
+                Delete Dish
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirm Delete Daily Special Post Dialog */}
+      {deletingSpecialPostTarget && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs"
+        >
+          <div className="bg-white dark:bg-stone-900 rounded-2xl max-w-sm w-full p-6 shadow-2xl relative border border-stone-200 dark:border-stone-800 space-y-4">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-xl bg-rose-50 dark:bg-rose-950/50 text-rose-600 dark:text-rose-400 flex items-center justify-center shrink-0">
+                <Trash2 className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold font-display text-stone-900 dark:text-stone-100">
+                  Confirm Delete Daily Special
+                </h3>
+                <p className="text-xs text-stone-500 dark:text-stone-400 mt-1 leading-relaxed">
+                  Are you sure you want to delete <strong className="text-stone-800 dark:text-stone-200">"{deletingSpecialPostTarget.title}"</strong>? This action cannot be undone.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-stone-100 dark:border-stone-800">
+              <button
+                type="button"
+                onClick={() => setDeletingSpecialPostTarget(null)}
+                className="px-4 py-2 text-xs font-semibold text-stone-600 dark:text-stone-300 hover:text-stone-900 dark:hover:text-stone-100 rounded-lg cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmDeleteSpecialPost}
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs rounded-xl transition-colors shadow-xs cursor-pointer"
+              >
+                Delete Special
+              </button>
+            </div>
           </div>
         </div>
       )}
