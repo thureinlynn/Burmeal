@@ -1373,7 +1373,7 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
                                       if (payload) onViewImage(payload);
                                     }}
                                     aria-label={`View full image of ${item.title}`}
-                                    className="w-7 h-7 rounded overflow-hidden shrink-0 cursor-zoom-in focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+                                    className="w-7 h-7 rounded overflow-hidden shrink-0 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
                                   >
                                     <img
                                       src={item.image}
@@ -1759,7 +1759,7 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
                                 }}
                                 data-testid={`dashboard-desktop-item-image-btn-${item.id}`}
                                 aria-label={`View full image of ${item.title}`}
-                                className="w-10 h-10 rounded-lg overflow-hidden bg-stone-100 dark:bg-stone-800 shrink-0 cursor-zoom-in focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+                                className="w-10 h-10 rounded-lg overflow-hidden bg-stone-100 dark:bg-stone-800 shrink-0 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
                               >
                                 <img
                                   src={item.image}
@@ -1893,7 +1893,7 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
                           }}
                           data-testid={`dashboard-mobile-item-image-btn-${item.id}`}
                           aria-label={`View full image of ${item.title}`}
-                          className="w-16 h-16 rounded-xl overflow-hidden bg-stone-100 dark:bg-stone-800 shrink-0 border border-stone-200 dark:border-stone-700 cursor-zoom-in focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+                          className="w-16 h-16 rounded-xl overflow-hidden bg-stone-100 dark:bg-stone-800 shrink-0 border border-stone-200 dark:border-stone-700 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
                         >
                           <img
                             src={item.image}

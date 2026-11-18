@@ -65,7 +65,7 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
               onClick={() => onViewImage(lightboxPayload)}
               data-testid="item-detail-image-btn"
               aria-label={`View full image of ${item.title}`}
-              className="block w-full h-full cursor-zoom-in focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+              className="block w-full h-full cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
             >
               <img
                 src={item.image}

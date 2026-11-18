@@ -222,7 +222,7 @@ export const DailySpecialFeedCard: React.FC<DailySpecialFeedCardProps> = ({
               }}
               data-testid={`daily-special-image-btn-${post.id}`}
               aria-label={`View full image of ${post.title}`}
-              className="block w-full cursor-zoom-in focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+              className="block w-full cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
             >
               <img
                 src={post.image}

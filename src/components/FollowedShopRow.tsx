@@ -251,7 +251,7 @@ export const FollowedShopRow: React.FC<FollowedShopRowProps> = ({
                       if (payload) onViewImage(payload);
                     }}
                     aria-label={`View full image of ${dish.title}`}
-                    className="w-12 h-12 rounded-lg overflow-hidden shrink-0 bg-stone-200 dark:bg-stone-700 cursor-zoom-in focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+                    className="w-12 h-12 rounded-lg overflow-hidden shrink-0 bg-stone-200 dark:bg-stone-700 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
                   >
                     <img
                       src={dish.image}
