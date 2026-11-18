@@ -12,6 +12,9 @@ import {
   extractSupabaseStoragePath,
   buildSupabaseProfilePath,
   validateProfileImageFile,
+  MAX_MENU_ITEM_IMAGE_BYTES,
+  buildSupabaseMenuItemPath,
+  validateMenuItemImageFile,
 } from './shopLocationHelpers';
 
 test('hasValidCoordinates validates latitude and longitude ranges strictly', () => {
@@ -175,3 +178,39 @@ test('parseOsmNominatimResult validates and rounds OSM search coordinates', () =
   assert.equal(parseOsmNominatimResult([]), null);
   assert.equal(parseOsmNominatimResult([{ lat: '999', lon: '96.1' }]), null);
 });
+
+test('buildSupabaseMenuItemPath formats public/menu-item-${id}-${timestamp}.${ext} safely', () => {
+  assert.equal(
+    buildSupabaseMenuItemPath('shp:ygn/1', 'mohinga.PNG', 1700000000000, 'image/png'),
+    'public/menu-item-shp_ygn_1-1700000000000.png'
+  );
+  assert.equal(
+    buildSupabaseMenuItemPath('shp_2', 'salad.webp', 1700000000005),
+    'public/menu-item-shp_2-1700000000005.webp'
+  );
+});
+
+test('validateMenuItemImageFile enforces 1.5 MB eco size limit and image mime types', () => {
+  assert.equal(MAX_MENU_ITEM_IMAGE_BYTES, Math.round(1.5 * 1024 * 1024));
+  assert.equal(
+    validateMenuItemImageFile({ size: 512 * 1024, type: 'image/webp', name: 'dish.webp' }).valid,
+    true
+  );
+  assert.equal(
+    validateMenuItemImageFile({ size: MAX_MENU_ITEM_IMAGE_BYTES, type: 'image/jpeg', name: 'exact.jpg' }).valid,
+    true
+  );
+  const oversized = validateMenuItemImageFile({
+    size: MAX_MENU_ITEM_IMAGE_BYTES + 1,
+    type: 'image/jpeg',
+    name: 'too-big.jpg',
+  });
+  assert.equal(oversized.valid, false);
+  assert.match(oversized.error || '', /1\.5 MB/);
+  assert.equal(validateMenuItemImageFile({ size: 0, type: 'image/png', name: 'empty.png' }).valid, false);
+  assert.equal(
+    validateMenuItemImageFile({ size: 1024, type: 'application/pdf', name: 'menu.pdf' }).valid,
+    false
+  );
+});
+

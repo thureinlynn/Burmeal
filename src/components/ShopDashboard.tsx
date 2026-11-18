@@ -14,11 +14,18 @@ import {
 } from '../utils/countries';
 import {
   removeDailySpecialImage,
+  removeMenuItemImage,
   removeShopProfilePicture,
   uploadDailySpecialImage,
+  uploadMenuItemImage,
   uploadShopProfilePicture,
 } from '../services/supabaseClient';
-import { getShopProfileImage, normalizeExternalImageUrl } from '../utils/shopLocationHelpers';
+import {
+  MAX_MENU_ITEM_IMAGE_MB_LABEL,
+  getShopProfileImage,
+  normalizeExternalImageUrl,
+} from '../utils/shopLocationHelpers';
+import { DEFAULT_FOOD_CATEGORY, getMenuItemCategoryOptions } from '../utils/foodCategories';
 import {
   canCreateDailySpecialPost,
   formatDailySpecialTimestamp,
@@ -27,10 +34,16 @@ import {
   validateDailySpecialInput,
 } from '../utils/dailySpecialHelpers';
 import {
+  MENU_ITEM_MAX_PER_TYPE,
+  getMenuSlotSummary,
+  validateMenuItemLimit,
+} from '../utils/menuLimitHelpers';
+import {
   getLocalCountryCoverDesign,
   isDefaultCoverImage,
   resolveCoverDesign,
 } from '../utils/coverDesigns';
+import { LightboxImageData, normalizeLightboxImage } from '../utils/imageLightboxHelpers';
 import { ShopLocationPicker } from './ShopLocationPicker';
 import { DailySpecialFeedCard } from './DailySpecialFeedCard';
 import { ScrollLoadMoreSentinel } from './ScrollLoadMoreSentinel';
@@ -72,6 +85,7 @@ import {
   Loader2,
   X,
   Megaphone,
+  Crown,
 } from 'lucide-react';
 
 interface ShopDashboardProps {
@@ -102,6 +116,7 @@ interface ShopDashboardProps {
     }
   ) => Promise<void>;
   onDeleteDailySpecialPost?: (id: string, imageOrPath?: string | null) => Promise<void>;
+  onViewImage?: (image: LightboxImageData) => void;
 }
 
 const DAYS_OF_WEEK = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -122,6 +137,7 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
   onCreateDailySpecialPost,
   onUpdateDailySpecialPost,
   onDeleteDailySpecialPost,
+  onViewImage,
 }) => {
   const { lang, setLang, t } = useLanguage();
   const { theme, setTheme } = useTheme();
@@ -214,13 +230,19 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
   const [description, setDescription] = useState('');
   const [image, setImage] = useState('');
   const [price, setPrice] = useState('');
-  const [category, setCategory] = useState('Noodles & Broth');
+  const [category, setCategory] = useState(DEFAULT_FOOD_CATEGORY);
   const [menuType, setMenuType] = useState<MenuType>('WEEKLY');
   const [isVegetarian, setIsVegetarian] = useState(false);
   const [isHalal, setIsHalal] = useState(false);
   const [specialDate, setSpecialDate] = useState(new Date().toISOString().slice(0, 10));
   const [availableDays, setAvailableDays] = useState<string[]>(['Mon', 'Wed', 'Fri']);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [itemFormError, setItemFormError] = useState('');
+  const [tempUploadedItemImageUrl, setTempUploadedItemImageUrl] = useState('');
+  const [isUploadingItemImage, setIsUploadingItemImage] = useState(false);
+  const [itemImageUploadError, setItemImageUploadError] = useState('');
+  const [premiumAlertContext, setPremiumAlertContext] = useState<'WEEKLY' | 'PERMANENT' | 'ALL' | null>(null);
+  const [isPremiumSubscribed, setIsPremiumSubscribed] = useState(false);
 
   // Daily Special Facebook-style Post Modal
   const [isDailySpecialModalOpen, setIsDailySpecialModalOpen] = useState(false);
@@ -304,18 +326,57 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
   const shopCountry = country || shop.country || 'Myanmar';
   const shopCurrency = getCurrencyForCountry(shopCountry);
 
-  const openCreateModal = (presetType: MenuType = 'WEEKLY') => {
+  const openPremiumAlert = (context: 'WEEKLY' | 'PERMANENT' | 'ALL') => {
+    setIsPremiumSubscribed(false);
+    setPremiumAlertContext(context);
+  };
+
+  const closeItemModal = () => {
+    if (tempUploadedItemImageUrl) {
+      removeMenuItemImage(tempUploadedItemImageUrl).catch(() => {});
+    }
+    setTempUploadedItemImageUrl('');
+    setItemImageUploadError('');
+    setItemFormError('');
+    setIsItemModalOpen(false);
+  };
+
+  const openCreateModal = (presetType: MenuType = 'WEEKLY', exactTarget = false) => {
+    const summary = getMenuSlotSummary(menuItems);
+    if (summary.areBothFull) {
+      openPremiumAlert('ALL');
+      return;
+    }
+
+    let nextType: MenuType = presetType === 'PERMANENT' ? 'PERMANENT' : 'WEEKLY';
+    if (nextType === 'WEEKLY' && summary.isWeeklyFull) {
+      if (exactTarget) {
+        openPremiumAlert('WEEKLY');
+        return;
+      }
+      nextType = 'PERMANENT';
+    } else if (nextType === 'PERMANENT' && summary.isRegularFull) {
+      if (exactTarget) {
+        openPremiumAlert('PERMANENT');
+        return;
+      }
+      nextType = 'WEEKLY';
+    }
+
     setEditingItem(null);
     setTitle('');
     setDescription('');
     setImage('/src/assets/images/burmeal_mohinga_dish_1793906770254.jpg');
+    setTempUploadedItemImageUrl('');
+    setItemImageUploadError('');
     setPrice(shopCurrency.placeholder);
-    setCategory('Noodles & Broth');
-    setMenuType(presetType === 'PERMANENT' ? 'PERMANENT' : 'WEEKLY');
+    setCategory(DEFAULT_FOOD_CATEGORY);
+    setMenuType(nextType);
     setIsVegetarian(false);
     setIsHalal(false);
     setSpecialDate(new Date().toISOString().slice(0, 10));
     setAvailableDays(['Mon', 'Wed', 'Fri']);
+    setItemFormError('');
     setIsItemModalOpen(true);
   };
 
@@ -469,6 +530,8 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
     setTitle(item.title);
     setDescription(item.description);
     setImage(item.image);
+    setTempUploadedItemImageUrl('');
+    setItemImageUploadError('');
     const initialPrice =
       shopCurrency.code === 'MMK' && item.price < 50
         ? (item.price * 1000).toString()
@@ -478,24 +541,69 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
         ? Math.round(item.price * 1300).toString()
         : item.price.toString();
     setPrice(initialPrice);
-    setCategory(item.category);
+    setCategory(item.category || DEFAULT_FOOD_CATEGORY);
     setMenuType(item.menuType);
     setIsVegetarian(item.isVegetarian);
     setIsHalal(item.isHalal);
     setSpecialDate(item.specialDate || new Date().toISOString().slice(0, 10));
     setAvailableDays(item.availableDays || []);
+    setItemFormError('');
     setIsItemModalOpen(true);
+  };
+
+  const handleMenuItemImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+
+    setItemImageUploadError('');
+    setIsUploadingItemImage(true);
+    try {
+      const previousTemp = tempUploadedItemImageUrl;
+      const uploaded = await uploadMenuItemImage(file, shop.id || user?.id || 'shop');
+      if (previousTemp && previousTemp !== uploaded.publicUrl) {
+        removeMenuItemImage(previousTemp).catch(() => {});
+      }
+      setImage(uploaded.publicUrl);
+      setTempUploadedItemImageUrl(uploaded.publicUrl);
+    } catch (err: any) {
+      setItemImageUploadError(err?.message || 'Failed to upload dish photo.');
+    } finally {
+      setIsUploadingItemImage(false);
+    }
+  };
+
+  const handleClearMenuItemImage = async () => {
+    const target = tempUploadedItemImageUrl;
+    setTempUploadedItemImageUrl('');
+    setItemImageUploadError('');
+    setImage('');
+    if (target) {
+      await removeMenuItemImage(target).catch(() => {});
+    }
   };
 
   const handleSaveItem = async (e: React.FormEvent) => {
     e.preventDefault();
+    setItemFormError('');
+
+    const limitCheck = validateMenuItemLimit(menuItems, menuType, editingItem?.id);
+    if (!limitCheck.allowed) {
+      const message = limitCheck.error || 'Menu item limit reached.';
+      setItemFormError(message);
+      openPremiumAlert(
+        slotSummary.areBothFull ? 'ALL' : menuType === 'PERMANENT' ? 'PERMANENT' : 'WEEKLY'
+      );
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       const payload = {
         shopId: shop.id,
         title,
         description,
-        image,
+        image: image || '/src/assets/images/burmeal_mohinga_dish_1793906770254.jpg',
         price: parseFloat(price) || 0,
         category,
         menuType,
@@ -510,8 +618,18 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
       } else {
         await onCreateMenuItem(payload);
       }
+      setTempUploadedItemImageUrl('');
+      setItemImageUploadError('');
       setIsItemModalOpen(false);
       onRefresh();
+    } catch (err: any) {
+      const msg = err?.message || 'Could not save dish. Please check menu item limits.';
+      setItemFormError(msg);
+      if (/limit|6 items|409/i.test(msg)) {
+        openPremiumAlert(
+          slotSummary.areBothFull ? 'ALL' : menuType === 'PERMANENT' ? 'PERMANENT' : 'WEEKLY'
+        );
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -657,6 +775,8 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
 
   const canPostDailySpecial = canCreateDailySpecialPost(activeDailySpecials, shop.id);
   const singleActiveSpecial = activeDailySpecials[0] || null;
+
+  const slotSummary = React.useMemo(() => getMenuSlotSummary(menuItems), [menuItems]);
 
   const weeklyItemsList = React.useMemo(
     () => menuItems.filter((i) => i.menuType === 'WEEKLY'),
@@ -859,10 +979,25 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
                   <button
                     type="button"
                     onClick={() => openCreateModal('WEEKLY')}
-                    className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-white/20 dark:bg-stone-950/35 hover:bg-white/30 dark:hover:bg-stone-950/55 text-white font-semibold text-xs sm:text-sm transition-colors backdrop-blur-xs border border-white/20 dark:border-stone-300/20 active:scale-98 cursor-pointer whitespace-nowrap shrink-0"
+                    title={
+                      slotSummary.areBothFull
+                        ? `${t.menuLimitReached} — Upgrade to Premium Shop`
+                        : t.addNewDish
+                    }
+                    className={`inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl font-semibold text-xs sm:text-sm transition-colors backdrop-blur-xs border whitespace-nowrap shrink-0 cursor-pointer active:scale-98 ${
+                      slotSummary.areBothFull
+                        ? 'bg-stone-950/60 hover:bg-stone-950/80 text-amber-200 border-amber-300/40'
+                        : 'bg-white/20 dark:bg-stone-950/35 hover:bg-white/30 dark:hover:bg-stone-950/55 text-white border-white/20 dark:border-stone-300/20'
+                    }`}
                   >
-                    <Plus className="w-4 h-4 text-white" />
-                    <span>+{t.addNewDish}</span>
+                    {slotSummary.areBothFull ? (
+                      <Crown className="w-4 h-4 text-amber-300" />
+                    ) : (
+                      <Plus className="w-4 h-4 text-current" />
+                    )}
+                    <span>
+                      {slotSummary.areBothFull ? `${t.addNewDish} (6/6 Full)` : `+${t.addNewDish}`}
+                    </span>
                   </button>
 
                   <button
@@ -898,12 +1033,16 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
                   <div className="text-3xl font-extrabold text-stone-900 dark:text-stone-100 font-display tabular-nums">
                     {activeDailySpecials.length + weeklyItems.length + regularItems.length}
                   </div>
-                  <div className="text-xs text-stone-500 dark:text-stone-400 mt-2 flex items-center gap-1.5 flex-wrap">
-                    <span className="text-rose-600 font-semibold">{activeDailySpecials.length} daily post</span>
+                  <div className="text-xs text-stone-500 dark:text-stone-400 mt-2 flex items-center gap-1.5 flex-wrap tabular-nums">
+                    <span className="text-rose-600 font-semibold">{activeDailySpecials.length}/1 daily</span>
                     <span>·</span>
-                    <span className="text-amber-600 font-semibold">{weeklyItems.length} weekly</span>
+                    <span className="text-amber-600 font-semibold">
+                      {weeklyItems.length}/{MENU_ITEM_MAX_PER_TYPE} weekly
+                    </span>
                     <span>·</span>
-                    <span className="text-stone-600 dark:text-stone-300 font-semibold">{regularItems.length} regular</span>
+                    <span className="text-stone-600 dark:text-stone-300 font-semibold">
+                      {regularItems.length}/{MENU_ITEM_MAX_PER_TYPE} regular
+                    </span>
                   </div>
                 </div>
               </div>
@@ -1111,11 +1250,24 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
                     </div>
                     <button
                       type="button"
-                      onClick={() => openCreateModal('WEEKLY')}
-                      className="text-xs font-semibold text-amber-600 hover:text-amber-700 dark:text-amber-500 dark:hover:text-amber-400 inline-flex items-center gap-1 cursor-pointer"
+                      onClick={() => openCreateModal('WEEKLY', true)}
+                      title={
+                        slotSummary.isWeeklyFull
+                          ? `${t.menuLimitReached} — Upgrade to Premium Shop`
+                          : 'Add Weekly Dish'
+                      }
+                      className={`text-xs font-semibold inline-flex items-center gap-1 cursor-pointer ${
+                        slotSummary.isWeeklyFull
+                          ? 'text-amber-700 dark:text-amber-400 hover:underline'
+                          : 'text-amber-600 hover:text-amber-700 dark:text-amber-500 dark:hover:text-amber-400'
+                      }`}
                     >
-                      <Plus className="w-3.5 h-3.5" />
-                      <span>Add Dish</span>
+                      {slotSummary.isWeeklyFull ? (
+                        <Crown className="w-3.5 h-3.5" />
+                      ) : (
+                        <Plus className="w-3.5 h-3.5" />
+                      )}
+                      <span>{slotSummary.isWeeklyFull ? 'Weekly Full (6/6)' : 'Add Dish'}</span>
                     </button>
                   </div>
 
@@ -1207,14 +1359,41 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
                               className="flex items-center justify-between text-xs bg-white dark:bg-stone-900 p-2 rounded-lg border border-amber-100 dark:border-amber-900/40"
                             >
                               <div className="flex items-center gap-2 truncate">
-                                <img
-                                  src={item.image}
-                                  alt={item.title}
-                                  className="w-7 h-7 rounded object-cover shrink-0"
-                                  onError={(e) => {
-                                    (e.currentTarget as HTMLImageElement).src = '/src/assets/images/burmeal_mohinga_dish_1793906770254.jpg';
-                                  }}
-                                />
+                                {onViewImage ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const payload = normalizeLightboxImage({
+                                        src: item.image,
+                                        alt: item.title,
+                                        title: item.title,
+                                        subtitle: `${shop.name} · ${formatPrice(item.price, shopCountry)}`,
+                                        badge: 'Weekly Special',
+                                      });
+                                      if (payload) onViewImage(payload);
+                                    }}
+                                    aria-label={`View full image of ${item.title}`}
+                                    className="w-7 h-7 rounded overflow-hidden shrink-0 cursor-zoom-in focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+                                  >
+                                    <img
+                                      src={item.image}
+                                      alt={item.title}
+                                      className="w-full h-full object-cover"
+                                      onError={(e) => {
+                                        (e.currentTarget as HTMLImageElement).src = '/src/assets/images/burmeal_mohinga_dish_1793906770254.jpg';
+                                      }}
+                                    />
+                                  </button>
+                                ) : (
+                                  <img
+                                    src={item.image}
+                                    alt={item.title}
+                                    className="w-7 h-7 rounded object-cover shrink-0"
+                                    onError={(e) => {
+                                      (e.currentTarget as HTMLImageElement).src = '/src/assets/images/burmeal_mohinga_dish_1793906770254.jpg';
+                                    }}
+                                  />
+                                )}
                                 <span className="font-semibold text-stone-900 dark:text-stone-100 truncate">
                                   {item.title}
                                 </span>
@@ -1245,8 +1424,8 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
                 </div>
 
                 <div className="mt-5 pt-3.5 border-t border-stone-100 dark:border-stone-800 flex items-center justify-between text-xs">
-                  <span className="text-stone-500 dark:text-stone-400">
-                    Weekly dishes total: {weeklyItems.length}
+                  <span className="text-stone-500 dark:text-stone-400 tabular-nums">
+                    Weekly dishes total: {weeklyItems.length} / {MENU_ITEM_MAX_PER_TYPE}
                   </span>
                   <button
                     type="button"
@@ -1334,8 +1513,8 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
                       <UtensilsCrossed className="w-4 h-4 text-amber-600" />
                       <h4 className="font-bold text-sm text-stone-900 dark:text-stone-100">Regular Menu Dishes</h4>
                     </div>
-                    <span className="text-xs font-bold text-stone-500 dark:text-stone-400">
-                      {regularItems.length} dishes
+                    <span className="text-xs font-bold text-stone-500 dark:text-stone-400 tabular-nums">
+                      {regularItems.length} / {MENU_ITEM_MAX_PER_TYPE} dishes
                     </span>
                   </div>
 
@@ -1346,11 +1525,23 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
 
                 <button
                   type="button"
-                  onClick={() => openCreateModal('PERMANENT')}
-                  className="mt-4 pt-3 border-t border-stone-100 dark:border-stone-800 text-xs font-semibold text-amber-600 hover:text-amber-700 dark:text-amber-500 dark:hover:text-amber-400 inline-flex items-center gap-1 cursor-pointer"
+                  onClick={() => openCreateModal('PERMANENT', true)}
+                  title={
+                    slotSummary.isRegularFull
+                      ? `${t.menuLimitReached} — Upgrade to Premium Shop`
+                      : 'Add Regular Dish'
+                  }
+                  className={`mt-4 pt-3 border-t border-stone-100 dark:border-stone-800 text-xs font-semibold inline-flex items-center gap-1 cursor-pointer ${
+                    slotSummary.isRegularFull
+                      ? 'text-amber-700 dark:text-amber-400 hover:underline'
+                      : 'text-amber-600 hover:text-amber-700 dark:text-amber-500 dark:hover:text-amber-400'
+                  }`}
                 >
-                  <span>+ Add Regular Dish</span>
-                  <span>→</span>
+                  {slotSummary.isRegularFull && <Crown className="w-3.5 h-3.5 shrink-0" />}
+                  <span>
+                    {slotSummary.isRegularFull ? 'Regular Menu Full (6/6)' : '+ Add Regular Dish'}
+                  </span>
+                  {!slotSummary.isRegularFull && <span>→</span>}
                 </button>
               </div>
             </div>
@@ -1396,11 +1587,44 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
 
                 <button
                   type="button"
-                  onClick={() => openCreateModal(menuFilter === 'PERMANENT' ? 'PERMANENT' : 'WEEKLY')}
-                  className="flex items-center justify-center gap-1.5 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold rounded-xl shadow-xs transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+                  onClick={() =>
+                    openCreateModal(
+                      menuFilter === 'PERMANENT' ? 'PERMANENT' : 'WEEKLY',
+                      menuFilter === 'WEEKLY' || menuFilter === 'PERMANENT'
+                    )
+                  }
+                  title={
+                    slotSummary.areBothFull ||
+                    (menuFilter === 'WEEKLY' && slotSummary.isWeeklyFull) ||
+                    (menuFilter === 'PERMANENT' && slotSummary.isRegularFull)
+                      ? `${t.menuLimitReached} — Upgrade to Premium Shop`
+                      : t.addNewDish
+                  }
+                  data-testid="add-new-dish-button"
+                  className={`flex items-center justify-center gap-1.5 px-4 py-2 text-xs font-semibold rounded-xl shadow-xs transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                    slotSummary.areBothFull ||
+                    (menuFilter === 'WEEKLY' && slotSummary.isWeeklyFull) ||
+                    (menuFilter === 'PERMANENT' && slotSummary.isRegularFull)
+                      ? 'bg-amber-950/10 dark:bg-amber-950/50 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-700 hover:bg-amber-100 dark:hover:bg-amber-900/50'
+                      : 'bg-amber-600 hover:bg-amber-700 text-white'
+                  }`}
                 >
-                  <Plus className="w-4 h-4" />
-                  <span>+{t.addNewDish}</span>
+                  {slotSummary.areBothFull ||
+                  (menuFilter === 'WEEKLY' && slotSummary.isWeeklyFull) ||
+                  (menuFilter === 'PERMANENT' && slotSummary.isRegularFull) ? (
+                    <Crown className="w-4 h-4" />
+                  ) : (
+                    <Plus className="w-4 h-4" />
+                  )}
+                  <span>
+                    {slotSummary.areBothFull
+                      ? `${t.addNewDish} (6/6 Full)`
+                      : menuFilter === 'WEEKLY' && slotSummary.isWeeklyFull
+                      ? `${t.addNewDish} (Weekly 6/6)`
+                      : menuFilter === 'PERMANENT' && slotSummary.isRegularFull
+                      ? `${t.addNewDish} (Regular 6/6)`
+                      : `+${t.addNewDish}`}
+                  </span>
                 </button>
               </div>
             </div>
@@ -1411,6 +1635,7 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
                 post={singleActiveSpecial}
                 onEdit={onUpdateDailySpecialPost ? openEditDailySpecialModal : undefined}
                 onDelete={handleDeleteSpecialPost}
+                onViewImage={onViewImage}
                 isDeleting={deletingSpecialId === singleActiveSpecial.id}
                 hideVisitShopAction
               />
@@ -1418,42 +1643,72 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
           </div>
 
           {/* Menu Tabs (Moved Daily Special out: All Menu, Weekly, Regular Menu) */}
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-            <div className="flex flex-wrap items-center gap-1.5 bg-stone-100 dark:bg-stone-800 p-1 rounded-xl border border-stone-200 dark:border-stone-700">
+          <div className="space-y-1.5">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-1.5 bg-stone-100 dark:bg-stone-800 p-1 rounded-xl border border-stone-200 dark:border-stone-700">
+                <button
+                  type="button"
+                  onClick={() => setMenuFilter('ALL')}
+                  className={`flex-1 sm:flex-none px-3 py-1.5 sm:py-1 text-xs font-medium rounded-lg text-center whitespace-nowrap shrink-0 cursor-pointer tabular-nums ${
+                    menuFilter === 'ALL' ? 'bg-amber-700 font-semibold text-white shadow-xs' : 'text-stone-600 dark:text-stone-300'
+                  }`}
+                >
+                  {t.allMenus} ({allMenuItemsList.length}/{MENU_ITEM_MAX_PER_TYPE * 2})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMenuFilter('WEEKLY')}
+                  className={`flex-1 sm:flex-none px-3 py-1.5 sm:py-1 text-xs font-medium rounded-lg text-center whitespace-nowrap shrink-0 cursor-pointer tabular-nums ${
+                    menuFilter === 'WEEKLY' ? 'bg-amber-600 font-semibold text-white shadow-xs' : 'text-stone-600 dark:text-stone-300'
+                  }`}
+                >
+                  Weekly ({weeklyItemsList.length}/{MENU_ITEM_MAX_PER_TYPE})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMenuFilter('PERMANENT')}
+                  className={`flex-1 sm:flex-none px-3 py-1.5 sm:py-1 text-xs font-medium rounded-lg text-center whitespace-nowrap shrink-0 cursor-pointer tabular-nums ${
+                    menuFilter === 'PERMANENT'
+                      ? 'bg-stone-800 dark:bg-stone-600 font-semibold text-white shadow-xs'
+                      : 'text-stone-600 dark:text-stone-300'
+                  }`}
+                >
+                  {t.regularMaster} ({regularItemsList.length}/{MENU_ITEM_MAX_PER_TYPE})
+                </button>
+              </div>
+
+              <span className="text-xs text-stone-500 dark:text-stone-400 tabular-nums self-end sm:self-auto">
+                {menuFilter === 'ALL'
+                  ? `${filteredItems.length} ${t.dishes}`
+                  : `${filteredItems.length} / ${MENU_ITEM_MAX_PER_TYPE} ${t.dishes}`}
+              </span>
+            </div>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-[11px] text-stone-500 dark:text-stone-400">
+                {t.menuItemLimitNotice}
+              </p>
               <button
                 type="button"
-                onClick={() => setMenuFilter('ALL')}
-                className={`flex-1 sm:flex-none px-3 py-1.5 sm:py-1 text-xs font-medium rounded-lg text-center whitespace-nowrap shrink-0 cursor-pointer ${
-                  menuFilter === 'ALL' ? 'bg-amber-700 font-semibold text-white shadow-xs' : 'text-stone-600 dark:text-stone-300'
-                }`}
+                data-testid="menus-premium-info-btn"
+                onClick={() =>
+                  openPremiumAlert(
+                    slotSummary.areBothFull
+                      ? 'ALL'
+                      : menuFilter === 'PERMANENT'
+                      ? 'PERMANENT'
+                      : menuFilter === 'WEEKLY'
+                      ? 'WEEKLY'
+                      : slotSummary.isWeeklyFull
+                      ? 'WEEKLY'
+                      : 'PERMANENT'
+                  )
+                }
+                className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-700 dark:text-amber-400 hover:underline cursor-pointer"
               >
-                {t.allMenus} ({allMenuItemsList.length})
-              </button>
-              <button
-                type="button"
-                onClick={() => setMenuFilter('WEEKLY')}
-                className={`flex-1 sm:flex-none px-3 py-1.5 sm:py-1 text-xs font-medium rounded-lg text-center whitespace-nowrap shrink-0 cursor-pointer ${
-                  menuFilter === 'WEEKLY' ? 'bg-amber-600 font-semibold text-white shadow-xs' : 'text-stone-600 dark:text-stone-300'
-                }`}
-              >
-                Weekly ({weeklyItemsList.length})
-              </button>
-              <button
-                type="button"
-                onClick={() => setMenuFilter('PERMANENT')}
-                className={`flex-1 sm:flex-none px-3 py-1.5 sm:py-1 text-xs font-medium rounded-lg text-center whitespace-nowrap shrink-0 cursor-pointer ${
-                  menuFilter === 'PERMANENT'
-                    ? 'bg-stone-800 dark:bg-stone-600 font-semibold text-white shadow-xs'
-                    : 'text-stone-600 dark:text-stone-300'
-                }`}
-              >
-                {t.regularMaster} ({regularItemsList.length})
+                <Crown className="w-3.5 h-3.5 shrink-0" />
+                <span>{t.premiumLearnMoreCta}</span>
               </button>
             </div>
-
-            <span className="text-xs text-stone-500 dark:text-stone-400 tabular-nums self-end sm:self-auto">
-              {filteredItems.length} {t.dishes}
-            </span>
           </div>
 
           <div className="space-y-4">
@@ -1484,12 +1739,43 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
                       <tr key={item.id} className="hover:bg-stone-50 dark:hover:bg-stone-800/50 transition-colors">
                         <td className="py-3 px-4">
                           <div className="flex items-center gap-3">
-                            <img
-                              src={item.image}
-                              alt={item.title}
-                              className="w-10 h-10 rounded-lg object-cover bg-stone-100 dark:bg-stone-800"
-                              referrerPolicy="no-referrer"
-                            />
+                            {onViewImage ? (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const payload = normalizeLightboxImage({
+                                    src: item.image,
+                                    alt: item.title,
+                                    title: item.title,
+                                    subtitle: `${shop.name} · ${formatPrice(item.price, shopCountry)}`,
+                                    badge:
+                                      item.menuType === 'SPECIAL'
+                                        ? t.todaySpecial
+                                        : item.menuType === 'WEEKLY'
+                                        ? t.weeklyHighlight
+                                        : t.masterMenu,
+                                  });
+                                  if (payload) onViewImage(payload);
+                                }}
+                                data-testid={`dashboard-desktop-item-image-btn-${item.id}`}
+                                aria-label={`View full image of ${item.title}`}
+                                className="w-10 h-10 rounded-lg overflow-hidden bg-stone-100 dark:bg-stone-800 shrink-0 cursor-zoom-in focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+                              >
+                                <img
+                                  src={item.image}
+                                  alt={item.title}
+                                  className="w-full h-full object-cover"
+                                  referrerPolicy="no-referrer"
+                                />
+                              </button>
+                            ) : (
+                              <img
+                                src={item.image}
+                                alt={item.title}
+                                className="w-10 h-10 rounded-lg object-cover bg-stone-100 dark:bg-stone-800 shrink-0"
+                                referrerPolicy="no-referrer"
+                              />
+                            )}
                             <div>
                               <p className="font-semibold text-stone-900 dark:text-stone-100">{item.title}</p>
                               <p className="text-stone-500 dark:text-stone-400 text-[11px] line-clamp-1 max-w-[180px]">
@@ -1587,12 +1873,43 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
                   <div key={item.id} className="p-4 space-y-3">
                     {/* Top Row: Thumbnail + Title + Price */}
                     <div className="flex items-start gap-3">
-                      <img
-                        src={item.image}
-                        alt={item.title}
-                        className="w-16 h-16 rounded-xl object-cover bg-stone-100 dark:bg-stone-800 shrink-0 border border-stone-200 dark:border-stone-700"
-                        referrerPolicy="no-referrer"
-                      />
+                      {onViewImage ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const payload = normalizeLightboxImage({
+                              src: item.image,
+                              alt: item.title,
+                              title: item.title,
+                              subtitle: `${shop.name} · ${formatPrice(item.price, shopCountry)}`,
+                              badge:
+                                item.menuType === 'SPECIAL'
+                                  ? t.todaySpecial
+                                  : item.menuType === 'WEEKLY'
+                                  ? t.weeklyHighlight
+                                  : t.masterMenu,
+                            });
+                            if (payload) onViewImage(payload);
+                          }}
+                          data-testid={`dashboard-mobile-item-image-btn-${item.id}`}
+                          aria-label={`View full image of ${item.title}`}
+                          className="w-16 h-16 rounded-xl overflow-hidden bg-stone-100 dark:bg-stone-800 shrink-0 border border-stone-200 dark:border-stone-700 cursor-zoom-in focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+                        >
+                          <img
+                            src={item.image}
+                            alt={item.title}
+                            className="w-full h-full object-cover"
+                            referrerPolicy="no-referrer"
+                          />
+                        </button>
+                      ) : (
+                        <img
+                          src={item.image}
+                          alt={item.title}
+                          className="w-16 h-16 rounded-xl object-cover bg-stone-100 dark:bg-stone-800 shrink-0 border border-stone-200 dark:border-stone-700"
+                          referrerPolicy="no-referrer"
+                        />
+                      )}
                       <div className="flex-1 min-w-0">
                         <div className="flex items-start justify-between gap-2">
                           <h4 className="font-bold text-sm text-stone-900 dark:text-stone-100 truncate">
@@ -2490,9 +2807,20 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
             <h2 className="text-xl font-bold font-display text-stone-900 dark:text-stone-100 mb-1">
               {editingItem ? t.editDish : t.addNewDish}
             </h2>
-            <p className="text-xs text-stone-500 dark:text-stone-400 mb-4">
-              Add a dish to your Weekly Highlights or Regular Menu. (Use the Daily Special button for your 48-hour storefront highlight.)
-            </p>
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+              <p className="text-xs text-stone-500 dark:text-stone-400">
+                {t.menuItemLimitNotice}
+              </p>
+              <button
+                type="button"
+                data-testid="modal-premium-info-btn"
+                onClick={() => openPremiumAlert(menuType === 'PERMANENT' ? 'PERMANENT' : 'WEEKLY')}
+                className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-700 dark:text-amber-400 hover:underline cursor-pointer"
+              >
+                <Crown className="w-3.5 h-3.5 shrink-0" />
+                <span>{t.premiumLearnMoreCta}</span>
+              </button>
+            </div>
 
             <form onSubmit={handleSaveItem} className="space-y-4">
               {/* Menu Type Selector */}
@@ -2501,28 +2829,60 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
                   Menu Type Classification *
                 </label>
                 <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setMenuType('WEEKLY')}
-                    className={`py-2 px-2 text-xs font-semibold rounded-lg border text-center transition-all cursor-pointer ${
-                      menuType === 'WEEKLY'
-                        ? 'bg-amber-50 dark:bg-amber-950/60 border-amber-500 text-amber-900 dark:text-amber-300 font-bold'
-                        : 'border-stone-200 dark:border-stone-700 text-stone-600 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-stone-800'
-                    }`}
-                  >
-                    Weekly Special
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setMenuType('PERMANENT')}
-                    className={`py-2 px-2 text-xs font-semibold rounded-lg border text-center transition-all cursor-pointer ${
-                      menuType === 'PERMANENT'
-                        ? 'bg-stone-800 dark:bg-stone-700 border-stone-800 dark:border-stone-600 text-white font-bold'
-                        : 'border-stone-200 dark:border-stone-700 text-stone-600 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-stone-800'
-                    }`}
-                  >
-                    Regular Menu
-                  </button>
+                  {(() => {
+                    const weeklyLocked = slotSummary.isWeeklyFull && editingItem?.menuType !== 'WEEKLY';
+                    const regularLocked = slotSummary.isRegularFull && editingItem?.menuType !== 'PERMANENT';
+                    return (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (weeklyLocked) {
+                              openPremiumAlert('WEEKLY');
+                              return;
+                            }
+                            setItemFormError('');
+                            setMenuType('WEEKLY');
+                          }}
+                          title={weeklyLocked ? `${t.menuLimitReached} — Click to upgrade` : 'Weekly Special'}
+                          data-testid="modal-menu-type-weekly"
+                          className={`py-2 px-2 text-xs font-semibold rounded-lg border text-center transition-all tabular-nums inline-flex items-center justify-center gap-1.5 cursor-pointer ${
+                            weeklyLocked
+                              ? 'border-amber-300 dark:border-amber-800/70 bg-amber-50/70 dark:bg-amber-950/30 text-amber-800 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-950/60'
+                              : menuType === 'WEEKLY'
+                              ? 'bg-amber-50 dark:bg-amber-950/60 border-amber-500 text-amber-900 dark:text-amber-300 font-bold'
+                              : 'border-stone-200 dark:border-stone-700 text-stone-600 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-stone-800'
+                          }`}
+                        >
+                          {weeklyLocked && <Lock className="w-3 h-3 shrink-0" />}
+                          <span>Weekly ({slotSummary.weeklyCount}/{MENU_ITEM_MAX_PER_TYPE})</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (regularLocked) {
+                              openPremiumAlert('PERMANENT');
+                              return;
+                            }
+                            setItemFormError('');
+                            setMenuType('PERMANENT');
+                          }}
+                          title={regularLocked ? `${t.menuLimitReached} — Click to upgrade` : 'Regular Menu'}
+                          data-testid="modal-menu-type-regular"
+                          className={`py-2 px-2 text-xs font-semibold rounded-lg border text-center transition-all tabular-nums inline-flex items-center justify-center gap-1.5 cursor-pointer ${
+                            regularLocked
+                              ? 'border-amber-300 dark:border-amber-800/70 bg-amber-50/70 dark:bg-amber-950/30 text-amber-800 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-950/60'
+                              : menuType === 'PERMANENT'
+                              ? 'bg-stone-800 dark:bg-stone-700 border-stone-800 dark:border-stone-600 text-white font-bold'
+                              : 'border-stone-200 dark:border-stone-700 text-stone-600 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-stone-800'
+                          }`}
+                        >
+                          {regularLocked && <Lock className="w-3 h-3 shrink-0" />}
+                          <span>Regular Menu ({slotSummary.regularCount}/{MENU_ITEM_MAX_PER_TYPE})</span>
+                        </button>
+                      </>
+                    );
+                  })()}
                 </div>
               </div>
 
@@ -2537,7 +2897,7 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
                         type="button"
                         key={d}
                         onClick={() => toggleDay(d)}
-                        className={`px-2.5 py-1 text-xs rounded border transition-colors ${
+                        className={`px-2.5 py-1 text-xs rounded border transition-colors cursor-pointer ${
                           availableDays.includes(d)
                             ? 'bg-amber-600 border-amber-600 text-white font-semibold'
                             : 'bg-white dark:bg-stone-800 border-stone-200 dark:border-stone-700 text-stone-600 dark:text-stone-300'
@@ -2591,15 +2951,16 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
                     Category Tag *
                   </label>
                   <select
+                    data-testid="menu-item-category-select"
                     value={category}
                     onChange={(e) => setCategory(e.target.value)}
                     className="w-full text-xs px-3 py-2 bg-stone-50 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-lg focus:outline-none focus:border-amber-600 text-stone-900 dark:text-stone-100"
                   >
-                    <option value="Noodles & Broth">Noodles & Broth</option>
-                    <option value="Salads & Snacks">Salads & Snacks</option>
-                    <option value="Breakfast Specials">Breakfast Specials</option>
-                    <option value="Rice & Main Dishes">Rice & Main Dishes</option>
-                    <option value="Desserts & Drinks">Desserts & Drinks</option>
+                    {getMenuItemCategoryOptions(category).map((cat) => (
+                      <option key={cat} value={cat}>
+                        {cat}
+                      </option>
+                    ))}
                   </select>
                 </div>
               </div>
@@ -2617,40 +2978,127 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
                 />
               </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-stone-700 dark:text-stone-300 mb-1">
-                  Photo URL
-                </label>
-                <input
-                  type="text"
-                  value={image}
-                  onChange={(e) => setImage(e.target.value)}
-                  placeholder="https://..."
-                  className="w-full text-xs px-3 py-2 bg-stone-50 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-lg focus:outline-none focus:border-amber-600 text-stone-900 dark:text-stone-100"
-                />
-                <div className="flex items-center gap-2 mt-1.5 text-[10px] text-stone-400">
-                  <span>Samples:</span>
-                  <button
-                    type="button"
-                    onClick={() => setImage('/src/assets/images/burmeal_mohinga_dish_1793906770254.jpg')}
-                    className="text-amber-700 dark:text-amber-400 hover:underline"
+              {/* Supabase Eco Image Upload + Photo URL */}
+              <div className="space-y-2.5">
+                <div className="flex items-center justify-between gap-2">
+                  <label className="block text-xs font-semibold text-stone-700 dark:text-stone-300">
+                    {t.menuItemUploadPhoto}
+                  </label>
+                  <span className="text-[11px] font-medium text-emerald-700 dark:text-emerald-400">
+                    Eco Max {MAX_MENU_ITEM_IMAGE_MB_LABEL}
+                  </span>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-3 p-3 rounded-xl bg-stone-50 dark:bg-stone-800/70 border border-stone-200 dark:border-stone-700">
+                  {image ? (
+                    <img
+                      src={image}
+                      alt={title || 'Dish preview'}
+                      referrerPolicy="no-referrer"
+                      className="w-16 h-16 rounded-xl object-cover border border-stone-200 dark:border-stone-700 bg-stone-100 dark:bg-stone-800 shrink-0"
+                    />
+                  ) : (
+                    <div className="w-16 h-16 rounded-xl border border-dashed border-stone-300 dark:border-stone-600 bg-stone-100 dark:bg-stone-800 text-stone-400 flex items-center justify-center shrink-0">
+                      <ImageIcon className="w-5 h-5" />
+                    </div>
+                  )}
+
+                  <div className="flex-1 min-w-[180px] space-y-1.5">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <label
+                        data-testid="menu-item-image-upload-btn"
+                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors whitespace-nowrap shrink-0 ${
+                          isUploadingItemImage
+                            ? 'bg-stone-200 dark:bg-stone-700 text-stone-500 dark:text-stone-400 border-stone-300 dark:border-stone-600 cursor-wait'
+                            : 'bg-amber-600 hover:bg-amber-700 text-white border-amber-600 cursor-pointer'
+                        }`}
+                      >
+                        {isUploadingItemImage ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <Upload className="w-3.5 h-3.5" />
+                        )}
+                        <span>
+                          {isUploadingItemImage ? t.menuItemUploading : t.menuItemUploadPhoto}
+                        </span>
+                        <input
+                          type="file"
+                          data-testid="menu-item-image-upload-input"
+                          accept="image/png,image/jpeg,image/webp,image/gif"
+                          disabled={isUploadingItemImage}
+                          onChange={handleMenuItemImageUpload}
+                          className="hidden"
+                        />
+                      </label>
+
+                      {image && (
+                        <button
+                          type="button"
+                          onClick={handleClearMenuItemImage}
+                          disabled={isUploadingItemImage}
+                          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-stone-600 dark:text-stone-300 hover:text-rose-600 dark:hover:text-rose-400 bg-stone-200/70 dark:bg-stone-700/70 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                          <span>Clear</span>
+                        </button>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-stone-500 dark:text-stone-400 leading-snug">
+                      {t.menuItemEcoLimitHint}
+                    </p>
+                  </div>
+                </div>
+
+                {itemImageUploadError && (
+                  <div
+                    role="alert"
+                    data-testid="menu-item-image-upload-error"
+                    className="p-2.5 bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300 text-xs rounded-xl flex items-start gap-2 font-medium"
                   >
-                    Mohinga
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setImage('/src/assets/images/burmeal_tea_leaf_salad_1793906770254.jpg')}
-                    className="text-amber-700 dark:text-amber-400 hover:underline"
-                  >
-                    Tea Leaf
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setImage('/src/assets/images/burmeal_ohn_no_khao_swe_1793906770581.jpg')}
-                    className="text-amber-700 dark:text-amber-400 hover:underline"
-                  >
-                    Coconut Noodle
-                  </button>
+                    <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                    <span>{itemImageUploadError}</span>
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-xs font-semibold text-stone-700 dark:text-stone-300 mb-1">
+                    Or paste Photo URL
+                  </label>
+                  <input
+                    type="text"
+                    data-testid="menu-item-image-url-input"
+                    value={image}
+                    onChange={(e) => {
+                      setItemImageUploadError('');
+                      setImage(e.target.value);
+                    }}
+                    placeholder="https://..."
+                    className="w-full text-xs px-3 py-2 bg-stone-50 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-lg focus:outline-none focus:border-amber-600 text-stone-900 dark:text-stone-100"
+                  />
+                  <div className="flex items-center gap-2 mt-1.5 text-[10px] text-stone-500 dark:text-stone-400">
+                    <span>Samples:</span>
+                    <button
+                      type="button"
+                      onClick={() => setImage('/src/assets/images/burmeal_mohinga_dish_1793906770254.jpg')}
+                      className="text-amber-700 dark:text-amber-400 hover:underline cursor-pointer"
+                    >
+                      Mohinga
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setImage('/src/assets/images/burmeal_tea_leaf_salad_1793906770254.jpg')}
+                      className="text-amber-700 dark:text-amber-400 hover:underline cursor-pointer"
+                    >
+                      Tea Leaf
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setImage('/src/assets/images/burmeal_ohn_no_khao_swe_1793906770581.jpg')}
+                      className="text-amber-700 dark:text-amber-400 hover:underline cursor-pointer"
+                    >
+                      Coconut Noodle
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -2677,23 +3125,187 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
                 </label>
               </div>
 
+              {itemFormError && (
+                <div
+                  role="alert"
+                  data-testid="dish-limit-error"
+                  className="p-3 bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300 text-xs rounded-xl flex items-center gap-2 font-medium"
+                >
+                  <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                  <span>{itemFormError}</span>
+                </div>
+              )}
+
               <div className="flex items-center justify-end gap-2 pt-3 border-t border-stone-200 dark:border-stone-800">
                 <button
                   type="button"
-                  onClick={() => setIsItemModalOpen(false)}
-                  className="px-4 py-2 text-xs font-semibold text-stone-600 dark:text-stone-300 hover:text-stone-900 rounded-lg"
+                  onClick={closeItemModal}
+                  className="px-4 py-2 text-xs font-semibold text-stone-600 dark:text-stone-300 hover:text-stone-900 dark:hover:text-stone-100 rounded-lg cursor-pointer"
                 >
                   {t.cancel}
                 </button>
                 <button
                   type="submit"
-                  disabled={isSubmitting}
-                  className="px-5 py-2 bg-amber-600 hover:bg-amber-700 text-white font-semibold text-xs rounded-lg transition-colors shadow-xs"
+                  disabled={
+                    isSubmitting ||
+                    isUploadingItemImage ||
+                    !validateMenuItemLimit(menuItems, menuType, editingItem?.id).allowed
+                  }
+                  className="px-5 py-2 bg-amber-600 hover:bg-amber-700 text-white font-semibold text-xs rounded-lg transition-colors shadow-xs disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                 >
                   {isSubmitting ? '...' : editingItem ? t.saveChanges : t.createDish}
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Premium Shop Upgrade Alert Box (Shown whenever a shop exceeds the 6-item limit) */}
+      {premiumAlertContext && (
+        <div
+          role="alertdialog"
+          aria-modal="true"
+          aria-labelledby="premium-shop-alert-title"
+          data-testid="premium-shop-alert-dialog"
+          className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/65 backdrop-blur-xs"
+        >
+          <div className="bg-white dark:bg-stone-900 rounded-2xl max-w-md w-full p-6 shadow-2xl border border-stone-200 dark:border-stone-800 space-y-5 relative">
+            <button
+              type="button"
+              aria-label="Close Premium Shop alert"
+              onClick={() => setPremiumAlertContext(null)}
+              className="absolute top-4 right-4 p-1.5 rounded-lg text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 hover:bg-stone-100 dark:hover:bg-stone-800 cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            <div className="flex items-start gap-3.5 pr-6">
+              <div className="w-11 h-11 rounded-xl bg-amber-100 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-800/70 text-amber-700 dark:text-amber-400 flex items-center justify-center shrink-0">
+                <Crown className="w-5 h-5" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[11px] font-semibold text-amber-700 dark:text-amber-400">
+                  {t.premiumAlertBadge}
+                </p>
+                <h3
+                  id="premium-shop-alert-title"
+                  className="text-lg font-bold font-display text-stone-900 dark:text-stone-100 mt-0.5 leading-snug"
+                >
+                  {t.premiumAlertTitle}
+                </h3>
+                <p className="text-xs text-stone-600 dark:text-stone-400 mt-1 tabular-nums">
+                  {premiumAlertContext === 'ALL'
+                    ? `Weekly (${slotSummary.weeklyCount}/${MENU_ITEM_MAX_PER_TYPE}) & Regular Menu (${slotSummary.regularCount}/${MENU_ITEM_MAX_PER_TYPE}) are full.`
+                    : premiumAlertContext === 'WEEKLY'
+                    ? `Weekly Highlights limit reached (${slotSummary.weeklyCount}/${MENU_ITEM_MAX_PER_TYPE}).`
+                    : `Regular Menu limit reached (${slotSummary.regularCount}/${MENU_ITEM_MAX_PER_TYPE}).`}
+                </p>
+              </div>
+            </div>
+
+            {isPremiumSubscribed ? (
+              <div
+                data-testid="premium-subscribed-confirmation"
+                className="p-4 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 space-y-2"
+              >
+                <div className="flex items-center gap-2 text-emerald-800 dark:text-emerald-300 font-bold text-sm">
+                  <CheckCircle2 className="w-4 h-4 shrink-0" />
+                  <span>{t.premiumSubscribedTitle}</span>
+                </div>
+                <p className="text-xs text-stone-700 dark:text-stone-300 leading-relaxed">
+                  {t.premiumSubscribedDesc}{' '}
+                  <strong className="text-stone-900 dark:text-stone-100">{shop.name}</strong>
+                  {user?.email ? ` (${user.email})` : ''}. Our onboarding team will activate your Premium Shop tier shortly.
+                </p>
+              </div>
+            ) : (
+              <>
+                <p className="text-xs text-stone-600 dark:text-stone-300 leading-relaxed">
+                  {t.premiumAlertDesc}
+                </p>
+
+                <ul className="space-y-2.5 p-3.5 rounded-xl bg-stone-50 dark:bg-stone-800/70 border border-stone-200/80 dark:border-stone-700/80 text-xs text-stone-700 dark:text-stone-200">
+                  <li className="flex items-start gap-2">
+                    <Check className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                    <span>{t.premiumFeatureUnlimited}</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <Check className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                    <span>{t.premiumFeatureSpecials}</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <Check className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                    <span>{t.premiumFeaturePriority}</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <Check className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                    <span>{t.premiumFeatureMedia}</span>
+                  </li>
+                </ul>
+              </>
+            )}
+
+            <div className="space-y-2 pt-2 border-t border-stone-200 dark:border-stone-800">
+              {!isPremiumSubscribed && (
+                <button
+                  type="button"
+                  data-testid="premium-subscribe-btn"
+                  onClick={() => setIsPremiumSubscribed(true)}
+                  className="w-full py-2.5 px-4 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs sm:text-sm transition-colors shadow-xs inline-flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <Crown className="w-4 h-4" />
+                  <span>{t.premiumSubscribeCta}</span>
+                </button>
+              )}
+
+              {premiumAlertContext === 'WEEKLY' && !slotSummary.isRegularFull && (
+                <button
+                  type="button"
+                  data-testid="premium-switch-menu-btn"
+                  onClick={() => {
+                    setPremiumAlertContext(null);
+                    if (isItemModalOpen) {
+                      setItemFormError('');
+                      setMenuType('PERMANENT');
+                    } else {
+                      openCreateModal('PERMANENT', true);
+                    }
+                  }}
+                  className="w-full py-2 px-4 rounded-xl bg-stone-100 dark:bg-stone-800 hover:bg-stone-200 dark:hover:bg-stone-700 text-stone-800 dark:text-stone-200 font-semibold text-xs transition-colors border border-stone-200 dark:border-stone-700 cursor-pointer tabular-nums"
+                >
+                  Or add to Regular Menu ({slotSummary.regularCount}/{MENU_ITEM_MAX_PER_TYPE})
+                </button>
+              )}
+
+              {premiumAlertContext === 'PERMANENT' && !slotSummary.isWeeklyFull && (
+                <button
+                  type="button"
+                  data-testid="premium-switch-menu-btn"
+                  onClick={() => {
+                    setPremiumAlertContext(null);
+                    if (isItemModalOpen) {
+                      setItemFormError('');
+                      setMenuType('WEEKLY');
+                    } else {
+                      openCreateModal('WEEKLY', true);
+                    }
+                  }}
+                  className="w-full py-2 px-4 rounded-xl bg-stone-100 dark:bg-stone-800 hover:bg-stone-200 dark:hover:bg-stone-700 text-stone-800 dark:text-stone-200 font-semibold text-xs transition-colors border border-stone-200 dark:border-stone-700 cursor-pointer tabular-nums"
+                >
+                  Or add to Weekly Highlights ({slotSummary.weeklyCount}/{MENU_ITEM_MAX_PER_TYPE})
+                </button>
+              )}
+
+              <button
+                type="button"
+                data-testid="premium-alert-close-btn"
+                onClick={() => setPremiumAlertContext(null)}
+                className="w-full py-2 px-4 rounded-xl text-stone-600 dark:text-stone-300 hover:text-stone-900 dark:hover:text-stone-100 hover:bg-stone-100 dark:hover:bg-stone-800 font-semibold text-xs transition-colors cursor-pointer"
+              >
+                {isPremiumSubscribed ? 'Done' : 'Maybe Later'}
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -272,3 +272,16 @@ export function canCreateDailySpecialPost<T extends { id: string; shopId: string
   if (!shopId) return false;
   return getActiveDailySpecialsForShop(posts, shopId, nowMs).length < DAILY_SPECIAL_MAX_ACTIVE_PER_SHOP;
 }
+
+/**
+ * Only validation (400) and strict business rule limit conflicts (409) should block
+ * optimistic / Firestore publishing. Auth/session/shop-not-synced 4xx codes (401/403/404)
+ * indicate SQLite session/shop desync and should trigger backend sync or Firestore fallback.
+ */
+export function isHardBusinessRejectionStatus(status: number): boolean {
+  return status === 400 || status === 409;
+}
+
+export function shouldRetryWithBackendSync(status: number): boolean {
+  return status === 401 || status === 403 || status === 404;
+}

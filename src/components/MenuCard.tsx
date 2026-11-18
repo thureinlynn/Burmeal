@@ -1,12 +1,13 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { MenuItem } from '../types';
 import { formatPrice } from '../utils/filter';
 import { useLanguage } from '../context/LanguageContext';
 import { useLocation } from '../context/LocationContext';
-import { Bookmark, Leaf, ShieldCheck, Store, ArrowRight, Calendar, Clock } from 'lucide-react';
+import { Bookmark, Leaf, ShieldCheck, ArrowRight, Calendar, Clock } from 'lucide-react';
 
 import { getCountryFlag } from '../utils/countries';
 import { buildItemSharePayload } from '../utils/shareHelpers';
+import { LightboxImageData, normalizeLightboxImage } from '../utils/imageLightboxHelpers';
 import { ShareButton } from './ShareButton';
 
 interface MenuCardProps {
@@ -14,6 +15,7 @@ interface MenuCardProps {
   onToggleSave: (item: MenuItem) => void;
   onSelectItem: (item: MenuItem) => void;
   onSelectShop?: (shopId: string) => void;
+  onViewImage?: (image: LightboxImageData) => void;
 }
 
 export const MenuCard: React.FC<MenuCardProps> = ({
@@ -21,13 +23,36 @@ export const MenuCard: React.FC<MenuCardProps> = ({
   onToggleSave,
   onSelectItem,
   onSelectShop,
+  onViewImage,
 }) => {
   const { t } = useLanguage();
   const { selectedCountry } = useLocation();
+  const [imgError, setImgError] = useState(false);
+
+  useEffect(() => {
+    setImgError(false);
+  }, [item.image]);
 
   // If item is from a specific shop, ALWAYS format price in that shop's country currency!
   // It must never change depending on which region the user is currently viewing.
   const itemCurrencyCountry = item.shopCountry || item.country || selectedCountry;
+  const formattedPrice = formatPrice(item.price, itemCurrencyCountry);
+  const menuBadgeLabel =
+    item.menuType === 'SPECIAL'
+      ? t.todaySpecial
+      : item.menuType === 'WEEKLY'
+      ? t.weeklyHighlight
+      : t.masterMenu;
+
+  const lightboxPayload = !imgError
+    ? normalizeLightboxImage({
+        src: item.image,
+        alt: item.title,
+        title: item.title,
+        subtitle: [item.shopName, formattedPrice].filter(Boolean).join(' · '),
+        badge: menuBadgeLabel,
+      })
+    : null;
 
   return (
     <div
@@ -36,18 +61,39 @@ export const MenuCard: React.FC<MenuCardProps> = ({
     >
       {/* Visual Image Header */}
       <div className="relative aspect-[4/3] w-full overflow-hidden bg-stone-100 dark:bg-stone-800">
-        <img
-          src={item.image}
-          alt={item.title}
-          referrerPolicy="no-referrer"
-          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-          onError={(e) => {
-            (e.target as HTMLElement).style.display = 'none';
-          }}
-        />
+        {lightboxPayload && onViewImage ? (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onViewImage(lightboxPayload);
+            }}
+            data-testid={`menu-card-image-btn-${item.id}`}
+            aria-label={`View full image of ${item.title}`}
+            className="block w-full h-full cursor-zoom-in focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+          >
+            <img
+              src={item.image}
+              alt={item.title}
+              referrerPolicy="no-referrer"
+              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+              onError={() => setImgError(true)}
+            />
+          </button>
+        ) : (
+          !imgError && (
+            <img
+              src={item.image}
+              alt={item.title}
+              referrerPolicy="no-referrer"
+              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+              onError={() => setImgError(true)}
+            />
+          )
+        )}
 
         {/* Dietary indicators (Clean, non-pill) */}
-        <div className="absolute top-2 left-2 flex items-center gap-1">
+        <div className="absolute top-2 left-2 flex items-center gap-1 pointer-events-none">
           {item.isVegetarian && (
             <span
               title="Vegetarian"
@@ -69,7 +115,7 @@ export const MenuCard: React.FC<MenuCardProps> = ({
         </div>
 
         {/* Share & Bookmark buttons */}
-        <div className="absolute top-2 right-2 flex items-center gap-1.5">
+        <div className="absolute top-2 right-2 z-10 flex items-center gap-1.5">
           <ShareButton
             variant="icon-overlay"
             ariaLabel={`Share ${item.title}`}

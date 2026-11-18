@@ -5,6 +5,7 @@ import { useLanguage } from '../context/LanguageContext';
 import { useLocation } from '../context/LocationContext';
 import { getCountryFlag } from '../utils/countries';
 import { buildItemSharePayload } from '../utils/shareHelpers';
+import { LightboxImageData, normalizeLightboxImage } from '../utils/imageLightboxHelpers';
 import { ShareButton } from './ShareButton';
 import { X, Bookmark, Store, Leaf, ShieldCheck, Calendar, Clock, ArrowRight } from 'lucide-react';
 
@@ -13,6 +14,7 @@ interface ItemDetailModalProps {
   onClose: () => void;
   onToggleSave: (item: MenuItem) => void;
   onVisitShop: (shopId: string) => void;
+  onViewImage?: (image: LightboxImageData) => void;
 }
 
 export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
@@ -20,6 +22,7 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
   onClose,
   onToggleSave,
   onVisitShop,
+  onViewImage,
 }) => {
   const { t } = useLanguage();
   const { selectedCountry } = useLocation();
@@ -27,6 +30,20 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
 
   // Use the shop's country currency so saved items and dishes keep their genuine local currency
   const itemCurrencyCountry = item.shopCountry || item.country || selectedCountry;
+  const formattedPrice = formatPrice(item.price, itemCurrencyCountry);
+  const badgeLabel =
+    item.menuType === 'SPECIAL'
+      ? t.todaySpecial
+      : item.menuType === 'WEEKLY'
+      ? t.weeklyHighlight
+      : t.masterMenu;
+  const lightboxPayload = normalizeLightboxImage({
+    src: item.image,
+    alt: item.title,
+    title: item.title,
+    subtitle: [item.shopName, formattedPrice].filter(Boolean).join(' · '),
+    badge: badgeLabel,
+  });
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/65 backdrop-blur-xs">
@@ -34,7 +51,7 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
         {/* Close Button */}
         <button
           onClick={onClose}
-          className="absolute right-3.5 top-3.5 z-10 p-1.5 rounded-full bg-black/50 text-stone-100 hover:bg-black/70 transition-colors"
+          className="absolute right-3.5 top-3.5 z-10 p-1.5 rounded-full bg-black/50 text-stone-100 hover:bg-black/70 transition-colors cursor-pointer"
           aria-label="Close dialog"
         >
           <X className="w-5 h-5" />
@@ -42,16 +59,33 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
 
         {/* Hero Image */}
         <div className="relative aspect-[16/10] w-full bg-stone-100 dark:bg-stone-800 overflow-hidden">
-          <img
-            src={item.image}
-            alt={item.title}
-            className="w-full h-full object-cover"
-            referrerPolicy="no-referrer"
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+          {lightboxPayload && onViewImage ? (
+            <button
+              type="button"
+              onClick={() => onViewImage(lightboxPayload)}
+              data-testid="item-detail-image-btn"
+              aria-label={`View full image of ${item.title}`}
+              className="block w-full h-full cursor-zoom-in focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+            >
+              <img
+                src={item.image}
+                alt={item.title}
+                className="w-full h-full object-cover"
+                referrerPolicy="no-referrer"
+              />
+            </button>
+          ) : (
+            <img
+              src={item.image}
+              alt={item.title}
+              className="w-full h-full object-cover"
+              referrerPolicy="no-referrer"
+            />
+          )}
+          <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent pointer-events-none" />
 
           {/* Badges on image */}
-          <div className="absolute top-3.5 left-3.5 flex items-center gap-1.5">
+          <div className="absolute top-3.5 left-3.5 flex items-center gap-1.5 pointer-events-none">
             {item.isVegetarian && (
               <span className="bg-emerald-600/90 text-white text-xs font-semibold px-2 py-0.5 rounded flex items-center gap-1 backdrop-blur">
                 <Leaf className="w-3.5 h-3.5" />
@@ -66,7 +100,7 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
             )}
           </div>
 
-          <div className="absolute bottom-3 left-4 right-4 flex items-center justify-between text-white">
+          <div className="absolute bottom-3 left-4 right-4 flex items-center justify-between text-white pointer-events-none">
             <span
               className={`text-xs font-bold uppercase tracking-wider px-2 py-0.5 rounded backdrop-blur ${
                 item.menuType === 'SPECIAL'

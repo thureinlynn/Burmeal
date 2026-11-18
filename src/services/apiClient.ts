@@ -5,8 +5,17 @@ import {
   canCreateDailySpecialPost,
   computeDailySpecialExpiry,
   filterDailySpecialPosts,
+  isHardBusinessRejectionStatus,
   partitionDailySpecialPosts,
+  shouldRetryWithBackendSync,
 } from '../utils/dailySpecialHelpers';
+import { validateMenuItemLimit } from '../utils/menuLimitHelpers';
+
+export interface BackendSyncContext {
+  user?: User | null;
+  shop?: Shop | null;
+  onSessionSynced?: (sync: { token?: string; shopId?: string | null }) => void;
+}
 
 const TOKEN_KEY = 'burmeal_token';
 const SHOP_ID_KEY = 'burmeal_shop_id';
@@ -430,17 +439,43 @@ export const apiClient = {
   },
 
   // Create menu item
-  async createMenuItem(data: Partial<MenuItem>, token?: string | null): Promise<MenuItem> {
+  async createMenuItem(
+    data: Partial<MenuItem>,
+    token?: string | null,
+    syncContext?: BackendSyncContext
+  ): Promise<MenuItem> {
+    const attemptPost = async (bearerToken?: string | null) => {
+      return fetch('/api/menu-items', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(bearerToken ? { Authorization: `Bearer ${bearerToken}` } : {}),
+        },
+        body: JSON.stringify(data),
+      });
+    };
+
     try {
-      if (token) {
-        const res = await fetch('/api/menu-items', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify(data),
-        });
+      let activeToken = token || null;
+      if (!activeToken && syncContext?.user) {
+        const synced = await apiClient.syncFirebaseAccount(syncContext.user, syncContext.shop);
+        if (synced.token) {
+          activeToken = synced.token;
+          syncContext.onSessionSynced?.(synced);
+        }
+      }
+
+      if (activeToken) {
+        let res = await attemptPost(activeToken);
+        if (shouldRetryWithBackendSync(res.status) && syncContext?.user) {
+          const synced = await apiClient.syncFirebaseAccount(syncContext.user, syncContext.shop);
+          if (synced.token) {
+            activeToken = synced.token;
+            syncContext.onSessionSynced?.(synced);
+            res = await attemptPost(activeToken);
+          }
+        }
+
         if (res.ok) {
           const ct = res.headers.get('content-type') || '';
           if (ct.includes('application/json')) {
@@ -450,32 +485,51 @@ export const apiClient = {
               id: created.id || created.itemId || data.id || 'item_' + Date.now(),
             };
             const db = getLocalDb();
-            db.menuItems.unshift(normalizedItem);
+            db.menuItems = [
+              normalizedItem,
+              ...db.menuItems.filter((m) => m.id !== normalizedItem.id),
+            ];
             saveLocalDb(db);
             return normalizedItem;
           }
+        } else if (isHardBusinessRejectionStatus(res.status)) {
+          const errBody = await res.json().catch(() => ({}));
+          const apiErr = new Error(errBody.error || `Failed to create menu item (${res.status})`);
+          (apiErr as any).isApiError = true;
+          throw apiErr;
         }
       }
-    } catch {}
+    } catch (err: any) {
+      if (err?.isApiError) throw err;
+    }
 
     // Client fallback
     const db = getLocalDb();
-    const newId = data.id || 'item_' + Date.now();
     const targetShop = db.shops.find((s) => s.id === data.shopId);
+    const resolvedShopId = data.shopId || targetShop?.id || '';
+    const resolvedMenuType: MenuType = data.menuType || 'WEEKLY';
+    const newId = data.id || 'item_' + Date.now();
+
+    const shopExistingItems = db.menuItems.filter((m) => m.shopId === resolvedShopId);
+    const limitCheck = validateMenuItemLimit(shopExistingItems, resolvedMenuType, newId);
+    if (!limitCheck.allowed) {
+      throw new Error(limitCheck.error);
+    }
+
     const newItem: MenuItem = {
       id: newId,
-      shopId: data.shopId || targetShop?.id || '',
+      shopId: resolvedShopId,
       shopName: data.shopName || targetShop?.name || '',
       title: data.title || 'Untitled Dish',
       description: data.description || '',
       image: data.image || '/src/assets/images/burmeal_mohinga_dish_1793906770254.jpg',
       price: typeof data.price === 'number' ? data.price : parseFloat(data.price as any) || 5.0,
       category: data.category || 'Noodles & Broth',
-      menuType: data.menuType || 'SPECIAL',
+      menuType: resolvedMenuType,
       isVegetarian: Boolean(data.isVegetarian),
       isHalal: Boolean(data.isHalal),
-      specialDate: data.specialDate || (data.menuType === 'SPECIAL' ? new Date().toISOString().slice(0, 10) : undefined),
-      availableDays: data.availableDays || (data.menuType === 'WEEKLY' ? ['Mon', 'Wed', 'Fri'] : undefined),
+      specialDate: data.specialDate || (resolvedMenuType === 'SPECIAL' ? new Date().toISOString().slice(0, 10) : undefined),
+      availableDays: data.availableDays || (resolvedMenuType === 'WEEKLY' ? ['Mon', 'Wed', 'Fri'] : undefined),
       createdAt: new Date().toISOString(),
       isSaved: false,
     };
@@ -498,15 +552,38 @@ export const apiClient = {
           body: JSON.stringify(data),
         });
         if (res.ok) {
-          // Success from backend
+          const db = getLocalDb();
+          const idx = db.menuItems.findIndex((m) => m.id === id);
+          if (idx !== -1) {
+            db.menuItems[idx] = { ...db.menuItems[idx], ...data };
+            saveLocalDb(db);
+          }
+          return true;
+        } else if (res.status >= 400 && res.status < 500) {
+          const errBody = await res.json().catch(() => ({}));
+          const apiErr = new Error(errBody.error || `Failed to update menu item (${res.status})`);
+          (apiErr as any).isApiError = true;
+          throw apiErr;
         }
       }
-    } catch {}
+    } catch (err: any) {
+      if (err?.isApiError) throw err;
+    }
 
     const db = getLocalDb();
     const idx = db.menuItems.findIndex((m) => m.id === id);
     if (idx !== -1) {
-      db.menuItems[idx] = { ...db.menuItems[idx], ...data };
+      const existing = db.menuItems[idx];
+      const nextMenuType = data.menuType || existing.menuType;
+      const limitCheck = validateMenuItemLimit(
+        db.menuItems.filter((m) => m.shopId === existing.shopId),
+        nextMenuType,
+        id
+      );
+      if (!limitCheck.allowed) {
+        throw new Error(limitCheck.error);
+      }
+      db.menuItems[idx] = { ...existing, ...data };
       saveLocalDb(db);
       return true;
     }
@@ -745,11 +822,21 @@ export const apiClient = {
   // Sync Firebase user & shop into SQLite session and local cache
   async syncFirebaseAccount(user: User, shop?: Shop | null): Promise<{ token?: string; shopId?: string | null }> {
     const db = getLocalDb();
-    if (!db.users.some((u) => u.id === user.id || u.email.toLowerCase() === user.email.toLowerCase())) {
+    const userIdx = db.users.findIndex(
+      (u) => u.id === user.id || u.email.toLowerCase() === user.email.toLowerCase()
+    );
+    if (userIdx === -1) {
       db.users.push(user);
+    } else {
+      db.users[userIdx] = { ...db.users[userIdx], ...user };
     }
-    if (shop && !db.shops.some((s) => s.id === shop.id)) {
-      db.shops.unshift(shop);
+    if (shop) {
+      const shopIdx = db.shops.findIndex((s) => s.id === shop.id);
+      if (shopIdx === -1) {
+        db.shops.unshift(shop);
+      } else {
+        db.shops[shopIdx] = { ...db.shops[shopIdx], ...shop };
+      }
     }
     saveLocalDb(db);
 
@@ -963,19 +1050,42 @@ export const apiClient = {
 
   async createDailySpecialPost(
     data: Partial<DailySpecialPost>,
-    token?: string | null
+    token?: string | null,
+    syncContext?: BackendSyncContext
   ): Promise<DailySpecialPost> {
     let clientError: Error | null = null;
+    const attemptPost = async (bearerToken?: string | null) => {
+      return fetch('/api/daily-specials', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(bearerToken ? { Authorization: `Bearer ${bearerToken}` } : {}),
+        },
+        body: JSON.stringify(data),
+      });
+    };
+
     try {
-      if (token) {
-        const res = await fetch('/api/daily-specials', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify(data),
-        });
+      let activeToken = token || null;
+      if (!activeToken && syncContext?.user) {
+        const synced = await apiClient.syncFirebaseAccount(syncContext.user, syncContext.shop);
+        if (synced.token) {
+          activeToken = synced.token;
+          syncContext.onSessionSynced?.(synced);
+        }
+      }
+
+      if (activeToken) {
+        let res = await attemptPost(activeToken);
+        if (shouldRetryWithBackendSync(res.status) && syncContext?.user) {
+          const synced = await apiClient.syncFirebaseAccount(syncContext.user, syncContext.shop);
+          if (synced.token) {
+            activeToken = synced.token;
+            syncContext.onSessionSynced?.(synced);
+            res = await attemptPost(activeToken);
+          }
+        }
+
         const ct = res.headers.get('content-type') || '';
         if (res.ok) {
           if (ct.includes('application/json')) {
@@ -990,7 +1100,7 @@ export const apiClient = {
               return created.post;
             }
           }
-        } else if (res.status >= 400 && res.status < 500) {
+        } else if (isHardBusinessRejectionStatus(res.status)) {
           let errMessage = 'Could not publish Daily Special post.';
           if (ct.includes('application/json')) {
             const errJson = await res.json().catch(() => null);
@@ -1048,18 +1158,31 @@ export const apiClient = {
       image?: string;
       imageStoragePath?: string;
     },
-    token?: string | null
+    token?: string | null,
+    syncContext?: BackendSyncContext
   ): Promise<DailySpecialPost | null> {
+    const attemptPatch = async (bearerToken: string) =>
+      fetch(`/api/daily-specials/${id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${bearerToken}`,
+        },
+        body: JSON.stringify(data),
+      });
+
     try {
-      if (token) {
-        const res = await fetch(`/api/daily-specials/${id}`, {
-          method: 'PATCH',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify(data),
-        });
+      let activeToken = token || null;
+      if (activeToken) {
+        let res = await attemptPatch(activeToken);
+        if (shouldRetryWithBackendSync(res.status) && syncContext?.user) {
+          const synced = await apiClient.syncFirebaseAccount(syncContext.user, syncContext.shop);
+          if (synced.token) {
+            activeToken = synced.token;
+            syncContext.onSessionSynced?.(synced);
+            res = await attemptPatch(activeToken);
+          }
+        }
         if (res.ok) {
           const ct = res.headers.get('content-type') || '';
           if (ct.includes('application/json')) {

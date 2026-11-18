@@ -16,6 +16,8 @@ import {
   DAILY_SPECIAL_MAX_ACTIVE_PER_SHOP,
   getActiveDailySpecialsForShop,
   canCreateDailySpecialPost,
+  isHardBusinessRejectionStatus,
+  shouldRetryWithBackendSync,
 } from './dailySpecialHelpers';
 import type { DailySpecialPost, Shop } from '../types';
 
@@ -237,5 +239,20 @@ describe('dailySpecialHelpers', () => {
 
     // Allowed once 48h TTL expires
     assert.equal(canCreateDailySpecialPost([activePost], 'shop_1', after48h), true);
+  });
+
+  it('distinguishes business rejections (400/409) from session/shop sync desyncs (401/403/404)', () => {
+    assert.equal(isHardBusinessRejectionStatus(400), true);
+    assert.equal(isHardBusinessRejectionStatus(409), true);
+    assert.equal(isHardBusinessRejectionStatus(401), false);
+    assert.equal(isHardBusinessRejectionStatus(403), false);
+    assert.equal(isHardBusinessRejectionStatus(404), false);
+    assert.equal(isHardBusinessRejectionStatus(500), false);
+
+    assert.equal(shouldRetryWithBackendSync(401), true);
+    assert.equal(shouldRetryWithBackendSync(403), true);
+    assert.equal(shouldRetryWithBackendSync(404), true);
+    assert.equal(shouldRetryWithBackendSync(400), false);
+    assert.equal(shouldRetryWithBackendSync(409), false);
   });
 });

@@ -9,6 +9,7 @@ import {
   shouldShowDailySpecialMoreToggle,
 } from '../utils/dailySpecialHelpers';
 import { buildDailySpecialSharePayload } from '../utils/shareHelpers';
+import { LightboxImageData, normalizeLightboxImage } from '../utils/imageLightboxHelpers';
 import { ShareButton } from './ShareButton';
 import { ArrowRight, Clock, Edit2, Store, Trash2 } from 'lucide-react';
 
@@ -17,6 +18,7 @@ interface DailySpecialFeedCardProps {
   onSelectShop?: (shopId: string) => void;
   onEdit?: (post: DailySpecialPost) => void;
   onDelete?: (post: DailySpecialPost) => void;
+  onViewImage?: (image: LightboxImageData) => void;
   isDeleting?: boolean;
   hideVisitShopAction?: boolean;
 }
@@ -26,6 +28,7 @@ export const DailySpecialFeedCard: React.FC<DailySpecialFeedCardProps> = ({
   onSelectShop,
   onEdit,
   onDelete,
+  onViewImage,
   isDeleting = false,
   hideVisitShopAction = false,
 }) => {
@@ -204,13 +207,40 @@ export const DailySpecialFeedCard: React.FC<DailySpecialFeedCardProps> = ({
       {/* Optional Uploaded Photo */}
       {post.image && !imageFailed && (
         <div className="bg-stone-100 dark:bg-stone-950 border-t border-b border-stone-100 dark:border-stone-800">
-          <img
-            src={post.image}
-            alt={post.title}
-            referrerPolicy="no-referrer"
-            onError={() => setImageFailed(true)}
-            className="w-full max-h-[480px] object-cover mx-auto block"
-          />
+          {onViewImage ? (
+            <button
+              type="button"
+              onClick={() => {
+                const payload = normalizeLightboxImage({
+                  src: post.image,
+                  alt: post.title,
+                  title: post.title,
+                  subtitle: post.shopName,
+                  badge: 'Daily Special (48h)',
+                });
+                if (payload) onViewImage(payload);
+              }}
+              data-testid={`daily-special-image-btn-${post.id}`}
+              aria-label={`View full image of ${post.title}`}
+              className="block w-full cursor-zoom-in focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+            >
+              <img
+                src={post.image}
+                alt={post.title}
+                referrerPolicy="no-referrer"
+                onError={() => setImageFailed(true)}
+                className="w-full max-h-[480px] object-cover mx-auto block"
+              />
+            </button>
+          ) : (
+            <img
+              src={post.image}
+              alt={post.title}
+              referrerPolicy="no-referrer"
+              onError={() => setImageFailed(true)}
+              className="w-full max-h-[480px] object-cover mx-auto block"
+            />
+          )}
         </div>
       )}
 

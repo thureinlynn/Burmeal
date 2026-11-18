@@ -1,7 +1,9 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import {
+  buildSupabaseMenuItemPath,
   buildSupabaseProfilePath,
   extractSupabaseStoragePath,
+  validateMenuItemImageFile,
   validateProfileImageFile,
 } from '../utils/shopLocationHelpers';
 
@@ -169,7 +171,9 @@ export async function deleteSupabaseStorageObjects(urlsOrPaths: Array<string | n
           const trimmed = val.trim();
           return (
             extractSupabaseStoragePath(trimmed, SHOP_PROFILES_BUCKET) ||
-            (trimmed.startsWith('public/daily-special-') ? trimmed : null)
+            (trimmed.startsWith('public/daily-special-') || trimmed.startsWith('public/menu-item-')
+              ? trimmed
+              : null)
           );
         })
         .filter((p): p is string => Boolean(p))
@@ -187,4 +191,70 @@ export async function deleteSupabaseStorageObjects(urlsOrPaths: Array<string | n
     console.warn('Supabase batch remove notice:', err);
   }
 }
+
+export async function uploadMenuItemImage(
+  file: File,
+  shopOrOwnerId: string
+): Promise<{ publicUrl: string; storagePath: string }> {
+  const validation = validateMenuItemImageFile(file);
+  if (!validation.valid) {
+    throw new Error(validation.error || 'Invalid menu item image file.');
+  }
+
+  const client = getSupabaseClient();
+  if (!client) {
+    throw new Error(
+      'Supabase storage is not configured yet. Please check your Supabase configuration to upload menu item photos.'
+    );
+  }
+
+  const storagePath = buildSupabaseMenuItemPath(
+    shopOrOwnerId,
+    file.name,
+    Date.now(),
+    file.type
+  );
+
+  const { error: uploadError } = await client.storage
+    .from(SHOP_PROFILES_BUCKET)
+    .upload(storagePath, file, {
+      cacheControl: '3600',
+      upsert: false,
+      contentType: file.type || undefined,
+    });
+
+  if (uploadError) {
+    throw new Error(
+      uploadError.message ||
+        `Failed to upload photo to Supabase bucket "${SHOP_PROFILES_BUCKET}".`
+    );
+  }
+
+  const { data } = client.storage.from(SHOP_PROFILES_BUCKET).getPublicUrl(storagePath);
+  if (!data?.publicUrl) {
+    throw new Error('Photo uploaded, but Supabase did not return a public URL.');
+  }
+
+  return { publicUrl: data.publicUrl, storagePath };
+}
+
+export async function removeMenuItemImage(urlOrPath?: string | null): Promise<void> {
+  if (!urlOrPath || !urlOrPath.trim()) return;
+  const trimmed = urlOrPath.trim();
+  const resolvedPath =
+    extractSupabaseStoragePath(trimmed, SHOP_PROFILES_BUCKET) ||
+    (trimmed.startsWith('public/menu-item-') ? trimmed : null);
+
+  if (!resolvedPath) return;
+
+  const client = getSupabaseClient();
+  if (!client) return;
+
+  try {
+    await client.storage.from(SHOP_PROFILES_BUCKET).remove([resolvedPath]);
+  } catch (err) {
+    console.warn('Supabase menu item image remove notice:', err);
+  }
+}
+
 

@@ -289,3 +289,48 @@ export function validateProfileImageFile(file: {
   }
   return { valid: true };
 }
+
+export const MAX_MENU_ITEM_IMAGE_BYTES = Math.round(1.5 * 1024 * 1024); // 1.5 MB eco limit
+export const MAX_MENU_ITEM_IMAGE_MB_LABEL = '1.5 MB';
+
+export function buildSupabaseMenuItemPath(
+  shopOrOwnerId: string,
+  fileName: string,
+  timestamp = Date.now(),
+  mimeType?: string
+): string {
+  const safeId = (shopOrOwnerId || 'shop').replace(/[^a-zA-Z0-9_-]/g, '_');
+  const ext = sanitizeFileExtension(fileName, mimeType);
+  return `public/menu-item-${safeId}-${timestamp}.${ext}`;
+}
+
+export function validateMenuItemImageFile(file: {
+  size: number;
+  type?: string;
+  name?: string;
+}): { valid: boolean; error?: string } {
+  if (!file) {
+    return { valid: false, error: 'Please choose an image file to upload.' };
+  }
+  if (file.type && !file.type.startsWith('image/')) {
+    return { valid: false, error: 'Only image files (JPG, PNG, WEBP, GIF) are supported.' };
+  }
+  if (!file.type && file.name) {
+    const parts = file.name.split('.');
+    const ext = parts.length > 1 ? parts[parts.length - 1].toLowerCase() : '';
+    if (!ALLOWED_EXTS.has(ext)) {
+      return { valid: false, error: 'Only image files (JPG, PNG, WEBP, GIF) are supported.' };
+    }
+  }
+  if (file.size <= 0) {
+    return { valid: false, error: 'The selected image file is empty.' };
+  }
+  if (file.size > MAX_MENU_ITEM_IMAGE_BYTES) {
+    return {
+      valid: false,
+      error: `Menu item image must be ${MAX_MENU_ITEM_IMAGE_MB_LABEL} or smaller (eco storage limit). Please choose or compress a smaller photo.`,
+    };
+  }
+  return { valid: true };
+}
+

@@ -26,6 +26,10 @@ import {
   validateDailySpecialInput,
 } from './src/utils/dailySpecialHelpers.js';
 import { extractSupabaseStoragePath } from './src/utils/shopLocationHelpers.js';
+import {
+  isLimitedMenuType,
+  validateMenuItemLimit,
+} from './src/utils/menuLimitHelpers.js';
 
 initDb();
 
@@ -49,7 +53,9 @@ async function removeServerSupabaseImages(urlsOrPaths: Array<string | null | und
           const clean = v.trim();
           return (
             extractSupabaseStoragePath(clean, SHOP_PROFILES_BUCKET) ||
-            (clean.startsWith('public/daily-special-') ? clean : null)
+            (clean.startsWith('public/daily-special-') || clean.startsWith('public/menu-item-')
+              ? clean
+              : null)
           );
         })
         .filter((p): p is string => Boolean(p))
@@ -380,11 +386,17 @@ app.post('/api/auth/firebase-sync', (req: Request, res: Response) => {
       );
     } else {
       effectiveUserId = existing.id;
+      const emailCollision = cleanEmail
+        ? (db
+            .prepare('SELECT id FROM users WHERE LOWER(email) = LOWER(?) AND id != ?')
+            .get(cleanEmail, effectiveUserId) as any)
+        : null;
+      const nextEmail = !emailCollision && cleanEmail ? cleanEmail : existing.email;
       db.prepare(`
         UPDATE users SET email = ?, name = ?, role = ?, avatar_url = ?
         WHERE id = ?
       `).run(
-        cleanEmail || existing.email,
+        nextEmail,
         cleanName || existing.name,
         role === 'SHOP_OWNER' || existing.role === 'SHOP_OWNER' ? 'SHOP_OWNER' : role,
         incomingUser.avatarUrl || existing.avatar_url,
@@ -1034,6 +1046,23 @@ app.post('/api/menu-items', (req: Request, res: Response) => {
       typeof requestedId === 'string' && requestedId.trim()
         ? requestedId.trim()
         : 'item_' + crypto.randomUUID().slice(0, 8);
+
+    if (isLimitedMenuType(menuType)) {
+      const existingShopItems = db
+        .prepare('SELECT id, menu_type as menuType FROM menu_items WHERE shop_id = ?')
+        .all(shopId) as Array<{ id: string; menuType: 'WEEKLY' | 'PERMANENT' | 'SPECIAL' }>;
+      const limitCheck = validateMenuItemLimit(existingShopItems, menuType, itemId);
+      if (!limitCheck.allowed) {
+        return res.status(409).json({
+          error: limitCheck.error,
+          code: 'MENU_ITEM_LIMIT_REACHED',
+          menuType,
+          limit: limitCheck.maxLimit,
+          currentCount: limitCheck.currentCount,
+        });
+      }
+    }
+
     const now = new Date().toISOString();
 
     db.prepare(`
@@ -1109,6 +1138,23 @@ app.put('/api/menu-items/:id', (req: Request, res: Response) => {
       availableDays,
     } = req.body;
 
+    const targetMenuType = menuType !== undefined ? menuType : existing.menu_type;
+    if (isLimitedMenuType(targetMenuType)) {
+      const existingShopItems = db
+        .prepare('SELECT id, menu_type as menuType FROM menu_items WHERE shop_id = ?')
+        .all(existing.shop_id) as Array<{ id: string; menuType: 'WEEKLY' | 'PERMANENT' | 'SPECIAL' }>;
+      const limitCheck = validateMenuItemLimit(existingShopItems, targetMenuType, existing.id);
+      if (!limitCheck.allowed) {
+        return res.status(409).json({
+          error: limitCheck.error,
+          code: 'MENU_ITEM_LIMIT_REACHED',
+          menuType: targetMenuType,
+          limit: limitCheck.maxLimit,
+          currentCount: limitCheck.currentCount,
+        });
+      }
+    }
+
     db.prepare(`
       UPDATE menu_items
       SET title = ?, description = ?, image = ?, price = ?,
@@ -1132,6 +1178,10 @@ app.put('/api/menu-items/:id', (req: Request, res: Response) => {
     const updatedItem = db.prepare('SELECT * FROM menu_items WHERE id = ?').get(req.params.id);
     const shop = db.prepare('SELECT * FROM shops WHERE id = ?').get(existing.shop_id);
     if (updatedItem) syncMenuItemToFirestore(updatedItem, shop);
+
+    if (image !== undefined && existing.image && existing.image !== image) {
+      void removeServerSupabaseImages([existing.image]);
+    }
 
     return res.json({ success: true });
   } catch (err) {
@@ -1165,6 +1215,9 @@ app.delete('/api/menu-items/:id', (req: Request, res: Response) => {
 
     db.prepare('DELETE FROM menu_items WHERE id = ?').run(req.params.id);
     deleteMenuItemFromFirestore(req.params.id);
+    if (existing.image) {
+      void removeServerSupabaseImages([existing.image]);
+    }
 
     return res.json({ success: true });
   } catch (err) {

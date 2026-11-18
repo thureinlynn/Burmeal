@@ -24,6 +24,7 @@ import {
 } from './utils/dailySpecialHelpers';
 import { parseShareTargetFromSearch } from './utils/shareHelpers';
 import { buildNewShopForOwner } from './utils/authHelpers';
+import { validateMenuItemLimit } from './utils/menuLimitHelpers';
 import { COUNTRIES, getDefaultRegionNameForCountry } from './utils/countries';
 import { Navbar } from './components/Navbar';
 import { BottomNav } from './components/BottomNav';
@@ -44,6 +45,8 @@ import { SettingsView } from './components/SettingsView';
 import { LocationModal } from './components/LocationModal';
 import { PWAInstallBanner, OfflineIndicator } from './components/PWAInstallBanner';
 import { CookieConsentPopup } from './components/CookieConsentPopup';
+import { ImageLightboxModal } from './components/ImageLightboxModal';
+import { LightboxImageData } from './utils/imageLightboxHelpers';
 import {
   CookieConsentChoice,
   CookieConsentPreferences,
@@ -60,7 +63,7 @@ import {
 } from 'lucide-react';
 
 export default function App() {
-  const { user, token, shopId } = useAuth();
+  const { user, token, shopId, syncBackendSession } = useAuth();
   const { t } = useLanguage();
   const {
     selectedCountry,
@@ -77,6 +80,7 @@ export default function App() {
   const [currentTab, setCurrentTab] = useState<string>('feed');
   const [selectedShopId, setSelectedShopId] = useState<string | null>(null);
   const [selectedItemForDetail, setSelectedItemForDetail] = useState<MenuItem | null>(null);
+  const [lightboxImage, setLightboxImage] = useState<LightboxImageData | null>(null);
 
   // Auth modal state
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
@@ -542,7 +546,10 @@ export default function App() {
             })
             .catch(() => {});
         }
-        await apiClient.syncFirebaseAccount(user, finalShop).catch(() => {});
+        const needsSessionSync = !token?.startsWith('tok_') || shopId !== finalShop.id;
+        if (needsSessionSync) {
+          await syncBackendSession(user, finalShop).catch(() => {});
+        }
 
         setOwnerShop(finalShop);
         const [fsItems, apiRes, fsSpecials, apiSpecials] = await Promise.all([
@@ -617,7 +624,7 @@ export default function App() {
         address: newOwnerAddress.trim(),
       });
       await firestoreService.createShop(createdShop);
-      await apiClient.syncFirebaseAccount(user, createdShop).catch(() => {});
+      await syncBackendSession(user, createdShop).catch(() => {});
       setOwnerShop(createdShop);
       setFirestoreShopsCache((prev) => mergeUniqueShops([createdShop], prev));
       await Promise.all([loadOwnerData(), loadShops()]);
@@ -663,7 +670,16 @@ export default function App() {
 
   const handleCreateMenuItem = async (data: any) => {
     const targetShopId = ownerShop?.id || shopId;
-    if (!targetShopId) return;
+    if (!targetShopId) {
+      throw new Error('Your shop profile is not ready yet. Please finish creating your shop profile first.');
+    }
+
+    const shopExistingItems = ownerMenuItems.filter((m) => m.shopId === targetShopId);
+    const limitCheck = validateMenuItemLimit(shopExistingItems, data.menuType);
+    if (!limitCheck.allowed) {
+      throw new Error(limitCheck.error);
+    }
+
     try {
       const canonicalId =
         data.id || `item_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
@@ -679,38 +695,55 @@ export default function App() {
         createdAt: data.createdAt || new Date().toISOString(),
       };
 
-      const [, fsCreated] = await Promise.all([
-        apiClient.createMenuItem(fullPayload, token).catch(() => fullPayload),
-        firestoreService.createMenuItem(fullPayload).catch((fbErr) => {
-          console.warn('Direct Firestore item write notice:', fbErr);
-          return fullPayload;
-        }),
-      ]);
+      const targetShop = ownerShop || allKnownShops.find((s) => s.id === targetShopId) || null;
+      const apiCreated = await apiClient.createMenuItem(fullPayload, token, {
+        user,
+        shop: targetShop,
+        onSessionSynced: () => {
+          void syncBackendSession(user, targetShop);
+        },
+      });
+      const finalItem = apiCreated || fullPayload;
+      await firestoreService.createMenuItem(finalItem).catch((fbErr) => {
+        console.warn('Direct Firestore item write notice:', fbErr);
+        return finalItem;
+      });
 
-      const finalItem = fsCreated || fullPayload;
       setOwnerMenuItems((prev) => mergeUniqueMenuItems([finalItem], prev));
       setFirestoreItemsCache((prev) => mergeUniqueMenuItems([finalItem], prev));
 
       await Promise.all([loadOwnerData(), loadMenuItems()]);
     } catch (err) {
       console.error('Create menu item error:', err);
+      throw err;
     }
   };
 
   const handleUpdateMenuItem = async (id: string, data: any) => {
+    const existing = ownerMenuItems.find((m) => m.id === id);
+    const targetShopId = existing?.shopId || ownerShop?.id || shopId;
+    const targetMenuType = data.menuType || existing?.menuType;
+
+    if (targetShopId && targetMenuType) {
+      const shopExistingItems = ownerMenuItems.filter((m) => m.shopId === targetShopId);
+      const limitCheck = validateMenuItemLimit(shopExistingItems, targetMenuType, id);
+      if (!limitCheck.allowed) {
+        throw new Error(limitCheck.error);
+      }
+    }
+
     try {
+      await apiClient.updateMenuItem(id, data, token);
       setOwnerMenuItems((prev) => prev.map((m) => (m.id === id ? { ...m, ...data } : m)));
       setFirestoreItemsCache((prev) => prev.map((m) => (m.id === id ? { ...m, ...data } : m)));
 
-      await Promise.all([
-        apiClient.updateMenuItem(id, data, token).catch(() => false),
-        firestoreService.updateMenuItem(id, data).catch((fbErr) => {
-          console.warn('Direct Firestore item update notice:', fbErr);
-        }),
-      ]);
+      await firestoreService.updateMenuItem(id, data).catch((fbErr) => {
+        console.warn('Direct Firestore item update notice:', fbErr);
+      });
       await Promise.all([loadOwnerData(), loadMenuItems()]);
     } catch (err) {
       console.error('Update menu item error:', err);
+      throw err;
     }
   };
 
@@ -739,7 +772,9 @@ export default function App() {
     imageStoragePath?: string;
   }) => {
     const targetShopId = ownerShop?.id || shopId;
-    if (!targetShopId) return;
+    if (!targetShopId) {
+      throw new Error('Your shop profile is not ready yet. Please finish creating your shop profile first.');
+    }
 
     const existingPool = mergeUniqueDailySpecialPosts(
       ownerDailySpecialPosts,
@@ -752,16 +787,17 @@ export default function App() {
     }
 
     try {
+      const targetShop = ownerShop || allKnownShops.find((s) => s.id === targetShopId) || null;
       const createdAt = new Date().toISOString();
       const canonicalId = `dsp_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
       const fullPost: DailySpecialPost = {
         id: canonicalId,
         shopId: targetShopId,
-        shopName: ownerShop?.name || 'Local Kitchen',
-        shopAvatarImage: ownerShop?.profileImageUrl || ownerShop?.avatarImage || '',
-        shopCountry: ownerShop?.country || '',
-        shopRegion: ownerShop?.region || '',
-        shopCity: ownerShop?.city || '',
+        shopName: targetShop?.name || 'Local Kitchen',
+        shopAvatarImage: targetShop?.profileImageUrl || targetShop?.avatarImage || '',
+        shopCountry: targetShop?.country || '',
+        shopRegion: targetShop?.region || '',
+        shopCity: targetShop?.city || '',
         title: data.title.trim(),
         post: data.post.trim(),
         image: data.image || '',
@@ -770,7 +806,13 @@ export default function App() {
         expiresAt: computeDailySpecialExpiry(createdAt),
       };
 
-      const apiCreated = await apiClient.createDailySpecialPost(fullPost, token);
+      const apiCreated = await apiClient.createDailySpecialPost(fullPost, token, {
+        user,
+        shop: targetShop,
+        onSessionSynced: () => {
+          void syncBackendSession(user, targetShop);
+        },
+      });
       const finalPost = apiCreated || fullPost;
       await firestoreService.createDailySpecialPost(finalPost).catch((fbErr) => {
         console.warn('Direct Firestore daily special write notice:', fbErr);
@@ -833,8 +875,17 @@ export default function App() {
         prev.map((p) => (p.id === id ? applyDailySpecialPostUpdate(p, data) : p))
       );
 
+      const targetShop = ownerShop || allKnownShops.find((s) => s.id === existing.shopId) || null;
       const [apiUpdated] = await Promise.all([
-        apiClient.updateDailySpecialPost(id, data, token).catch(() => null),
+        apiClient
+          .updateDailySpecialPost(id, data, token, {
+            user,
+            shop: targetShop,
+            onSessionSynced: () => {
+              void syncBackendSession(user, targetShop);
+            },
+          })
+          .catch(() => null),
         firestoreService
           .updateDailySpecialPost(id, updatedPost, oldImageToRemove)
           .catch((fbErr) => {
@@ -1234,6 +1285,7 @@ export default function App() {
               onFollowToggle={handleToggleFollow}
               onToggleSave={handleToggleSave}
               onSelectItem={(it) => setSelectedItemForDetail(it)}
+              onViewImage={setLightboxImage}
             />
           ) : (
             <ShopDashboard
@@ -1258,6 +1310,7 @@ export default function App() {
               onCreateDailySpecialPost={handleCreateDailySpecialPost}
               onUpdateDailySpecialPost={handleUpdateDailySpecialPost}
               onDeleteDailySpecialPost={handleDeleteDailySpecialPost}
+              onViewImage={setLightboxImage}
             />
           )
         ) : (
@@ -1347,6 +1400,7 @@ export default function App() {
                         setSelectedShopId(sId);
                         setCurrentTab('shop_detail');
                       }}
+                      onViewImage={setLightboxImage}
                     />
                   ))}
                 </div>
@@ -1479,6 +1533,7 @@ export default function App() {
                       }}
                       onToggleFollow={handleToggleFollow}
                       onSelectDish={(it) => setSelectedItemForDetail(it)}
+                      onViewImage={setLightboxImage}
                     />
                   ))}
                   <ScrollLoadMoreSentinel
@@ -1548,6 +1603,7 @@ export default function App() {
                             setSelectedShopId(sId);
                             setCurrentTab('shop_detail');
                           }}
+                          onViewImage={setLightboxImage}
                         />
                       ))}
                     </div>
@@ -1607,6 +1663,7 @@ export default function App() {
                         setSelectedShopId(sId);
                         setCurrentTab('shop_detail');
                       }}
+                      onViewImage={setLightboxImage}
                     />
                   ))}
                 </div>
@@ -1736,6 +1793,7 @@ export default function App() {
             onFollowToggle={handleToggleFollow}
             onToggleSave={handleToggleSave}
             onSelectItem={(it) => setSelectedItemForDetail(it)}
+            onViewImage={setLightboxImage}
           />
         )}
 
@@ -1779,6 +1837,12 @@ export default function App() {
           setSelectedShopId(shopId);
           setCurrentTab('shop_detail');
         }}
+        onViewImage={setLightboxImage}
+      />
+
+      <ImageLightboxModal
+        image={lightboxImage}
+        onClose={() => setLightboxImage(null)}
       />
 
       {/* Dual Login / Register Modal */}

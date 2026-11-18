@@ -13,6 +13,7 @@ import { partitionDailySpecialPosts } from '../utils/dailySpecialHelpers';
 import { PAGE_LIMITS } from '../utils/paginationHelpers';
 import { useInfiniteScrollLimit } from '../hooks/useInfiniteScrollLimit';
 import { buildShopSharePayload } from '../utils/shareHelpers';
+import { LightboxImageData } from '../utils/imageLightboxHelpers';
 import { ShareButton } from './ShareButton';
 import { MenuCard } from './MenuCard';
 import { DailySpecialFeedCard } from './DailySpecialFeedCard';
@@ -37,6 +38,7 @@ interface ShopProfileViewProps {
   onFollowToggle: (shopId: string) => void;
   onToggleSave: (item: MenuItem) => void;
   onSelectItem: (item: MenuItem) => void;
+  onViewImage?: (image: LightboxImageData) => void;
 }
 
 export const ShopProfileView: React.FC<ShopProfileViewProps> = ({
@@ -47,6 +49,7 @@ export const ShopProfileView: React.FC<ShopProfileViewProps> = ({
   onFollowToggle,
   onToggleSave,
   onSelectItem,
+  onViewImage,
 }) => {
   const { t } = useLanguage();
   const [selectedMenuType, setSelectedMenuType] = useState<MenuType>('ALL');
@@ -376,6 +379,7 @@ export const ShopProfileView: React.FC<ShopProfileViewProps> = ({
           </div>
           <DailySpecialFeedCard
             post={singleActiveSpecialPost}
+            onViewImage={onViewImage}
             hideVisitShopAction
           />
         </section>
@@ -442,6 +446,7 @@ export const ShopProfileView: React.FC<ShopProfileViewProps> = ({
                 }}
                 onToggleSave={onToggleSave}
                 onSelectItem={onSelectItem}
+                onViewImage={onViewImage}
               />
             ))}
           </div>

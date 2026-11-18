@@ -33,6 +33,10 @@ interface AuthContextType {
     expectedRole?: 'CUSTOMER' | 'SHOP_OWNER'
   ) => Promise<{ success: boolean; error?: string; errorCode?: string }>;
   register: (data: any) => Promise<{ success: boolean; error?: string; errorCode?: string }>;
+  syncBackendSession: (
+    userOverride?: User | null,
+    shopOverride?: Shop | null
+  ) => Promise<{ token?: string; shopId?: string | null }>;
   logout: () => Promise<void>;
 }
 
@@ -412,6 +416,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         try {
           await firestoreService.saveUserProfile(res.user);
+          if (res.shopId && res.user.role === 'SHOP_OWNER') {
+            const createdShop = await apiClient.getShop(res.shopId, effectiveToken);
+            if (createdShop) {
+              await firestoreService.createShop(createdShop).catch(() => {});
+            }
+          }
         } catch {}
 
         return { success: true };
@@ -520,6 +530,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     isAuthActionInProgressRef.current = false;
   };
 
+  const syncBackendSession = async (
+    userOverride?: User | null,
+    shopOverride?: Shop | null
+  ): Promise<{ token?: string; shopId?: string | null }> => {
+    const targetUser = userOverride || user;
+    if (!targetUser) return {};
+    try {
+      const syncRes = await apiClient.syncFirebaseAccount(targetUser, shopOverride);
+      const nextToken = syncRes.token || token || '';
+      const nextShopId = syncRes.shopId ?? shopOverride?.id ?? shopId ?? null;
+      if (nextToken) {
+        persistLocalSession(targetUser, nextToken, nextShopId);
+        setToken(nextToken);
+      }
+      if (nextShopId !== undefined) {
+        setShopId(nextShopId);
+      }
+      return { token: nextToken || undefined, shopId: nextShopId };
+    } catch {
+      return { shopId: shopOverride?.id ?? shopId ?? null };
+    }
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -530,6 +563,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         login,
         loginWithGoogle,
         register,
+        syncBackendSession,
         logout,
       }}
     >

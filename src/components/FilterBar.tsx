@@ -1,6 +1,7 @@
 import React from 'react';
 import { MenuType } from '../types';
 import { useLanguage } from '../context/LanguageContext';
+import { FILTER_CATEGORIES } from '../utils/foodCategories';
 import { Search, Leaf, ShieldCheck, X } from 'lucide-react';
 
 interface FilterBarProps {
@@ -16,7 +17,7 @@ interface FilterBarProps {
   onCategoryChange: (cat: string) => void;
 }
 
-const CATEGORIES = ['ALL', 'Noodles & Broth', 'Salads & Snacks', 'Breakfast Specials', 'Rice & Main Dishes'];
+const CATEGORIES = FILTER_CATEGORIES;
 
 export const FilterBar: React.FC<FilterBarProps> = ({
   searchQuery,

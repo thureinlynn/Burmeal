@@ -6,6 +6,7 @@ import { getCountryFlag } from '../utils/countries';
 import { useLanguage } from '../context/LanguageContext';
 import { resolveCoverDesign, getLocalCountryCoverDesign } from '../utils/coverDesigns';
 import { getShopProfileImage } from '../utils/shopLocationHelpers';
+import { LightboxImageData, normalizeLightboxImage } from '../utils/imageLightboxHelpers';
 
 interface FollowedShopRowProps {
   shop: Shop;
@@ -13,6 +14,7 @@ interface FollowedShopRowProps {
   onSelectShop: (shopId: string) => void;
   onToggleFollow: (shopId: string) => void;
   onSelectDish?: (dish: MenuItem) => void;
+  onViewImage?: (image: LightboxImageData) => void;
 }
 
 export const FollowedShopRow: React.FC<FollowedShopRowProps> = ({
@@ -21,6 +23,7 @@ export const FollowedShopRow: React.FC<FollowedShopRowProps> = ({
   onSelectShop,
   onToggleFollow,
   onSelectDish,
+  onViewImage,
 }) => {
   const { t } = useLanguage();
   const flag = getCountryFlag(shop.country);
@@ -234,12 +237,37 @@ export const FollowedShopRow: React.FC<FollowedShopRowProps> = ({
                 onClick={() => onSelectDish ? onSelectDish(dish) : onSelectShop(shop.id)}
                 className="flex items-center gap-2.5 p-2 rounded-xl bg-stone-50 dark:bg-stone-800/70 border border-stone-200/60 dark:border-stone-700/80 hover:border-amber-400 dark:hover:border-amber-500 cursor-pointer transition-all group/dish"
               >
-                <img
-                  src={dish.image}
-                  alt={dish.title}
-                  referrerPolicy="no-referrer"
-                  className="w-12 h-12 rounded-lg object-cover shrink-0 bg-stone-200 dark:bg-stone-700"
-                />
+                {onViewImage ? (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const payload = normalizeLightboxImage({
+                        src: dish.image,
+                        alt: dish.title,
+                        title: dish.title,
+                        subtitle: `${shop.name} · ${formatPrice(dish.price, dish.shopCountry || shop.country)}`,
+                      });
+                      if (payload) onViewImage(payload);
+                    }}
+                    aria-label={`View full image of ${dish.title}`}
+                    className="w-12 h-12 rounded-lg overflow-hidden shrink-0 bg-stone-200 dark:bg-stone-700 cursor-zoom-in focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+                  >
+                    <img
+                      src={dish.image}
+                      alt={dish.title}
+                      referrerPolicy="no-referrer"
+                      className="w-full h-full object-cover"
+                    />
+                  </button>
+                ) : (
+                  <img
+                    src={dish.image}
+                    alt={dish.title}
+                    referrerPolicy="no-referrer"
+                    className="w-12 h-12 rounded-lg object-cover shrink-0 bg-stone-200 dark:bg-stone-700"
+                  />
+                )}
                 <div className="flex-1 min-w-0">
                   <h4 className="text-xs font-bold text-stone-800 dark:text-stone-200 truncate group-hover/dish:text-amber-600 transition-colors">
                     {dish.title}
