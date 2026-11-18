@@ -26,22 +26,79 @@ function normalizeEmail(email?: string | null): string {
 }
 
 export const firestoreService = {
-  // 1. Subscribe to all approved shops with realtime updates
+  // Helper to dynamically calculate follower counts from follows collection
+  async calculateFollowerCounts(shops: Shop[]): Promise<Shop[]> {
+    if (!shops.length) return shops;
+    try {
+      const followsSnap = await getDocs(collection(db, 'follows'));
+      const counts = new Map<string, number>();
+      followsSnap.forEach((d) => {
+        const data = d.data();
+        const sId = data?.shopId;
+        if (sId) {
+          counts.set(sId, (counts.get(sId) || 0) + 1);
+        }
+      });
+      return shops.map((s) => ({
+        ...s,
+        followerCount: counts.get(s.id) || 0,
+      }));
+    } catch {
+      return shops;
+    }
+  },
+
+  // 1. Subscribe to all approved shops with realtime updates (dynamically reflecting follower count)
   subscribeShops(onUpdate: (shops: Shop[]) => void): () => void {
-    const colRef = collection(db, 'shops');
-    return onSnapshot(
-      colRef,
+    let latestShops: Shop[] = [];
+    let latestFollows: Array<{ shopId?: string }> = [];
+
+    const update = () => {
+      const counts = new Map<string, number>();
+      latestFollows.forEach((f) => {
+        if (f.shopId) counts.set(f.shopId, (counts.get(f.shopId) || 0) + 1);
+      });
+      const mapped = latestShops.map((s) => ({
+        ...s,
+        followerCount: counts.get(s.id) || 0,
+      }));
+      onUpdate(mapped);
+    };
+
+    const unsubShops = onSnapshot(
+      collection(db, 'shops'),
       (snapshot) => {
-        const shops: Shop[] = [];
+        const list: Shop[] = [];
         snapshot.forEach((docSnap) => {
-          shops.push(docSnap.data() as Shop);
+          list.push(docSnap.data() as Shop);
         });
-        onUpdate(shops);
+        latestShops = list;
+        update();
       },
       (error) => {
         handleFirestoreError(error, OperationType.GET, 'shops');
       }
     );
+
+    const unsubFollows = onSnapshot(
+      collection(db, 'follows'),
+      (snapshot) => {
+        const list: Array<{ shopId?: string }> = [];
+        snapshot.forEach((docSnap) => {
+          list.push(docSnap.data());
+        });
+        latestFollows = list;
+        update();
+      },
+      (error) => {
+        handleFirestoreError(error, OperationType.GET, 'follows');
+      }
+    );
+
+    return () => {
+      unsubShops();
+      unsubFollows();
+    };
   },
 
   // 2. Subscribe to menu items with realtime updates
@@ -486,7 +543,9 @@ export const firestoreService = {
     const ref = doc(db, 'shops', shopId);
     try {
       const snap = await getDoc(ref);
-      return snap.exists() ? (snap.data() as Shop) : null;
+      if (!snap.exists()) return null;
+      const updated = await this.calculateFollowerCounts([snap.data() as Shop]);
+      return updated[0] || null;
     } catch (error) {
       handleFirestoreError(error, OperationType.GET, `shops/${shopId}`);
       return null;
@@ -498,7 +557,8 @@ export const firestoreService = {
     try {
       const snap = await getDocs(q);
       if (!snap.empty) {
-        return snap.docs[0].data() as Shop;
+        const updated = await this.calculateFollowerCounts([snap.docs[0].data() as Shop]);
+        return updated[0] || null;
       }
       return null;
     } catch (error) {
@@ -513,21 +573,28 @@ export const firestoreService = {
     if (!lowered) return null;
     const candidates = Array.from(new Set([lowered, trimmed]));
     try {
+      let foundShop: Shop | null = null;
       for (const candidate of candidates) {
         const snap = await getDocs(query(collection(db, 'shops'), where('ownerEmail', '==', candidate)));
         if (!snap.empty) {
-          return snap.docs[0].data() as Shop;
+          foundShop = snap.docs[0].data() as Shop;
+          break;
         }
       }
-      // Fallback: scan shops collection in case ownerEmail had mixed casing in legacy docs
-      const allSnap = await getDocs(collection(db, 'shops'));
-      for (const d of allSnap.docs) {
-        const data = d.data() as Shop;
-        if (data?.ownerEmail && normalizeEmail(data.ownerEmail) === lowered) {
-          return data;
+      if (!foundShop) {
+        // Fallback: scan shops collection in case ownerEmail had mixed casing in legacy docs
+        const allSnap = await getDocs(collection(db, 'shops'));
+        for (const d of allSnap.docs) {
+          const data = d.data() as Shop;
+          if (data?.ownerEmail && normalizeEmail(data.ownerEmail) === lowered) {
+            foundShop = data;
+            break;
+          }
         }
       }
-      return null;
+      if (!foundShop) return null;
+      const updated = await this.calculateFollowerCounts([foundShop]);
+      return updated[0] || null;
     } catch (error) {
       handleFirestoreError(error, OperationType.GET, 'shops');
       return null;
@@ -556,7 +623,7 @@ export const firestoreService = {
       snap.forEach((docSnap) => {
         list.push(docSnap.data() as Shop);
       });
-      return list;
+      return await this.calculateFollowerCounts(list);
     } catch (error) {
       handleFirestoreError(error, OperationType.GET, 'shops');
       return [];
