@@ -1837,7 +1837,6 @@ export default function App() {
               }
             : null
         }
-        items={menuItems}
         onClose={() => setSelectedItemForDetail(null)}
         onToggleSave={handleToggleSave}
         onVisitShop={(shopId) => {
@@ -1845,7 +1844,6 @@ export default function App() {
           setCurrentTab('shop_detail');
         }}
         onViewImage={setLightboxImage}
-        onSelectItem={setSelectedItemForDetail}
       />
 
       <ImageLightboxModal
