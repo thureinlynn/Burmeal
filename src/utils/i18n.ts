@@ -157,6 +157,14 @@ export const translations = {
     dailySpecialAlerts: 'Notify me when followed shops post new daily specials',
     currencyDisplay: 'Display Currency',
     appVersion: 'BurMeal Platform Version: 2.4.0',
+    passwordSecurity: 'Password & Security',
+    currentPassword: 'Current Password',
+    newPassword: 'New Password',
+    confirmNewPassword: 'Confirm New Password',
+    updatePassword: 'Update Password',
+    updatingPassword: 'Updating Password...',
+    passwordUpdatedSuccess: 'Password updated successfully! Your account credentials have been secured.',
+    googleAuthPasswordNotice: 'You are signed in with Google. Password management is handled via your Google Account.',
 
     // Common
     cancel: 'Cancel',
@@ -324,6 +332,14 @@ export const translations = {
     dailySpecialAlerts: 'Follow လုပ်ထားသောဆိုင်များမှ ယနေ့အထူးဟင်းပွဲများ တင်သောအခါ အသိပေးရန်',
     currencyDisplay: 'ငွေကြေးဖော်ပြမှုစနစ်',
     appVersion: 'BurMeal ဗားရှင်း: 2.4.0',
+    passwordSecurity: 'စကားဝှက်နှင့် လုံခြုံရေး',
+    currentPassword: 'လက်ရှိစကားဝှက်',
+    newPassword: 'စကားဝှက်အသစ်',
+    confirmNewPassword: 'စကားဝှက်အသစ်ကို အတည်ပြုပါ',
+    updatePassword: 'စကားဝှက်ကို ပြောင်းလဲမည်',
+    updatingPassword: 'ပြောင်းလဲနေသည်...',
+    passwordUpdatedSuccess: 'စကားဝှက်ကို အောင်မြင်စွာ ပြောင်းလဲပြီးပါပြီ!',
+    googleAuthPasswordNotice: 'သင်သည် Google အကောင့်ဖြင့် ဝင်ရောက်ထားပါသည်။ စကားဝှက်ကို Google အကောင့်ဆက်တင်များတွင် ပြောင်းလဲပါ။',
 
     // Common
     cancel: 'မလုပ်တော့ပါ',

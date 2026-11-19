@@ -82,6 +82,12 @@ export default function App() {
   const [selectedItemForDetail, setSelectedItemForDetail] = useState<MenuItem | null>(null);
   const [lightboxImage, setLightboxImage] = useState<LightboxImageData | null>(null);
 
+  useEffect(() => {
+    if (selectedShopId) {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }, [selectedShopId]);
+
   // Auth modal state
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [authDefaultRole, setAuthDefaultRole] = useState<'CUSTOMER' | 'SHOP_OWNER'>('CUSTOMER');

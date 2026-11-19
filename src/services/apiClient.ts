@@ -1226,5 +1226,26 @@ export const apiClient = {
     saveLocalDelta(delta);
     return true;
   },
+
+  async changePassword(currentPassword: string, newPassword: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      const token = localStorage.getItem(TOKEN_KEY);
+      const res = await fetch('/api/auth/change-password', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token || ''}`,
+        },
+        body: JSON.stringify({ currentPassword, newPassword }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        return { success: true };
+      }
+      return { success: false, error: data.error || 'Failed to update password.' };
+    } catch (err) {
+      return { success: false, error: 'Network error while updating password.' };
+    }
+  },
 };
 

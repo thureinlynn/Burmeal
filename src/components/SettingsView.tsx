@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { useLanguage } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
+import { apiClient } from '../services/apiClient';
+import { auth, updatePassword, reauthenticateWithCredential, EmailAuthProvider } from '../firebase';
 import {
   Settings as SettingsIcon,
   Sun,
@@ -59,6 +61,67 @@ export const SettingsView: React.FC = () => {
   const triggerFeedback = () => {
     setSavedFeedback(true);
     setTimeout(() => setSavedFeedback(false), 2000);
+  };
+
+  // Password Change state
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+  const [passwordSuccess, setPasswordSuccess] = useState('');
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
+
+  const handlePasswordChange = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPasswordError('');
+    setPasswordSuccess('');
+
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      setPasswordError('All password fields are required.');
+      return;
+    }
+    if (newPassword.length < 6) {
+      setPasswordError('New password must be at least 6 characters long.');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordError('New passwords do not match.');
+      return;
+    }
+
+    setIsChangingPassword(true);
+    try {
+      if (auth.currentUser && auth.currentUser.email) {
+        try {
+          const credential = EmailAuthProvider.credential(auth.currentUser.email, currentPassword);
+          await reauthenticateWithCredential(auth.currentUser, credential);
+          await updatePassword(auth.currentUser, newPassword);
+        } catch (fbErr: any) {
+          if (fbErr?.code === 'auth/wrong-password' || fbErr?.code === 'auth/invalid-credential') {
+            setPasswordError('Current password is incorrect.');
+            setIsChangingPassword(false);
+            return;
+          }
+        }
+      }
+
+      const res = await apiClient.changePassword(currentPassword, newPassword);
+      if (!res.success) {
+        setPasswordError(res.error || 'Failed to update password.');
+        setIsChangingPassword(false);
+        return;
+      }
+
+      setPasswordSuccess(t.passwordUpdatedSuccess);
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      setTimeout(() => setPasswordSuccess(''), 4000);
+    } catch (err: any) {
+      setPasswordError(err?.message || 'Error updating password.');
+    } finally {
+      setIsChangingPassword(false);
+    }
   };
 
   return (
@@ -233,6 +296,80 @@ export const SettingsView: React.FC = () => {
               <span>{t.signOut}</span>
             </button>
           </div>
+        </div>
+      )}
+
+
+
+      {/* 6. Password Change Section (if logged in) */}
+      {user && (
+        <div className="bg-white dark:bg-stone-900 rounded-2xl border border-stone-200 dark:border-stone-800 p-5 shadow-xs space-y-4">
+          <h2 className="text-sm font-bold font-display text-stone-900 dark:text-stone-100 flex items-center gap-2">
+            <ShieldCheck className="w-4 h-4 text-amber-600" />
+            <span>{t.passwordSecurity}</span>
+          </h2>
+
+          {auth.currentUser?.providerData?.some((p: any) => p.providerId === 'google.com') ? (
+            <div className="p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-300 text-xs rounded-xl">
+              {t.googleAuthPasswordNotice}
+            </div>
+          ) : (
+            <form onSubmit={handlePasswordChange} className="space-y-3.5 pt-1">
+              {passwordSuccess && (
+                <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 text-xs rounded-xl flex items-center gap-2">
+                  <Check className="w-4 h-4 text-emerald-600" />
+                  <span>{passwordSuccess}</span>
+                </div>
+              )}
+              {passwordError && (
+                <div className="p-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-800 dark:text-rose-300 text-xs rounded-xl">
+                  {passwordError}
+                </div>
+              )}
+              <div>
+                <label className="block text-xs font-medium text-stone-700 dark:text-stone-300 mb-1">{t.currentPassword}</label>
+                <input
+                  type="password"
+                  required
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className="w-full px-3 py-2 bg-stone-50 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-xl text-xs text-stone-900 dark:text-stone-100 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-stone-700 dark:text-stone-300 mb-1">{t.newPassword}</label>
+                <input
+                  type="password"
+                  required
+                  minLength={6}
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="At least 6 characters"
+                  className="w-full px-3 py-2 bg-stone-50 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-xl text-xs text-stone-900 dark:text-stone-100 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-stone-700 dark:text-stone-300 mb-1">{t.confirmNewPassword}</label>
+                <input
+                  type="password"
+                  required
+                  minLength={6}
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="Repeat new password"
+                  className="w-full px-3 py-2 bg-stone-50 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-xl text-xs text-stone-900 dark:text-stone-100 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={isChangingPassword}
+                className="w-full py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm disabled:opacity-50"
+              >
+                {isChangingPassword ? t.updatingPassword : t.updatePassword}
+              </button>
+            </form>
+          )}
         </div>
       )}
       {/* App Info Footer */}

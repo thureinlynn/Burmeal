@@ -529,6 +529,94 @@ app.post('/api/auth/logout', (req: Request, res: Response) => {
   return res.json({ success: true });
 });
 
+// 5. Auth: Change Password
+app.post('/api/auth/change-password', (req: Request, res: Response) => {
+  try {
+    const authHeader = req.headers.authorization;
+    const token = authHeader && authHeader.startsWith('Bearer ') ? authHeader.substring(7) : null;
+    if (!token) {
+      return res.status(401).json({ error: 'Authentication required.' });
+    }
+
+    const { currentPassword, newPassword } = req.body;
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ error: 'Current and new passwords are required.' });
+    }
+    if (newPassword.length < 6) {
+      return res.status(400).json({ error: 'New password must be at least 6 characters.' });
+    }
+
+    const session = db.prepare('SELECT user_id FROM sessions WHERE token = ? AND expires_at > datetime("now")').get(token) as any;
+    if (!session) {
+      return res.status(401).json({ error: 'Invalid or expired session.' });
+    }
+
+    const user = db.prepare('SELECT * FROM users WHERE id = ?').get(session.user_id) as any;
+    if (!user) {
+      return res.status(404).json({ error: 'User not found.' });
+    }
+
+    const matches = bcrypt.compareSync(currentPassword, user.password_hash);
+    if (!matches) {
+      return res.status(401).json({ error: 'Current password is incorrect.' });
+    }
+
+    const salt = bcrypt.genSaltSync(10);
+    const newHash = bcrypt.hashSync(newPassword, salt);
+
+    db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(newHash, user.id);
+
+    return res.json({ success: true });
+  } catch (err) {
+    console.error('Change password error:', err);
+    return res.status(500).json({ error: 'Server error during password update.' });
+  }
+});
+
+// 5. Auth: Change Password
+app.post('/api/auth/change-password', (req: Request, res: Response) => {
+  try {
+    const authHeader = req.headers.authorization;
+    const token = authHeader && authHeader.startsWith('Bearer ') ? authHeader.substring(7) : null;
+    if (!token) {
+      return res.status(401).json({ error: 'Authentication required.' });
+    }
+
+    const { currentPassword, newPassword } = req.body;
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ error: 'Current and new passwords are required.' });
+    }
+    if (newPassword.length < 6) {
+      return res.status(400).json({ error: 'New password must be at least 6 characters.' });
+    }
+
+    const session = db.prepare('SELECT user_id FROM sessions WHERE token = ? AND expires_at > datetime("now")').get(token) as any;
+    if (!session) {
+      return res.status(401).json({ error: 'Invalid or expired session.' });
+    }
+
+    const user = db.prepare('SELECT * FROM users WHERE id = ?').get(session.user_id) as any;
+    if (!user) {
+      return res.status(404).json({ error: 'User not found.' });
+    }
+
+    const matches = bcrypt.compareSync(currentPassword, user.password_hash);
+    if (!matches) {
+      return res.status(401).json({ error: 'Current password is incorrect.' });
+    }
+
+    const salt = bcrypt.genSaltSync(10);
+    const newHash = bcrypt.hashSync(newPassword, salt);
+
+    db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(newHash, user.id);
+
+    return res.json({ success: true });
+  } catch (err) {
+    console.error('Change password error:', err);
+    return res.status(500).json({ error: 'Server error during password update.' });
+  }
+});
+
 const REGION_PREFIX_TO_COUNTRY: Record<string, string> = {
   'MM': 'Myanmar',
   'TH': 'Thailand',
