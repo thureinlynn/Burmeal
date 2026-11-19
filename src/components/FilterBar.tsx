@@ -126,37 +126,20 @@ export const FilterBar: React.FC<FilterBarProps> = ({
           </div>
         </div>
 
-        {/* Category Bubble Shortcuts */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 pt-1 no-scrollbar">
-          {TOP_CATEGORIES.map((cat) => {
-            const isActive = selectedCategory === cat;
-            return (
-              <button
-                key={cat}
-                type="button"
-                onClick={() => onCategoryChange(cat)}
-                className={`px-3 py-1 text-[11px] sm:text-xs font-semibold rounded-full transition-all whitespace-nowrap shrink-0 cursor-pointer border ${
-                  isActive
-                    ? 'bg-amber-600 text-white border-amber-600 shadow-xs'
-                    : 'bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-300 border-stone-200 dark:border-stone-700 hover:border-amber-400'
-                }`}
-              >
-                {cat === 'ALL' ? (t.allCategories || 'All') : cat}
-              </button>
-            );
-          })}
-
-          <button
-            type="button"
-            onClick={() => setIsMoreOpen(true)}
-            className={`px-3 py-1 text-[11px] sm:text-xs font-semibold rounded-full transition-all whitespace-nowrap shrink-0 cursor-pointer border flex items-center gap-1 ${
-              isCustomSelected
-                ? 'bg-amber-600 text-white border-amber-600 shadow-xs'
-                : 'bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-300 border-stone-200 dark:border-stone-700 hover:border-amber-400'
-            }`}
+        {/* Category Dropdown Selector */}
+        <div>
+          <select
+            value={selectedCategory}
+            onChange={(e) => onCategoryChange(e.target.value)}
+            className="w-full sm:w-auto px-3.5 py-2 bg-stone-50 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-xl text-xs sm:text-sm font-medium text-stone-900 dark:text-stone-100 focus:outline-none focus:ring-2 focus:ring-amber-500 cursor-pointer shadow-2xs"
           >
-            <span>{isCustomSelected ? selectedCategory : 'More...'}</span>
-          </button>
+            <option value="ALL">📁 {t.allCategories || 'All Categories'}</option>
+            {CATEGORIES.filter((c) => c !== 'ALL').map((cat) => (
+              <option key={cat} value={cat}>
+                {cat}
+              </option>
+            ))}
+          </select>
         </div>
       </div>
 

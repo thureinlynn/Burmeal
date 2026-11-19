@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { MenuItem } from '../types';
 import { formatPrice } from '../utils/filter';
 import { useLanguage } from '../context/LanguageContext';
@@ -11,21 +11,77 @@ import { X, Bookmark, Store, Leaf, ShieldCheck, Calendar, Clock, ArrowRight } fr
 
 interface ItemDetailModalProps {
   item: MenuItem | null;
+  items?: MenuItem[];
   onClose: () => void;
   onToggleSave: (item: MenuItem) => void;
   onVisitShop: (shopId: string) => void;
   onViewImage?: (image: LightboxImageData) => void;
+  onSelectItem?: (item: MenuItem) => void;
 }
 
 export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
   item,
+  items,
   onClose,
   onToggleSave,
   onVisitShop,
   onViewImage,
+  onSelectItem,
 }) => {
   const { t } = useLanguage();
   const { selectedCountry } = useLocation();
+
+  const [touchStartX, setTouchStartX] = useState<number | null>(null);
+  const [touchEndX, setTouchEndX] = useState<number | null>(null);
+
+  const currentIndex = items && item ? items.findIndex((i) => i.id === item.id) : -1;
+
+  useEffect(() => {
+    if (!items || items.length <= 1 || currentIndex === -1) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowLeft') {
+        const prevIndex = (currentIndex - 1 + items.length) % items.length;
+        onSelectItem?.(items[prevIndex]);
+      } else if (e.key === 'ArrowRight') {
+        const nextIndex = (currentIndex + 1) % items.length;
+        onSelectItem?.(items[nextIndex]);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [items, currentIndex, onSelectItem]);
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length === 1) {
+      setTouchStartX(e.touches[0].clientX);
+    }
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (e.touches.length === 1) {
+      setTouchEndX(e.touches[0].clientX);
+    }
+  };
+
+  const handleTouchEnd = () => {
+    if (touchStartX === null || touchEndX === null || !items || items.length <= 1 || currentIndex === -1) {
+      setTouchStartX(null);
+      setTouchEndX(null);
+      return;
+    }
+    const diffX = touchEndX - touchStartX;
+    const threshold = 50;
+    if (diffX > threshold) {
+      const prevIndex = (currentIndex - 1 + items.length) % items.length;
+      onSelectItem?.(items[prevIndex]);
+    } else if (diffX < -threshold) {
+      const nextIndex = (currentIndex + 1) % items.length;
+      onSelectItem?.(items[nextIndex]);
+    }
+    setTouchStartX(null);
+    setTouchEndX(null);
+  };
+
   if (!item) return null;
 
   // Use the shop's country currency so saved items and dishes keep their genuine local currency
@@ -47,7 +103,12 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/65 backdrop-blur-xs">
-      <div className="bg-white dark:bg-stone-900 rounded-2xl max-w-lg w-full overflow-hidden shadow-2xl relative border border-stone-200 dark:border-stone-800 flex flex-col max-h-[90vh]">
+      <div
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        className="bg-white dark:bg-stone-900 rounded-2xl max-w-lg w-full overflow-hidden shadow-2xl relative border border-stone-200 dark:border-stone-800 flex flex-col max-h-[90vh]"
+      >
         {/* Close Button */}
         <button
           onClick={onClose}
@@ -216,6 +277,24 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
             <ArrowRight className="w-4 h-4" />
           </button>
         </div>
+
+        {/* Dot Indicators */}
+        {items && items.length > 1 && (
+          <div className="flex items-center justify-center gap-1.5 py-2.5 bg-stone-50 dark:bg-stone-900 border-t border-stone-200 dark:border-stone-800 shrink-0">
+            {items.slice(0, 15).map((it, idx) => (
+              <button
+                key={it.id}
+                onClick={() => onSelectItem?.(it)}
+                className={`transition-all rounded-full cursor-pointer ${
+                  idx === currentIndex
+                    ? 'w-6 h-2 bg-amber-600 dark:bg-amber-500'
+                    : 'w-2 h-2 bg-stone-300 dark:bg-stone-700 hover:bg-stone-400'
+                }`}
+                aria-label={`Go to item ${idx + 1}`}
+              />
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
