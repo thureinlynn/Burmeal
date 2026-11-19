@@ -9,6 +9,8 @@ interface ImageLightboxModalProps {
 
 export const ImageLightboxModal: React.FC<ImageLightboxModalProps> = ({ image, onClose }) => {
   const [isZoomed, setIsZoomed] = useState(false);
+  const [touchStartY, setTouchStartY] = useState<number | null>(null);
+  const [touchCurrentY, setTouchCurrentY] = useState<number | null>(null);
 
   useEffect(() => {
     setIsZoomed(false);
@@ -33,6 +35,40 @@ export const ImageLightboxModal: React.FC<ImageLightboxModalProps> = ({ image, o
     };
   }, [image, onClose]);
 
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (isZoomed) return;
+    if (e.touches.length === 1) {
+      setTouchStartY(e.touches[0].clientY);
+      setTouchCurrentY(e.touches[0].clientY);
+    }
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (isZoomed || touchStartY === null) return;
+    if (e.touches.length === 1) {
+      const currentY = e.touches[0].clientY;
+      setTouchCurrentY(currentY);
+    }
+  };
+
+  const handleTouchEnd = () => {
+    if (isZoomed || touchStartY === null || touchCurrentY === null) {
+      setTouchStartY(null);
+      setTouchCurrentY(null);
+      return;
+    }
+
+    const deltaY = touchCurrentY - touchStartY;
+    if (deltaY > 80) {
+      onClose();
+    }
+    setTouchStartY(null);
+    setTouchCurrentY(null);
+  };
+
+  const translateY = touchStartY !== null && touchCurrentY !== null && !isZoomed ? Math.max(0, touchCurrentY - touchStartY) : 0;
+  const opacity = 1 - Math.min(1, translateY / 300);
+
   if (!image) return null;
 
   return (
@@ -42,6 +78,14 @@ export const ImageLightboxModal: React.FC<ImageLightboxModalProps> = ({ image, o
       aria-label={image.title || image.alt || 'Full image viewer'}
       data-testid="image-lightbox-modal"
       onClick={onClose}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+      style={{
+        transform: translateY > 0 ? `translateY(${translateY}px)` : undefined,
+        opacity: translateY > 0 ? opacity : undefined,
+        transition: touchStartY === null ? 'transform 0.2s ease, opacity 0.2s ease' : undefined,
+      }}
       className="fixed inset-0 z-[80] flex flex-col bg-black/95 backdrop-blur-sm select-none"
     >
       {/* Top Toolbar */}

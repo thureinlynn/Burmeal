@@ -1321,6 +1321,45 @@ app.post('/api/shops/:id/follow', (req: Request, res: Response) => {
     if (!user) return res.status(401).json({ error: 'Please log in to follow shops.' });
 
     const shopId = req.params.id;
+
+    // Ensure user exists in SQLite users table
+    const existingUser = db.prepare('SELECT 1 FROM users WHERE id = ?').get(user.id);
+    if (!existingUser) {
+      db.prepare(`
+        INSERT OR IGNORE INTO users (id, email, password_hash, name, role, avatar_url, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        user.id,
+        user.email || 'user@burmeal.app',
+        '$2b$10$dummyhashforfirebaseuserauthsincenosqlitepasswordwasprovided',
+        user.name || 'User',
+        user.role || 'CUSTOMER',
+        user.avatarUrl || '',
+        new Date().toISOString()
+      );
+    }
+
+    // Ensure shop exists in SQLite shops table
+    const existingShop = db.prepare('SELECT 1 FROM shops WHERE id = ?').get(shopId);
+    if (!existingShop) {
+      db.prepare(`
+        INSERT OR IGNORE INTO shops (id, owner_id, name, bio, cover_image, avatar_image, status, cuisine_type, location_area, is_open, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        shopId,
+        'usr_placeholder',
+        'Shop ' + shopId,
+        'Local food shop',
+        'https://images.unsplash.com/photo-1543353071-10c8ba85a904?auto=format&fit=crop&w=800&q=80',
+        'https://api.dicebear.com/7.x/avataaars/svg?seed=' + shopId,
+        'APPROVED',
+        'Burmese',
+        'Yangon',
+        1,
+        new Date().toISOString()
+      );
+    }
+
     const desiredState = typeof req.body?.desiredState === 'boolean' ? req.body.desiredState : undefined;
     const existing = db.prepare('SELECT 1 FROM follows WHERE customer_id = ? AND shop_id = ?').get(user.id, shopId);
     const nextFollowed = desiredState !== undefined ? desiredState : !existing;
