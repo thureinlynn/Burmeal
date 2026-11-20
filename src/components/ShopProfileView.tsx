@@ -123,7 +123,7 @@ export const ShopProfileView: React.FC<ShopProfileViewProps> = ({
   const hasPinnedCoords = hasValidCoordinates(shop.latitude, shop.longitude);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-in fade-in zoom-in-95 duration-300">
       {/* Top back button */}
       <div>
         <button

@@ -27,7 +27,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
 
   if (role === 'CUSTOMER') {
     return (
-      <nav aria-label="Mobile Navigation" className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-stone-900/95 backdrop-blur border-t border-stone-200 dark:border-stone-800 px-1 py-1 shadow-lg transition-colors">
+      <nav aria-label="Mobile Navigation" className="md:hidden fixed bottom-4 left-1/2 -translate-x-1/2 w-[92%] max-w-md z-40 bg-white/75 dark:bg-stone-900/75 backdrop-blur-2xl backdrop-saturate-200 border border-white/60 dark:border-stone-700/60 px-3 py-2 shadow-[0_16px_40px_0_rgba(0,0,0,0.15)] dark:shadow-[0_16px_40px_0_rgba(0,0,0,0.7)] rounded-full transition-all">
         <div className="grid grid-cols-5 items-center">
           {/* Tab 1: Home Feed */}
           <button
@@ -106,7 +106,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
 
   // SHOP_OWNER Navigation: Responsive 4-tab mobile layout (Overview, Menus, Shop Info, Settings)
   return (
-    <nav aria-label="Shop Owner Navigation" className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-stone-900/95 backdrop-blur border-t border-stone-200 dark:border-stone-800 px-1 py-1.5 shadow-lg transition-colors">
+    <nav aria-label="Shop Owner Navigation" className="md:hidden fixed bottom-4 left-1/2 -translate-x-1/2 w-[92%] max-w-md z-40 bg-white/75 dark:bg-stone-900/75 backdrop-blur-2xl backdrop-saturate-200 border border-white/60 dark:border-stone-700/60 px-3 py-2 shadow-[0_16px_40px_0_rgba(0,0,0,0.15)] dark:shadow-[0_16px_40px_0_rgba(0,0,0,0.7)] rounded-full transition-all">
       <div className="grid grid-cols-4 items-center">
         {/* Tab 1: Overview & Insights */}
         <button

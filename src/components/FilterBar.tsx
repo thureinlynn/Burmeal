@@ -65,7 +65,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
   return (
-    <div className="bg-white/90 dark:bg-stone-900/90 backdrop-blur-md rounded-2xl border border-stone-200/90 dark:border-stone-800/90 p-3 sm:p-4 shadow-xs transition-colors relative z-40">
+    <div className="bg-white/90 dark:bg-stone-900/90 backdrop-blur-md rounded-2xl border border-stone-200/90 dark:border-stone-800/90 p-3 sm:p-4 shadow-xs transition-colors relative z-10">
       <div className="space-y-3">
         {/* Search Input */}
         <div className="relative">
@@ -75,7 +75,11 @@ export const FilterBar: React.FC<FilterBarProps> = ({
             value={searchQuery}
             onChange={(e) => onSearchChange(e.target.value)}
             placeholder={t.searchPlaceholder}
-            className="w-full pl-10 pr-9 py-2 bg-white/90 dark:bg-stone-900/90 backdrop-blur-xs border border-stone-200/80 dark:border-stone-700/80 rounded-xl text-xs sm:text-sm text-stone-900 dark:text-stone-100 placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-600 transition-all shadow-2xs"
+            className={`w-full pl-10 pr-9 bg-white/95 dark:bg-stone-900/95 backdrop-blur-xs border rounded-xl text-stone-900 dark:text-stone-100 placeholder:text-stone-400 focus:outline-none focus:ring-4 focus:ring-amber-500/25 focus:border-amber-600 transition-all duration-300 ${
+              searchQuery.length > 0
+                ? 'py-3 sm:py-3.5 text-sm sm:text-base shadow-lg border-amber-500 scale-[1.01]'
+                : 'py-2 text-xs sm:text-sm shadow-2xs border-stone-200/80 dark:border-stone-700/80'
+            }`}
           />
           {searchQuery && (
             <button
