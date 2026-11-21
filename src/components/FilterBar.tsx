@@ -65,7 +65,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
   return (
-    <div className="bg-white/90 dark:bg-stone-900/90 backdrop-blur-md rounded-2xl border border-stone-200/90 dark:border-stone-800/90 p-3 sm:p-4 shadow-xs transition-colors relative z-10">
+    <div className="bg-white/90 dark:bg-stone-900/90 backdrop-blur-md rounded-2xl border border-stone-200/90 dark:border-stone-800/90 p-3 sm:p-4 shadow-xs transition-colors relative z-40">
       <div className="space-y-3">
         {/* Search Input */}
         <div className="relative">
@@ -148,7 +148,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
               {isDropdownOpen && (
                 <>
                   <div
-                    className="fixed inset-0 z-[9998] bg-black/20 backdrop-blur-2xs"
+                    className="fixed inset-0 z-[9998]"
                     onClick={() => setIsDropdownOpen(false)}
                   />
                   <div className="fixed inset-x-4 top-24 sm:absolute sm:right-0 sm:left-auto sm:mt-1.5 sm:w-72 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-2xl shadow-2xl z-[9999] p-1.5 max-h-[70vh] overflow-y-auto">
