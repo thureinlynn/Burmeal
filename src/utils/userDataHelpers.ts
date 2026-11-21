@@ -1,6 +1,7 @@
 import { MenuItem, MenuType, Shop } from '../types';
 import { filterMenuItems, matchesRegionFilter } from './filter';
 import { filterOutSeededMockMenuItems, filterOutSeededMockShops } from './mockCleanup';
+import { sortHomeFeedMenuItems } from './feedSortHelpers';
 
 export function mergeUniqueIds(...lists: Array<Iterable<string> | undefined | null>): string[] {
   const seen = new Set<string>();
@@ -101,6 +102,8 @@ export function buildDisplayedMenuItems(
     isHalal?: boolean;
     query?: string;
     includeClosed?: boolean;
+    followedIds?: Set<string>;
+    sortSeed?: string;
   }
 ): MenuItem[] {
   const shopMap = new Map(allShops.map((s) => [s.id, s]));
@@ -167,7 +170,15 @@ export function buildDisplayedMenuItems(
   });
 
   const cleaned = filterOutSeededMockMenuItems(filtered);
-  return applySaveStateToMenuItems(cleaned, savedIds);
+  const savedApplied = applySaveStateToMenuItems(cleaned, savedIds);
+  if (!filters.shopId && filters.sortSeed) {
+    return sortHomeFeedMenuItems(savedApplied, {
+      followedIds: filters.followedIds ?? new Set<string>(),
+      shopsLookup: allShops,
+      seed: filters.sortSeed,
+    });
+  }
+  return savedApplied;
 }
 
 export function filterFollowedShops(allShops: Shop[], followedIds: Set<string>): Shop[] {

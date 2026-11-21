@@ -16,6 +16,7 @@ import {
   filterFollowedMenuItems,
   filterSavedMenuItems,
 } from './utils/userDataHelpers';
+import { createFeedSortSeed } from './utils/feedSortHelpers';
 import { filterOutSeededMockShops } from './utils/mockCleanup';
 import {
   applyDailySpecialPostUpdate,
@@ -114,6 +115,7 @@ export default function App() {
   const [isVegetarian, setIsVegetarian] = useState(false);
   const [isHalal, setIsHalal] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState('ALL');
+  const [feedSortSeed, setFeedSortSeed] = useState<string>(() => createFeedSortSeed());
   const [cookieConsent, setCookieConsent] = useState<CookieConsentPreferences | null>(() => {
     if (typeof window === 'undefined') return null;
     return getStoredCookieConsent(window.localStorage);
@@ -1039,6 +1041,8 @@ export default function App() {
       isVegetarian,
       isHalal,
       query: searchQuery,
+      followedIds: effectiveFollowedIds,
+      sortSeed: !selectedShopId && currentTab === 'feed' ? feedSortSeed : undefined,
     });
   }, [
     currentTab,
@@ -1056,6 +1060,7 @@ export default function App() {
     isVegetarian,
     isHalal,
     searchQuery,
+    feedSortSeed,
   ]);
 
   const allKnownDailySpecialPosts = React.useMemo(() => {
@@ -1094,7 +1099,7 @@ export default function App() {
   const paginatedHomeDishes = useInfiniteScrollLimit(
     displayedMenuItems,
     PAGE_LIMITS.WEEKLY_AND_MASTER,
-    `feed:${selectedMenuType}:${selectedCategory}:${isVegetarian}:${isHalal}:${selectedCountry}:${selectedRegionId}:${searchQuery}`,
+    `feed:${selectedMenuType}:${selectedCategory}:${isVegetarian}:${isHalal}:${selectedCountry}:${selectedRegionId}:${searchQuery}:${feedSortSeed}`,
     isConsumerView && currentTab === 'feed'
   );
 
@@ -1182,6 +1187,14 @@ export default function App() {
 
   const hasNavigatedRef = useRef(false);
 
+  const prevUserIdRef = useRef<string | undefined>(user?.id);
+  useEffect(() => {
+    if (prevUserIdRef.current !== user?.id) {
+      prevUserIdRef.current = user?.id;
+      setFeedSortSeed(createFeedSortSeed());
+    }
+  }, [user?.id]);
+
   useEffect(() => {
     if (!hasNavigatedRef.current) {
       hasNavigatedRef.current = true;
@@ -1213,6 +1226,9 @@ export default function App() {
         currentTab={currentTab}
         onSelectTab={(tab) => {
           window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+          if (tab === 'feed') {
+            setFeedSortSeed(createFeedSortSeed());
+          }
           setSelectedShopId(null);
           setCurrentTab(tab);
         }}
@@ -1956,6 +1972,9 @@ export default function App() {
         currentTab={currentTab}
         onSelectTab={(tab) => {
           window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+          if (tab === 'feed') {
+            setFeedSortSeed(createFeedSortSeed());
+          }
           setSelectedShopId(null);
           setCurrentTab(tab);
         }}
