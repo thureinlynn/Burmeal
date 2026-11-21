@@ -1311,8 +1311,8 @@ app.put('/api/menu-items/:id', (req: Request, res: Response) => {
         typeof requestedShopId === 'string' && requestedShopId.trim()
           ? requestedShopId.trim()
           : (db.prepare('SELECT id FROM shops WHERE owner_id = ? LIMIT 1').get(user.id) as any)?.id;
-      if (!targetShopId || !title || !category || !menuType) {
-        return res.status(404).json({ error: 'Menu item not found' });
+      if (!targetShopId) {
+        return res.status(404).json({ error: 'Shop not found for menu item' });
       }
       const shop = db.prepare(`
         SELECT s.*, u.email as owner_email
@@ -1320,7 +1320,7 @@ app.put('/api/menu-items/:id', (req: Request, res: Response) => {
         LEFT JOIN users u ON s.owner_id = u.id
         WHERE s.id = ?
       `).get(targetShopId) as any;
-      if (!shop) return res.status(404).json({ error: 'Menu item not found' });
+      if (!shop) return res.status(404).json({ error: 'Shop not found' });
 
       const shopEmailMatches =
         Boolean(shop.owner_email && user.email) &&
@@ -1329,16 +1329,17 @@ app.put('/api/menu-items/:id', (req: Request, res: Response) => {
         return res.status(403).json({ error: 'Unauthorized to edit this item.' });
       }
 
-      if (isLimitedMenuType(menuType)) {
+      const resolvedMenuType = menuType || 'WEEKLY';
+      if (isLimitedMenuType(resolvedMenuType)) {
         const existingShopItems = db
           .prepare('SELECT id, menu_type as menuType FROM menu_items WHERE shop_id = ?')
           .all(targetShopId) as Array<{ id: string; menuType: 'WEEKLY' | 'PERMANENT' | 'SPECIAL' }>;
-        const limitCheck = validateMenuItemLimit(existingShopItems, menuType, req.params.id);
+        const limitCheck = validateMenuItemLimit(existingShopItems, resolvedMenuType, req.params.id);
         if (!limitCheck.allowed) {
           return res.status(409).json({
             error: limitCheck.error,
             code: 'MENU_ITEM_LIMIT_REACHED',
-            menuType,
+            menuType: resolvedMenuType,
             limit: limitCheck.maxLimit,
             currentCount: limitCheck.currentCount,
           });
@@ -1352,12 +1353,12 @@ app.put('/api/menu-items/:id', (req: Request, res: Response) => {
       `).run(
         req.params.id,
         targetShopId,
-        title,
+        title || 'Untitled Dish',
         description || '',
         image || '/src/assets/images/burmeal_mohinga_dish_1793906770254.jpg',
         Number(price) || 0,
-        category,
-        menuType,
+        category || 'Noodles & Broth',
+        resolvedMenuType,
         isVegetarian ? 1 : 0,
         isHalal ? 1 : 0,
         specialDate || null,
