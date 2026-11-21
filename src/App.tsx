@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from './context/AuthContext';
 import { useLanguage } from './context/LanguageContext';
 import { useLocation } from './context/LocationContext';
@@ -9,12 +9,14 @@ import {
   mergeUniqueIds,
   mergeUniqueShops,
   mergeUniqueMenuItems,
+  isShopOpenForPublic,
   buildDisplayedShops,
   buildDisplayedMenuItems,
   filterFollowedShops,
   filterFollowedMenuItems,
   filterSavedMenuItems,
 } from './utils/userDataHelpers';
+import { filterOutSeededMockShops } from './utils/mockCleanup';
 import {
   applyDailySpecialPostUpdate,
   canCreateDailySpecialPost,
@@ -180,8 +182,10 @@ export default function App() {
     if (target.shopId) {
       const matchedShop = allShopsPool.find((s) => s.id === target.shopId);
       if (matchedShop) {
-        setSelectedShopId(matchedShop.id);
-        setCurrentTab('shop_detail');
+        if (isShopOpenForPublic(matchedShop) || user?.role === 'ADMIN' || matchedShop.ownerId === user?.id) {
+          setSelectedShopId(matchedShop.id);
+          setCurrentTab('shop_detail');
+        }
         clearShareParams();
         return;
       }
@@ -190,7 +194,10 @@ export default function App() {
     if (target.itemId) {
       const matchedItem = allItemsPool.find((i) => i.id === target.itemId);
       if (matchedItem) {
-        setSelectedItemForDetail(matchedItem);
+        const parentShop = allShopsPool.find((s) => s.id === matchedItem.shopId);
+        if (!parentShop || isShopOpenForPublic(parentShop) || user?.role === 'ADMIN' || parentShop.ownerId === user?.id) {
+          setSelectedItemForDetail(matchedItem);
+        }
         clearShareParams();
         return;
       }
@@ -204,8 +211,10 @@ export default function App() {
             const fetchedShop = await apiClient.getShop(target.shopId, token).catch(() => null);
             if (fetchedShop) {
               setAllBackendShopsCache((prev) => mergeUniqueShops(prev, [fetchedShop]));
-              setSelectedShopId(fetchedShop.id);
-              setCurrentTab('shop_detail');
+              if (isShopOpenForPublic(fetchedShop) || user?.role === 'ADMIN' || fetchedShop.ownerId === user?.id) {
+                setSelectedShopId(fetchedShop.id);
+                setCurrentTab('shop_detail');
+              }
               clearShareParams();
               return;
             }
@@ -226,7 +235,7 @@ export default function App() {
         }
       })();
     }
-  }, [shops, allBackendShopsCache, firestoreShopsCache, menuItems, allBackendItemsCache, firestoreItemsCache, token]);
+  }, [shops, allBackendShopsCache, firestoreShopsCache, menuItems, allBackendItemsCache, firestoreItemsCache, token, user?.role, user?.id]);
 
   // Effective cross-device IDs (Firestore real-time UID/email source of truth + backend session fallback)
   const effectiveFollowedIds = React.useMemo(
@@ -382,10 +391,10 @@ export default function App() {
     }
   };
 
-  // Auto-reload data whenever auth token, country, or region changes
+  // Auto-reload data whenever auth token, active tab, country, or region changes
   useEffect(() => {
     loadShops();
-  }, [token, selectedCountry, selectedRegionId]);
+  }, [token, currentTab, selectedCountry, selectedRegionId]);
 
   useEffect(() => {
     loadMenuItems();
@@ -522,6 +531,9 @@ export default function App() {
         resolvedShop = await firestoreService.getShopByOwnerEmail(user.email);
       }
       if (!resolvedShop) {
+        resolvedShop = await apiClient.getOwnerShop(token).catch(() => null);
+      }
+      if (!resolvedShop) {
         const allShops = await apiClient.getShops(null, token);
         resolvedShop =
           allShops.find(
@@ -656,13 +668,21 @@ export default function App() {
       });
 
       await Promise.all([
-        apiClient.updateShop(targetId, data, token).catch(() => null),
+        apiClient
+          .updateShop(targetId, data, token, {
+            user,
+            shop: updatedOnlineShop,
+            onSessionSynced: () => {
+              void syncBackendSession(user, updatedOnlineShop);
+            },
+          })
+          .catch(() => null),
         firestoreService.updateShop(targetId, updatedOnlineShop).catch((fbErr) => {
           console.warn('Direct Firestore shop update notice:', fbErr);
         }),
       ]);
 
-      await Promise.all([loadOwnerData(), loadShops()]);
+      await Promise.all([loadOwnerData(), loadShops(), loadMenuItems(), loadDailySpecialPosts()]);
     } catch (err) {
       console.error('Profile update error:', err);
     }
@@ -721,7 +741,7 @@ export default function App() {
 
   const handleUpdateMenuItem = async (id: string, data: any) => {
     const existing = ownerMenuItems.find((m) => m.id === id);
-    const targetShopId = existing?.shopId || ownerShop?.id || shopId;
+    const targetShopId = existing?.shopId || data.shopId || ownerShop?.id || shopId;
     const targetMenuType = data.menuType || existing?.menuType;
 
     if (targetShopId && targetMenuType) {
@@ -733,11 +753,24 @@ export default function App() {
     }
 
     try {
-      await apiClient.updateMenuItem(id, data, token);
-      setOwnerMenuItems((prev) => prev.map((m) => (m.id === id ? { ...m, ...data } : m)));
-      setFirestoreItemsCache((prev) => prev.map((m) => (m.id === id ? { ...m, ...data } : m)));
+      const targetShop = ownerShop || allKnownShops.find((s) => s.id === targetShopId) || null;
+      const payload = {
+        ...data,
+        ...(targetShopId ? { shopId: targetShopId } : {}),
+        ...(targetShop?.name ? { shopName: targetShop.name } : {}),
+      };
+      await apiClient.updateMenuItem(id, payload, token, {
+        user,
+        shop: targetShop,
+        onSessionSynced: () => {
+          void syncBackendSession(user, targetShop);
+        },
+      });
+      setOwnerMenuItems((prev) => prev.map((m) => (m.id === id ? { ...m, ...payload } : m)));
+      setMenuItems((prev) => prev.map((m) => (m.id === id ? { ...m, ...payload } : m)));
+      setFirestoreItemsCache((prev) => prev.map((m) => (m.id === id ? { ...m, ...payload } : m)));
 
-      await firestoreService.updateMenuItem(id, data).catch((fbErr) => {
+      await firestoreService.updateMenuItem(id, payload).catch((fbErr) => {
         console.warn('Direct Firestore item update notice:', fbErr);
       });
       await Promise.all([loadOwnerData(), loadMenuItems()]);
@@ -977,19 +1010,25 @@ export default function App() {
   );
 
   const followedRowDishes = React.useMemo(
-    () => filterFollowedMenuItems(allKnownItems, effectiveFollowedIds, effectiveSavedIds),
-    [allKnownItems, effectiveFollowedIds, effectiveSavedIds]
+    () => filterFollowedMenuItems(allKnownItems, effectiveFollowedIds, effectiveSavedIds, undefined, allKnownShops),
+    [allKnownItems, effectiveFollowedIds, effectiveSavedIds, allKnownShops]
   );
 
   const displayedMenuItems = React.useMemo(() => {
     if (currentTab === 'following') {
-      return filterFollowedMenuItems(allKnownItems, effectiveFollowedIds, effectiveSavedIds, {
-        menuType: selectedMenuType,
-        category: selectedCategory,
-        isVegetarian,
-        isHalal,
-        query: searchQuery,
-      });
+      return filterFollowedMenuItems(
+        allKnownItems,
+        effectiveFollowedIds,
+        effectiveSavedIds,
+        {
+          menuType: selectedMenuType,
+          category: selectedCategory,
+          isVegetarian,
+          isHalal,
+          query: searchQuery,
+        },
+        allKnownShops
+      );
     }
     return buildDisplayedMenuItems(menuItems, firestoreItemsCache, allKnownShops, effectiveSavedIds, {
       shopId: selectedShopId,
@@ -1019,25 +1058,28 @@ export default function App() {
     searchQuery,
   ]);
 
-  const allKnownDailySpecialPosts = React.useMemo(
-    () =>
-      partitionDailySpecialPosts(
-        mergeUniqueDailySpecialPosts(
-          allBackendSpecialsCache,
-          dailySpecialPosts,
-          firestoreSpecialPosts,
-          ownerDailySpecialPosts
-        ),
-        expiryClockMs
-      ).active,
-    [
-      allBackendSpecialsCache,
-      dailySpecialPosts,
-      firestoreSpecialPosts,
-      ownerDailySpecialPosts,
-      expiryClockMs,
-    ]
-  );
+  const allKnownDailySpecialPosts = React.useMemo(() => {
+    const shopMap = new Map(allKnownShops.map((s) => [s.id, s]));
+    return partitionDailySpecialPosts(
+      mergeUniqueDailySpecialPosts(
+        allBackendSpecialsCache,
+        dailySpecialPosts,
+        firestoreSpecialPosts,
+        ownerDailySpecialPosts
+      ),
+      expiryClockMs
+    ).active.filter((post) => {
+      const shop = shopMap.get(post.shopId);
+      return !shop || isShopOpenForPublic(shop);
+    });
+  }, [
+    allKnownShops,
+    allBackendSpecialsCache,
+    dailySpecialPosts,
+    firestoreSpecialPosts,
+    ownerDailySpecialPosts,
+    expiryClockMs,
+  ]);
 
   const displayedSavedItems = React.useMemo(
     () => filterSavedMenuItems(allKnownItems, effectiveSavedIds, allKnownShops),
@@ -1091,11 +1133,34 @@ export default function App() {
       followedShopsList.find((s) => s.id === selectedShopId) ||
       allKnownShops.find((s) => s.id === selectedShopId);
     if (!found) return undefined;
+    if (!isShopOpenForPublic(found) && user?.role !== 'ADMIN' && found.ownerId !== user?.id) {
+      return undefined;
+    }
     return {
       ...found,
       isFollowed: effectiveFollowedIds.has(found.id),
     };
-  }, [selectedShopId, displayedShops, followedShopsList, allKnownShops, effectiveFollowedIds]);
+  }, [selectedShopId, displayedShops, followedShopsList, allKnownShops, effectiveFollowedIds, user?.role, user?.id]);
+
+  // If a customer is viewing a shop/item that gets closed by the owner in real time, leave the closed view cleanly
+  useEffect(() => {
+    if (user?.role === 'ADMIN' || user?.role === 'SHOP_OWNER') return;
+    if (selectedShopId) {
+      const targetShop = allKnownShops.find((s) => s.id === selectedShopId);
+      if (targetShop && !isShopOpenForPublic(targetShop)) {
+        setSelectedShopId(null);
+        if (currentTab === 'shop_detail') {
+          setCurrentTab('feed');
+        }
+      }
+    }
+    if (selectedItemForDetail) {
+      const itemShop = allKnownShops.find((s) => s.id === selectedItemForDetail.shopId);
+      if (itemShop && !isShopOpenForPublic(itemShop)) {
+        setSelectedItemForDetail(null);
+      }
+    }
+  }, [allKnownShops, selectedShopId, selectedItemForDetail, currentTab, user?.role]);
 
   // Real owner shop resolved from Firestore / SQLite (never falls back to mock shop data)
 
@@ -1114,6 +1179,16 @@ export default function App() {
       }
     }
   }, [user, user?.role, currentTab]);
+
+  const hasNavigatedRef = useRef(false);
+
+  useEffect(() => {
+    if (!hasNavigatedRef.current) {
+      hasNavigatedRef.current = true;
+      return;
+    }
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+  }, [selectedShopId, currentTab]);
 
   return (
     <div className="min-h-screen flex flex-col bg-[#FAFAF9] dark:bg-stone-950 text-stone-900 dark:text-stone-100 transition-colors pb-20 md:pb-8">
@@ -1137,6 +1212,7 @@ export default function App() {
       <Navbar
         currentTab={currentTab}
         onSelectTab={(tab) => {
+          window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
           setSelectedShopId(null);
           setCurrentTab(tab);
         }}
@@ -1315,6 +1391,34 @@ export default function App() {
           )
         ) : (
           <>
+            {(currentTab === 'shop_detail' || (selectedShopId && currentTab !== 'admin')) && activeDetailShop ? (
+              /* ================= VIEW 6: SHOP PROFILE VIEW (WITH DEDICATED CONTACT SECTION) ================= */
+              <ShopProfileView
+                shop={activeDetailShop}
+                menuItems={buildDisplayedMenuItems(
+                  menuItems,
+                  mergeUniqueMenuItems(firestoreItemsCache, allBackendItemsCache),
+                  allKnownShops,
+                  effectiveSavedIds,
+                  { shopId: activeDetailShop.id }
+                )}
+                dailySpecialPosts={allKnownDailySpecialPosts.filter((p) => p.shopId === activeDetailShop.id)}
+                onBack={() => {
+                  window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+                  setSelectedShopId(null);
+                  setCurrentTab('feed');
+                }}
+                onFollowToggle={handleToggleFollow}
+                onToggleSave={handleToggleSave}
+                onSelectItem={(it) => setSelectedItemForDetail(it)}
+                onViewImage={setLightboxImage}
+              />
+            ) : (
+              <div
+                key={currentTab}
+                data-testid={`tab-view-${currentTab}`}
+                className="animate-tab-enter"
+              >
             {/* ================= VIEW 1: TAB 1 (HOME FEED - PUBLIC FOOD ITEMS GRID) ================= */}
             {currentTab === 'feed' && !selectedShopId && (
           <div className="space-y-4 sm:space-y-6">
@@ -1774,33 +1878,10 @@ export default function App() {
           </div>
         )}
 
-        {/* ================= VIEW 6: SHOP PROFILE VIEW (WITH DEDICATED CONTACT SECTION) ================= */}
-        {(currentTab === 'shop_detail' || (selectedShopId && currentTab !== 'admin')) && activeDetailShop && (
-          <ShopProfileView
-            shop={activeDetailShop}
-            menuItems={buildDisplayedMenuItems(
-              menuItems,
-              mergeUniqueMenuItems(firestoreItemsCache, allBackendItemsCache),
-              allKnownShops,
-              effectiveSavedIds,
-              { shopId: activeDetailShop.id }
-            )}
-            dailySpecialPosts={allKnownDailySpecialPosts.filter((p) => p.shopId === activeDetailShop.id)}
-            onBack={() => {
-              setSelectedShopId(null);
-              setCurrentTab('feed');
-            }}
-            onFollowToggle={handleToggleFollow}
-            onToggleSave={handleToggleSave}
-            onSelectItem={(it) => setSelectedItemForDetail(it)}
-            onViewImage={setLightboxImage}
-          />
-        )}
-
         {/* ================= VIEW 8: ADMIN APPROVAL PANEL ================= */}
         {currentTab === 'admin' && user?.role === 'ADMIN' && (
           <AdminPanel
-            shops={displayedShops}
+            shops={filterOutSeededMockShops(allKnownShops)}
             onUpdateStatus={handleAdminStatusUpdate}
             onRefresh={() => {
               loadShops();
@@ -1813,6 +1894,8 @@ export default function App() {
         {currentTab === 'settings' && !selectedShopId && (
           <SettingsView />
         )}
+              </div>
+            )}
           </>
         )}
       </main>
@@ -1834,6 +1917,7 @@ export default function App() {
         onClose={() => setSelectedItemForDetail(null)}
         onToggleSave={handleToggleSave}
         onVisitShop={(shopId) => {
+          window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
           setSelectedShopId(shopId);
           setCurrentTab('shop_detail');
         }}
@@ -1871,6 +1955,7 @@ export default function App() {
       <BottomNav
         currentTab={currentTab}
         onSelectTab={(tab) => {
+          window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
           setSelectedShopId(null);
           setCurrentTab(tab);
         }}

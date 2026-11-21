@@ -698,13 +698,13 @@ app.get('/api/shops', (req: Request, res: Response) => {
       LEFT JOIN users u ON s.owner_id = u.id
     `;
 
-    // Only admins can see non-approved shops unless owner is viewing own shop
+    // Only admins can see non-approved shops, and public endpoints hide shops toggled closed (is_open = 0)
     if (statusFilter && user?.role === 'ADMIN') {
       query += ` WHERE s.status = '${statusFilter}'`;
     } else if (user?.role === 'ADMIN') {
       query += ` WHERE 1=1`;
     } else {
-      query += ` WHERE s.status = 'APPROVED'`;
+      query += ` WHERE s.status = 'APPROVED' AND (s.is_open IS NULL OR s.is_open = 1)`;
     }
 
     const followedOnlyFilter = req.query.followedOnly === 'true';
@@ -763,6 +763,62 @@ app.get('/api/shops', (req: Request, res: Response) => {
   }
 });
 
+// 5b. Owner's Own Shop (including when closed)
+app.get('/api/owner/shop', (req: Request, res: Response) => {
+  try {
+    const user = getAuthenticatedUser(req);
+    if (!user) return res.status(401).json({ error: 'Unauthorized' });
+
+    const shop = db.prepare(`
+      SELECT s.*, u.email as owner_email,
+        (SELECT COUNT(*) FROM follows WHERE shop_id = s.id) as follower_count,
+        (SELECT COUNT(*) FROM menu_items WHERE shop_id = s.id) as item_count
+      FROM shops s
+      LEFT JOIN users u ON s.owner_id = u.id
+      WHERE s.owner_id = ? OR (u.email IS NOT NULL AND LOWER(u.email) = LOWER(?))
+      LIMIT 1
+    `).get(user.id, user.email || '') as any;
+
+    if (!shop) {
+      return res.status(404).json({ error: 'Shop not found' });
+    }
+
+    return res.json({
+      id: shop.id,
+      ownerId: shop.owner_id,
+      ownerEmail: shop.owner_email,
+      name: shop.name,
+      bio: shop.bio,
+      coverImage: shop.cover_image,
+      avatarImage: shop.avatar_image,
+      profileImageUrl: shop.profile_image_url || undefined,
+      status: shop.status,
+      cuisineType: shop.cuisine_type,
+      locationArea: shop.location_area,
+      address: shop.address,
+      city: shop.city,
+      region: shop.region,
+      country: shop.country,
+      latitude: typeof shop.latitude === 'number' ? shop.latitude : undefined,
+      longitude: typeof shop.longitude === 'number' ? shop.longitude : undefined,
+      facebookUrl: shop.facebook_url,
+      whatsappPhone: shop.whatsapp_phone,
+      viberPhone: shop.viber_phone,
+      lineId: shop.line_id,
+      phoneNumber: shop.phone_number,
+      isOpen: shop.is_open === null || shop.is_open === undefined ? true : Boolean(shop.is_open),
+      operatingHours: shop.operating_hours || '8:00 AM - 8:00 PM',
+      createdAt: shop.created_at,
+      followerCount: shop.follower_count,
+      itemCount: shop.item_count,
+      isFollowed: false,
+    });
+  } catch (err) {
+    console.error('Error fetching owner shop:', err);
+    return res.status(500).json({ error: 'Failed to fetch owner shop' });
+  }
+});
+
 // 6. Shop Detail
 app.get('/api/shops/:id', (req: Request, res: Response) => {
   try {
@@ -778,6 +834,18 @@ app.get('/api/shops/:id', (req: Request, res: Response) => {
 
     if (!shop) {
       return res.status(404).json({ error: 'Shop not found' });
+    }
+
+    const emailMatches =
+      Boolean(shop.owner_email && user?.email) &&
+      shop.owner_email.toLowerCase() === user!.email!.toLowerCase();
+    const isOwnerOrAdmin = Boolean(
+      user && (shop.owner_id === user.id || emailMatches || user.role === 'ADMIN')
+    );
+    const isOpenFlag = shop.is_open === null || shop.is_open === undefined ? true : Boolean(shop.is_open);
+
+    if ((!isOpenFlag || shop.status !== 'APPROVED') && !isOwnerOrAdmin) {
+      return res.status(404).json({ error: 'Shop is currently closed or unavailable' });
     }
 
     let isFollowed = false;
@@ -967,9 +1035,29 @@ app.get('/api/menu-items', (req: Request, res: Response) => {
       WHERE 1=1
     `;
 
-    // Only approved shops visible in public feeds unless admin or viewing specific shop directly
-    if (user?.role !== 'ADMIN' && !shopId) {
-      sql += ` AND s.status = 'APPROVED'`;
+    let isViewingOwnShop = false;
+    if (shopId && user) {
+      const ownShop = db.prepare(`
+        SELECT s.owner_id, u.email as owner_email
+        FROM shops s
+        LEFT JOIN users u ON s.owner_id = u.id
+        WHERE s.id = ?
+      `).get(String(shopId)) as any;
+      if (
+        ownShop &&
+        (ownShop.owner_id === user.id ||
+          (ownShop.owner_email && user.email && ownShop.owner_email.toLowerCase() === user.email.toLowerCase()))
+      ) {
+        isViewingOwnShop = true;
+      }
+    }
+
+    // Only approved and currently open shops are visible in public/customer feeds unless admin or owner viewing own shop
+    if (user?.role !== 'ADMIN' && !isViewingOwnShop) {
+      sql += ` AND (s.is_open IS NULL OR s.is_open = 1)`;
+      if (!shopId) {
+        sql += ` AND s.status = 'APPROVED'`;
+      }
     }
 
     if (shopId) {
@@ -1204,16 +1292,8 @@ app.put('/api/menu-items/:id', (req: Request, res: Response) => {
       WHERE m.id = ?
     `).get(req.params.id) as any;
 
-    if (!existing) return res.status(404).json({ error: 'Menu item not found' });
-    const emailMatches =
-      Boolean(existing.owner_email && user.email) &&
-      existing.owner_email.toLowerCase() === user.email.toLowerCase();
-
-    if (existing.owner_id !== user.id && !emailMatches && user.role !== 'ADMIN') {
-      return res.status(403).json({ error: 'Unauthorized to edit this item.' });
-    }
-
     const {
+      shopId: requestedShopId,
       title,
       description,
       image,
@@ -1225,6 +1305,78 @@ app.put('/api/menu-items/:id', (req: Request, res: Response) => {
       specialDate,
       availableDays,
     } = req.body;
+
+    if (!existing) {
+      const targetShopId =
+        typeof requestedShopId === 'string' && requestedShopId.trim()
+          ? requestedShopId.trim()
+          : (db.prepare('SELECT id FROM shops WHERE owner_id = ? LIMIT 1').get(user.id) as any)?.id;
+      if (!targetShopId || !title || !category || !menuType) {
+        return res.status(404).json({ error: 'Menu item not found' });
+      }
+      const shop = db.prepare(`
+        SELECT s.*, u.email as owner_email
+        FROM shops s
+        LEFT JOIN users u ON s.owner_id = u.id
+        WHERE s.id = ?
+      `).get(targetShopId) as any;
+      if (!shop) return res.status(404).json({ error: 'Menu item not found' });
+
+      const shopEmailMatches =
+        Boolean(shop.owner_email && user.email) &&
+        shop.owner_email.toLowerCase() === user.email.toLowerCase();
+      if (shop.owner_id !== user.id && !shopEmailMatches && user.role !== 'ADMIN') {
+        return res.status(403).json({ error: 'Unauthorized to edit this item.' });
+      }
+
+      if (isLimitedMenuType(menuType)) {
+        const existingShopItems = db
+          .prepare('SELECT id, menu_type as menuType FROM menu_items WHERE shop_id = ?')
+          .all(targetShopId) as Array<{ id: string; menuType: 'WEEKLY' | 'PERMANENT' | 'SPECIAL' }>;
+        const limitCheck = validateMenuItemLimit(existingShopItems, menuType, req.params.id);
+        if (!limitCheck.allowed) {
+          return res.status(409).json({
+            error: limitCheck.error,
+            code: 'MENU_ITEM_LIMIT_REACHED',
+            menuType,
+            limit: limitCheck.maxLimit,
+            currentCount: limitCheck.currentCount,
+          });
+        }
+      }
+
+      const now = new Date().toISOString();
+      db.prepare(`
+        INSERT OR REPLACE INTO menu_items (id, shop_id, title, description, image, price, category, menu_type, is_vegetarian, is_halal, special_date, available_days, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        req.params.id,
+        targetShopId,
+        title,
+        description || '',
+        image || '/src/assets/images/burmeal_mohinga_dish_1793906770254.jpg',
+        Number(price) || 0,
+        category,
+        menuType,
+        isVegetarian ? 1 : 0,
+        isHalal ? 1 : 0,
+        specialDate || null,
+        availableDays ? JSON.stringify(availableDays) : null,
+        now
+      );
+
+      const upsertedItem = db.prepare('SELECT * FROM menu_items WHERE id = ?').get(req.params.id);
+      if (upsertedItem) syncMenuItemToFirestore(upsertedItem, shop);
+      return res.json({ success: true });
+    }
+
+    const emailMatches =
+      Boolean(existing.owner_email && user.email) &&
+      existing.owner_email.toLowerCase() === user.email.toLowerCase();
+
+    if (existing.owner_id !== user.id && !emailMatches && user.role !== 'ADMIN') {
+      return res.status(403).json({ error: 'Unauthorized to edit this item.' });
+    }
 
     const targetMenuType = menuType !== undefined ? menuType : existing.menu_type;
     if (isLimitedMenuType(targetMenuType)) {
@@ -1422,7 +1574,7 @@ app.get('/api/saved-items', (req: Request, res: Response) => {
       FROM saved_items si
       JOIN menu_items m ON si.item_id = m.id
       JOIN shops s ON m.shop_id = s.id
-      WHERE si.customer_id = ?
+      WHERE si.customer_id = ? AND (s.is_open IS NULL OR s.is_open = 1)
       ORDER BY si.created_at DESC
     `).all(user.id) as any[];
 
@@ -1475,8 +1627,28 @@ app.get('/api/daily-specials', async (req: Request, res: Response) => {
     `;
     const params: any[] = [nowIso];
 
-    if (user?.role !== 'ADMIN' && !shopId) {
-      sql += ` AND s.status = 'APPROVED'`;
+    let isViewingOwnShop = false;
+    if (shopId && user) {
+      const ownShop = db.prepare(`
+        SELECT s.owner_id, u.email as owner_email
+        FROM shops s
+        LEFT JOIN users u ON s.owner_id = u.id
+        WHERE s.id = ?
+      `).get(String(shopId)) as any;
+      if (
+        ownShop &&
+        (ownShop.owner_id === user.id ||
+          (ownShop.owner_email && user.email && ownShop.owner_email.toLowerCase() === user.email.toLowerCase()))
+      ) {
+        isViewingOwnShop = true;
+      }
+    }
+
+    if (user?.role !== 'ADMIN' && !isViewingOwnShop) {
+      sql += ` AND (s.is_open IS NULL OR s.is_open = 1)`;
+      if (!shopId) {
+        sql += ` AND s.status = 'APPROVED'`;
+      }
     }
 
     if (shopId) {

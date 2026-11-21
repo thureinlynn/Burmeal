@@ -905,55 +905,34 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
 
           {/* 4 Dedicated Tabs Navigation Selector (Desktop) */}
           <div className="hidden md:flex items-center gap-1 bg-stone-100 dark:bg-stone-800 p-1 rounded-xl border border-stone-200 dark:border-stone-700">
-            <button
-              type="button"
-              onClick={() => setTab('shop_overview')}
-              className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-colors cursor-pointer ${
-                currentTab === 'shop_overview'
-                  ? 'bg-white dark:bg-stone-700 text-stone-900 dark:text-stone-100 shadow-xs'
-                  : 'text-stone-500 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100'
-              }`}
-            >
-              <span>Overview</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setTab('shop_menus')}
-              className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-colors cursor-pointer ${
-                currentTab === 'shop_menus'
-                  ? 'bg-white dark:bg-stone-700 text-stone-900 dark:text-stone-100 shadow-xs'
-                  : 'text-stone-500 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100'
-              }`}
-            >
-              <span>Menus</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setTab('shop_profile')}
-              className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-colors cursor-pointer ${
-                currentTab === 'shop_profile'
-                  ? 'bg-white dark:bg-stone-700 text-stone-900 dark:text-stone-100 shadow-xs'
-                  : 'text-stone-500 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100'
-              }`}
-            >
-              <span>Shop Info</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setTab('shop_settings')}
-              className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-colors cursor-pointer ${
-                currentTab === 'shop_settings'
-                  ? 'bg-white dark:bg-stone-700 text-stone-900 dark:text-stone-100 shadow-xs'
-                  : 'text-stone-500 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100'
-              }`}
-            >
-              <span>Settings</span>
-            </button>
+            {[
+              { id: 'shop_overview', label: 'Overview' },
+              { id: 'shop_menus', label: 'Menus' },
+              { id: 'shop_profile', label: 'Shop Info' },
+              { id: 'shop_settings', label: 'Settings' },
+            ].map((tab) => {
+              const active = currentTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setTab(tab.id as 'shop_overview' | 'shop_menus' | 'shop_profile' | 'shop_settings')}
+                  className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-all duration-200 active:scale-95 cursor-pointer ${
+                    active
+                      ? 'bg-white dark:bg-stone-700 text-stone-900 dark:text-stone-100 shadow-xs'
+                      : 'text-stone-500 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100'
+                  }`}
+                >
+                  <span>{tab.label}</span>
+                </button>
+              );
+            })}
           </div>
         </div>
       </div>
     </div>
 
+      <div key={currentTab} className="animate-tab-enter">
       {/* ================= TAB 1: "HOME" (OVERVIEW & SALES INSIGHTS) ================= */}
       {currentTab === 'shop_overview' && (() => {
         const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -2828,6 +2807,7 @@ export const ShopDashboard: React.FC<ShopDashboardProps> = ({
           </div>
         </div>
       )}
+      </div>
 
       {/* Item Modal (Create / Edit Regular Menu Items: Weekly Special or Regular Menu) */}
       {isItemModalOpen && (

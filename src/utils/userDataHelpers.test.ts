@@ -6,6 +6,7 @@ import {
   mergeUniqueMenuItems,
   applyFollowStateToShops,
   applySaveStateToMenuItems,
+  isShopOpenForPublic,
   buildDisplayedShops,
   buildDisplayedMenuItems,
   filterFollowedShops,
@@ -238,3 +239,62 @@ test('buildDisplayedShops and buildDisplayedMenuItems exclude legacy seeded mock
   assert.equal(visibleItems.length, 1);
   assert.equal(visibleItems[0].id, 'item_1794668262639');
 });
+
+test('isShopOpenForPublic treats undefined/true as open and false as hidden', () => {
+  assert.equal(isShopOpenForPublic(undefined), true);
+  assert.equal(isShopOpenForPublic(null), true);
+  assert.equal(isShopOpenForPublic({ isOpen: undefined }), true);
+  assert.equal(isShopOpenForPublic({ isOpen: true }), true);
+  assert.equal(isShopOpenForPublic({ isOpen: false }), false);
+});
+
+test('hides closed shops and all of their items from public, followed, and saved feeds until reopened', () => {
+  const closedMmShop: Shop = { ...shops[0], isOpen: false };
+  const openJpShop: Shop = { ...shops[1], isOpen: true };
+
+  // Even if SQLite returns stale open copy while Firestore has isOpen: false, Firestore wins and hides the shop
+  const publicShops = buildDisplayedShops([shops[0], shops[1]], [closedMmShop, openJpShop], new Set(['shop_mm_1']), {
+    country: 'Myanmar',
+    regionId: 'MM-ALL',
+  });
+  assert.equal(publicShops.length, 0);
+
+  const allShopsWithClosed = [closedMmShop, openJpShop];
+
+  // Items belonging to closed shops are hidden from both Discover feed and shop detail queries
+  const publicItems = buildDisplayedMenuItems(items, [], allShopsWithClosed, new Set(['item_1']), {});
+  assert.deepEqual(publicItems.map((i) => i.id), ['item_2']);
+
+  const closedShopDetailItems = buildDisplayedMenuItems(items, [], allShopsWithClosed, new Set(['item_1']), {
+    shopId: 'shop_mm_1',
+  });
+  assert.equal(closedShopDetailItems.length, 0);
+
+  // Followed Shops & Followed Dishes Feed exclude closed shops and their dishes
+  const followedIds = new Set(['shop_mm_1', 'shop_jp_1']);
+  const savedIds = new Set(['item_1', 'item_2']);
+
+  const followedShops = filterFollowedShops(allShopsWithClosed, followedIds);
+  assert.deepEqual(followedShops.map((s) => s.id), ['shop_jp_1']);
+
+  const followedDishes = filterFollowedMenuItems(items, followedIds, savedIds, {}, allShopsWithClosed);
+  assert.deepEqual(followedDishes.map((i) => i.id), ['item_2']);
+
+  // Saved Items also exclude items belonging to closed shops without losing the bookmark
+  const savedDishes = filterSavedMenuItems(items, savedIds, allShopsWithClosed);
+  assert.deepEqual(savedDishes.map((i) => i.id), ['item_2']);
+
+  // Once the shop owner toggles isOpen back to true, both shop and its items/saves/follows reappear
+  const reopenedShops = [{ ...shops[0], isOpen: true }, openJpShop];
+  assert.deepEqual(
+    buildDisplayedShops([shops[0]], reopenedShops, followedIds, { country: 'Myanmar', regionId: 'MM-ALL' }).map((s) => s.id),
+    ['shop_mm_1']
+  );
+  assert.deepEqual(
+    buildDisplayedMenuItems(items, [], reopenedShops, savedIds, {}).map((i) => i.id),
+    ['item_1', 'item_2']
+  );
+  assert.deepEqual(filterFollowedShops(reopenedShops, followedIds).map((s) => s.id), ['shop_mm_1', 'shop_jp_1']);
+  assert.deepEqual(filterSavedMenuItems(items, savedIds, reopenedShops).map((i) => i.id), ['item_1', 'item_2']);
+});
+

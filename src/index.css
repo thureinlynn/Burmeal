@@ -23,3 +23,105 @@
     font-family: 'Outfit', 'Plus Jakarta Sans', system-ui, sans-serif;
   }
 }
+
+@keyframes burmeal-backdrop-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes burmeal-backdrop-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes burmeal-modal-in {
+  from {
+    opacity: 0;
+    transform: translateY(28px) scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes burmeal-modal-out {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(48px) scale(0.92);
+  }
+}
+
+@keyframes burmeal-shop-expand {
+  0% {
+    opacity: 0;
+    transform: translateY(24px) scale(0.88);
+  }
+  65% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes burmeal-tab-enter {
+  0% {
+    opacity: 0;
+    transform: translateY(18px) scale(0.975);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.animate-modal-backdrop-in {
+  animation: burmeal-backdrop-in 220ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.animate-modal-backdrop-out {
+  animation: burmeal-backdrop-out 220ms cubic-bezier(0.4, 0, 1, 1) forwards;
+}
+
+.animate-modal-card-in {
+  animation: burmeal-modal-in 280ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-modal-card-out {
+  animation: burmeal-modal-out 220ms cubic-bezier(0.4, 0, 1, 1) forwards;
+}
+
+.animate-shop-expand {
+  transform-origin: center top;
+  animation: burmeal-shop-expand 440ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-tab-enter {
+  transform-origin: center top;
+  animation: burmeal-tab-enter 320ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-modal-backdrop-in,
+  .animate-modal-backdrop-out,
+  .animate-modal-card-in,
+  .animate-modal-card-out,
+  .animate-shop-expand,
+  .animate-tab-enter {
+    animation-duration: 1ms;
+  }
+}

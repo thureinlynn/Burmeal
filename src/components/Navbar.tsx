@@ -78,17 +78,24 @@ export const Navbar: React.FC<NavbarProps> = ({
             {user?.role !== 'SHOP_OWNER' && (
               <>
                 <button
+                  type="button"
                   onClick={() => onSelectTab('feed')}
-                  className={`hover:text-stone-900 dark:hover:text-stone-100 transition-colors whitespace-nowrap shrink-0 ${
-                    currentTab === 'feed' ? 'text-amber-700 dark:text-amber-400 font-bold border-b-2 border-amber-600 pb-1' : ''
+                  className={`relative pb-1.5 hover:text-stone-900 dark:hover:text-stone-100 transition-all duration-200 active:scale-95 whitespace-nowrap shrink-0 cursor-pointer ${
+                    currentTab === 'feed' ? 'text-amber-700 dark:text-amber-400 font-bold' : ''
                   }`}
                 >
                   {t.navFeed}
+                  <span
+                    className={`absolute inset-x-0 bottom-0 h-0.5 rounded-full bg-amber-600 dark:bg-amber-400 origin-center transition-all duration-250 ${
+                      currentTab === 'feed' ? 'scale-x-100 opacity-100' : 'scale-x-0 opacity-0'
+                    }`}
+                  />
                 </button>
                 <button
+                  type="button"
                   onClick={() => onSelectTab('following')}
-                  className={`flex items-center gap-1 hover:text-stone-900 dark:hover:text-stone-100 transition-colors whitespace-nowrap shrink-0 ${
-                    currentTab === 'following' ? 'text-amber-700 dark:text-amber-400 font-bold border-b-2 border-amber-600 pb-1' : ''
+                  className={`relative pb-1.5 flex items-center gap-1 hover:text-stone-900 dark:hover:text-stone-100 transition-all duration-200 active:scale-95 whitespace-nowrap shrink-0 cursor-pointer ${
+                    currentTab === 'following' ? 'text-amber-700 dark:text-amber-400 font-bold' : ''
                   }`}
                 >
                   <Heart className="w-3.5 h-3.5 text-rose-500" />
@@ -96,81 +103,100 @@ export const Navbar: React.FC<NavbarProps> = ({
                   {hasFollowedShops && (
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 ml-0.5"></span>
                   )}
+                  <span
+                    className={`absolute inset-x-0 bottom-0 h-0.5 rounded-full bg-amber-600 dark:bg-amber-400 origin-center transition-all duration-250 ${
+                      currentTab === 'following' ? 'scale-x-100 opacity-100' : 'scale-x-0 opacity-0'
+                    }`}
+                  />
                 </button>
                 <button
+                  type="button"
                   onClick={() => onSelectTab('shops')}
-                  className={`hover:text-stone-900 dark:hover:text-stone-100 transition-colors whitespace-nowrap shrink-0 ${
-                    currentTab === 'shops' ? 'text-amber-700 dark:text-amber-400 font-bold border-b-2 border-amber-600 pb-1' : ''
+                  className={`relative pb-1.5 hover:text-stone-900 dark:hover:text-stone-100 transition-all duration-200 active:scale-95 whitespace-nowrap shrink-0 cursor-pointer ${
+                    currentTab === 'shops' ? 'text-amber-700 dark:text-amber-400 font-bold' : ''
                   }`}
                 >
                   {t.navShops}
+                  <span
+                    className={`absolute inset-x-0 bottom-0 h-0.5 rounded-full bg-amber-600 dark:bg-amber-400 origin-center transition-all duration-250 ${
+                      currentTab === 'shops' ? 'scale-x-100 opacity-100' : 'scale-x-0 opacity-0'
+                    }`}
+                  />
                 </button>
                 <button
+                  type="button"
                   onClick={() => onSelectTab('saved')}
-                  className={`flex items-center gap-1 hover:text-stone-900 dark:hover:text-stone-100 transition-colors whitespace-nowrap shrink-0 ${
-                    currentTab === 'saved' ? 'text-amber-700 dark:text-amber-400 font-bold border-b-2 border-amber-600 pb-1' : ''
+                  className={`relative pb-1.5 flex items-center gap-1 hover:text-stone-900 dark:hover:text-stone-100 transition-all duration-200 active:scale-95 whitespace-nowrap shrink-0 cursor-pointer ${
+                    currentTab === 'saved' ? 'text-amber-700 dark:text-amber-400 font-bold' : ''
                   }`}
                 >
                   <Bookmark className="w-3.5 h-3.5" />
                   <span>{t.navSaved}</span>
+                  <span
+                    className={`absolute inset-x-0 bottom-0 h-0.5 rounded-full bg-amber-600 dark:bg-amber-400 origin-center transition-all duration-250 ${
+                      currentTab === 'saved' ? 'scale-x-100 opacity-100' : 'scale-x-0 opacity-0'
+                    }`}
+                  />
                 </button>
                 {user && (
                   <button
+                    type="button"
                     onClick={() => onSelectTab('profile')}
-                    className={`flex items-center gap-1 hover:text-stone-900 dark:hover:text-stone-100 transition-colors whitespace-nowrap shrink-0 ${
-                      currentTab === 'profile' ? 'text-amber-700 dark:text-amber-400 font-bold border-b-2 border-amber-600 pb-1' : ''
+                    className={`relative pb-1.5 flex items-center gap-1 hover:text-stone-900 dark:hover:text-stone-100 transition-all duration-200 active:scale-95 whitespace-nowrap shrink-0 cursor-pointer ${
+                      currentTab === 'profile' ? 'text-amber-700 dark:text-amber-400 font-bold' : ''
                     }`}
                   >
                     <User className="w-3.5 h-3.5" />
                     <span>{t.navProfile}</span>
+                    <span
+                      className={`absolute inset-x-0 bottom-0 h-0.5 rounded-full bg-amber-600 dark:bg-amber-400 origin-center transition-all duration-250 ${
+                        currentTab === 'profile' ? 'scale-x-100 opacity-100' : 'scale-x-0 opacity-0'
+                      }`}
+                    />
                   </button>
                 )}
                 <button
+                  type="button"
                   onClick={() => onSelectTab('settings')}
-                  className={`flex items-center gap-1 hover:text-stone-900 dark:hover:text-stone-100 transition-colors whitespace-nowrap shrink-0 ${
-                    currentTab === 'settings' ? 'text-amber-700 dark:text-amber-400 font-bold border-b-2 border-amber-600 pb-1' : ''
+                  className={`relative pb-1.5 flex items-center gap-1 hover:text-stone-900 dark:hover:text-stone-100 transition-all duration-200 active:scale-95 whitespace-nowrap shrink-0 cursor-pointer ${
+                    currentTab === 'settings' ? 'text-amber-700 dark:text-amber-400 font-bold' : ''
                   }`}
                 >
                   <SettingsIcon className="w-3.5 h-3.5" />
                   <span>{t.navSettings}</span>
+                  <span
+                    className={`absolute inset-x-0 bottom-0 h-0.5 rounded-full bg-amber-600 dark:bg-amber-400 origin-center transition-all duration-250 ${
+                      currentTab === 'settings' ? 'scale-x-100 opacity-100' : 'scale-x-0 opacity-0'
+                    }`}
+                  />
                 </button>
               </>
             )}
 
             {user?.role === 'SHOP_OWNER' && (
               <>
-                <button
-                  onClick={() => onSelectTab('shop_overview')}
-                  className={`hover:text-stone-900 dark:hover:text-stone-100 transition-colors whitespace-nowrap shrink-0 ${
-                    currentTab === 'shop_overview' ? 'text-amber-700 dark:text-amber-400 font-bold border-b-2 border-amber-600 pb-1' : ''
-                  }`}
-                >
-                  {t.shopNavOverview}
-                </button>
-                <button
-                  onClick={() => onSelectTab('shop_menus')}
-                  className={`hover:text-stone-900 dark:hover:text-stone-100 transition-colors whitespace-nowrap shrink-0 ${
-                    currentTab === 'shop_menus' ? 'text-amber-700 dark:text-amber-400 font-bold border-b-2 border-amber-600 pb-1' : ''
-                  }`}
-                >
-                  {t.shopNavMenus}
-                </button>
-                <button
-                  onClick={() => onSelectTab('shop_profile')}
-                  className={`hover:text-stone-900 dark:hover:text-stone-100 transition-colors whitespace-nowrap shrink-0 ${
-                    currentTab === 'shop_profile' ? 'text-amber-700 dark:text-amber-400 font-bold border-b-2 border-amber-600 pb-1' : ''
-                  }`}
-                >
-                  {t.shopNavProfile}
-                </button>
-                <button
-                  onClick={() => onSelectTab('shop_settings')}
-                  className={`hover:text-stone-900 dark:hover:text-stone-100 transition-colors whitespace-nowrap shrink-0 ${
-                    currentTab === 'shop_settings' ? 'text-amber-700 dark:text-amber-400 font-bold border-b-2 border-amber-600 pb-1' : ''
-                  }`}
-                >
-                  {t.shopNavSettings}
-                </button>
+                {[
+                  { id: 'shop_overview', label: t.shopNavOverview },
+                  { id: 'shop_menus', label: t.shopNavMenus },
+                  { id: 'shop_profile', label: t.shopNavProfile },
+                  { id: 'shop_settings', label: t.shopNavSettings },
+                ].map((tab) => (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => onSelectTab(tab.id)}
+                    className={`relative pb-1.5 hover:text-stone-900 dark:hover:text-stone-100 transition-all duration-200 active:scale-95 whitespace-nowrap shrink-0 cursor-pointer ${
+                      currentTab === tab.id ? 'text-amber-700 dark:text-amber-400 font-bold' : ''
+                    }`}
+                  >
+                    {tab.label}
+                    <span
+                      className={`absolute inset-x-0 bottom-0 h-0.5 rounded-full bg-amber-600 dark:bg-amber-400 origin-center transition-all duration-250 ${
+                        currentTab === tab.id ? 'scale-x-100 opacity-100' : 'scale-x-0 opacity-0'
+                      }`}
+                    />
+                  </button>
+                ))}
               </>
             )}
           </nav>

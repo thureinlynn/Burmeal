@@ -83,6 +83,7 @@ export function filterDailySpecialPosts(
     query?: string;
     shopsLookup?: Shop[];
     nowMs?: number;
+    includeClosed?: boolean;
   } = {}
 ): DailySpecialPost[] {
   const nowMs = options.nowMs ?? Date.now();
@@ -106,6 +107,9 @@ export function filterDailySpecialPosts(
 
   return active.filter((post) => {
     const shop = shopMap.get(post.shopId);
+    if (shop && !options.includeClosed && shop.isOpen === false) {
+      return false;
+    }
     if (shop && shop.status && shop.status !== 'APPROVED' && !options.shopId) {
       return false;
     }

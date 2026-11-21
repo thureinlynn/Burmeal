@@ -55,6 +55,10 @@ export function applySaveStateToMenuItems(items: MenuItem[], savedIds: Set<strin
   }));
 }
 
+export function isShopOpenForPublic(shop?: Pick<Shop, 'isOpen'> | null): boolean {
+  return shop?.isOpen !== false;
+}
+
 export function buildDisplayedShops(
   backendShops: Shop[],
   firestoreShops: Shop[],
@@ -62,14 +66,13 @@ export function buildDisplayedShops(
   regionFilter?: { country?: string; regionId?: string },
   allItems: MenuItem[] = []
 ): Shop[] {
-  const fsInRegion = firestoreShops.filter((s) => {
+  // Firestore overrides matching SQLite shop records so online edits (including closing a shop) always take precedence
+  const merged = filterOutSeededMockShops(mergeUniqueShops(backendShops, firestoreShops)).filter((s) => {
     if (s.status && s.status !== 'APPROVED') return false;
+    if (!isShopOpenForPublic(s)) return false;
     if (!regionFilter?.country && !regionFilter?.regionId) return true;
     return matchesRegionFilter(s, regionFilter?.regionId, regionFilter?.country);
   });
-
-  // Firestore overrides matching SQLite shop records so online edits always take precedence
-  const merged = filterOutSeededMockShops(mergeUniqueShops(backendShops, fsInRegion));
   const itemCounts = new Map<string, number>();
   for (const item of allItems) {
     if (item?.shopId) {
@@ -97,26 +100,28 @@ export function buildDisplayedMenuItems(
     isVegetarian?: boolean;
     isHalal?: boolean;
     query?: string;
+    includeClosed?: boolean;
   }
 ): MenuItem[] {
   const shopMap = new Map(allShops.map((s) => [s.id, s]));
 
-  // Enrich Firestore items with shop metadata and filter to active region/shop/filters
-  const enrichedFsItems = firestoreItems
-    .map((item) => {
-      const shop = shopMap.get(item.shopId);
-      const shopCountry = item.shopCountry || item.country || shop?.country;
-      const shopRegion = item.shopRegion || shop?.region;
-      const shopCity = item.shopCity || shop?.city;
-      const shopName = item.shopName || shop?.name || 'Local Kitchen';
-      return {
-        ...item,
-        shopName,
-        shopCountry,
-        shopRegion,
-        shopCity,
-        country: shopCountry,
-        contactLinks: item.contactLinks || (shop
+  // Merge backend and Firestore items first (Firestore overrides matching IDs) and enrich shop metadata
+  const mergedRaw = mergeUniqueMenuItems(backendItems, firestoreItems).map((item) => {
+    const shop = shopMap.get(item.shopId);
+    const shopCountry = item.shopCountry || item.country || shop?.country;
+    const shopRegion = item.shopRegion || shop?.region;
+    const shopCity = item.shopCity || shop?.city;
+    const shopName = item.shopName || shop?.name || 'Local Kitchen';
+    return {
+      ...item,
+      shopName,
+      shopCountry,
+      shopRegion,
+      shopCity,
+      country: shopCountry,
+      contactLinks:
+        item.contactLinks ||
+        (shop
           ? {
               whatsappPhone: shop.whatsappPhone,
               viberPhone: shop.viberPhone,
@@ -125,30 +130,34 @@ export function buildDisplayedMenuItems(
               phoneNumber: shop.phoneNumber,
             }
           : undefined),
+    };
+  });
+
+  const shopFiltered = mergedRaw.filter((item) => {
+    const shop = shopMap.get(item.shopId);
+    if (shop && !filters.includeClosed && !isShopOpenForPublic(shop)) {
+      return false;
+    }
+    if (shop && shop.status && shop.status !== 'APPROVED' && !filters.shopId) {
+      return false;
+    }
+    if (!filters.shopId && (filters.country || filters.regionId)) {
+      const regionCandidate = {
+        name: item.shopName || shop?.name || '',
+        country: item.shopCountry || item.country || shop?.country,
+        region: item.shopRegion || shop?.region,
+        city: item.shopCity || shop?.city,
+        locationArea: shop?.locationArea || '',
+        address: shop?.address || '',
       };
-    })
-    .filter((item) => {
-      const shop = shopMap.get(item.shopId);
-      if (shop && shop.status && shop.status !== 'APPROVED' && !filters.shopId) {
+      if (!matchesRegionFilter(regionCandidate, filters.regionId, filters.country)) {
         return false;
       }
-      if (!filters.shopId && (filters.country || filters.regionId)) {
-        const regionCandidate = {
-          name: item.shopName || shop?.name || '',
-          country: item.shopCountry || item.country || shop?.country,
-          region: item.shopRegion || shop?.region,
-          city: item.shopCity || shop?.city,
-          locationArea: shop?.locationArea || '',
-          address: shop?.address || '',
-        };
-        if (!matchesRegionFilter(regionCandidate, filters.regionId, filters.country)) {
-          return false;
-        }
-      }
-      return true;
-    });
+    }
+    return true;
+  });
 
-  const filteredFsItems = filterMenuItems(enrichedFsItems, {
+  const filtered = filterMenuItems(shopFiltered, {
     shopId: filters.shopId || undefined,
     menuType: filters.menuType,
     category: filters.category,
@@ -157,15 +166,14 @@ export function buildDisplayedMenuItems(
     query: filters.query,
   });
 
-  // Firestore overrides SQLite items for same ID so online edits win across all devices
-  const merged = filterOutSeededMockMenuItems(mergeUniqueMenuItems(backendItems, filteredFsItems));
-  return applySaveStateToMenuItems(merged, savedIds);
+  const cleaned = filterOutSeededMockMenuItems(filtered);
+  return applySaveStateToMenuItems(cleaned, savedIds);
 }
 
 export function filterFollowedShops(allShops: Shop[], followedIds: Set<string>): Shop[] {
   const map = new Map<string, Shop>();
   for (const shop of allShops) {
-    if (followedIds.has(shop.id)) {
+    if (followedIds.has(shop.id) && isShopOpenForPublic(shop)) {
       map.set(shop.id, { ...shop, isFollowed: true });
     }
   }
@@ -182,12 +190,16 @@ export function filterFollowedMenuItems(
     isVegetarian?: boolean;
     isHalal?: boolean;
     query?: string;
-  }
+  },
+  shopsLookup: Shop[] = []
 ): MenuItem[] {
   const q = filters?.query?.trim().toLowerCase() || '';
+  const shopMap = new Map(shopsLookup.map((s) => [s.id, s]));
   return allItems
     .filter((item) => {
       if (!followedIds.has(item.shopId)) return false;
+      const shop = shopMap.get(item.shopId);
+      if (shop && !isShopOpenForPublic(shop)) return false;
       if (filters?.menuType === 'ALL') {
         if (item.menuType !== 'WEEKLY' && item.menuType !== 'PERMANENT') {
           return false;
@@ -223,6 +235,9 @@ export function filterSavedMenuItems(
   for (const item of allItems) {
     if (savedIds.has(item.id)) {
       const shop = shopMap.get(item.shopId);
+      if (shop && !isShopOpenForPublic(shop)) {
+        continue;
+      }
       result.set(item.id, {
         ...item,
         shopCountry: item.shopCountry || item.country || shop?.country,

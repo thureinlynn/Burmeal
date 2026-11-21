@@ -244,7 +244,8 @@ export const apiClient = {
     const userId = getUserIdFromToken(token);
     let shops = db.shops;
 
-    // Apply followedOnly or region/country filtering
+    // Apply followedOnly or region/country filtering and exclude closed shops in public lists
+    shops = shops.filter((s) => s.isOpen !== false);
     if (filterParams.followedOnly) {
       if (!userId) return [];
       const followedIds = db.follows.filter((f) => f.customerId === userId).map((f) => f.shopId);
@@ -259,6 +260,34 @@ export const apiClient = {
       itemCount: db.menuItems.filter((m) => m.shopId === s.id).length,
       followerCount: db.follows.filter((f) => f.shopId === s.id).length,
     }));
+  },
+
+  // Get authenticated owner's own shop (even when closed)
+  async getOwnerShop(token?: string | null): Promise<Shop | null> {
+    try {
+      if (token) {
+        const res = await fetch('/api/owner/shop', {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.ok) {
+          const ct = res.headers.get('content-type') || '';
+          if (ct.includes('application/json')) {
+            return await res.json();
+          }
+        }
+      }
+    } catch {}
+
+    const db = getLocalDb();
+    const userId = getUserIdFromToken(token);
+    if (!userId) return null;
+    const owner = db.users.find((u) => u.id === userId);
+    const shop = db.shops.find(
+      (s) =>
+        s.ownerId === userId ||
+        (owner?.email && s.ownerEmail?.toLowerCase() === owner.email.toLowerCase())
+    );
+    return shop || null;
   },
 
   // Get single shop
@@ -288,31 +317,64 @@ export const apiClient = {
   },
 
   // Update shop profile
-  async updateShop(shopId: string, data: Partial<Shop>, token?: string | null): Promise<{ success: boolean; shop?: Shop }> {
+  async updateShop(
+    shopId: string,
+    data: Partial<Shop>,
+    token?: string | null,
+    syncContext?: BackendSyncContext
+  ): Promise<{ success: boolean; shop?: Shop }> {
     let serverSuccess = false;
+    const attemptPut = async (bearerToken: string) =>
+      fetch(`/api/shops/${shopId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${bearerToken}`,
+        },
+        body: JSON.stringify(data),
+      });
+
     try {
-      if (token) {
-        const res = await fetch(`/api/shops/${shopId}`, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify(data),
-        });
+      let activeToken = token || null;
+      if (!activeToken && syncContext?.user) {
+        const synced = await apiClient.syncFirebaseAccount(syncContext.user, syncContext.shop);
+        if (synced.token) {
+          activeToken = synced.token;
+          syncContext.onSessionSynced?.(synced);
+        }
+      }
+
+      if (activeToken) {
+        let res = await attemptPut(activeToken);
+        if (shouldRetryWithBackendSync(res.status) && syncContext?.user) {
+          const synced = await apiClient.syncFirebaseAccount(
+            syncContext.user,
+            syncContext.shop ? { ...syncContext.shop, ...data } : undefined
+          );
+          if (synced.token) {
+            activeToken = synced.token;
+            syncContext.onSessionSynced?.(synced);
+            res = await attemptPut(activeToken);
+          }
+        }
         if (res.ok) {
           serverSuccess = true;
         }
       }
     } catch {}
 
-    // Always update client storage to guarantee instant Vercel responsiveness
+    // Always update client storage to guarantee instant responsiveness
     const db = getLocalDb();
     const idx = db.shops.findIndex((s) => s.id === shopId);
     if (idx !== -1) {
       db.shops[idx] = { ...db.shops[idx], ...data };
       saveLocalDb(db);
       return { success: true, shop: db.shops[idx] };
+    } else if (syncContext?.shop) {
+      const mergedShop: Shop = { ...syncContext.shop, ...data, id: shopId };
+      db.shops.unshift(mergedShop);
+      saveLocalDb(db);
+      return { success: true, shop: mergedShop };
     }
     return { success: serverSuccess };
   },
@@ -362,7 +424,24 @@ export const apiClient = {
     // Client fallback
     const db = getLocalDb();
     const userId = getUserIdFromToken(token);
+    const activeUser = userId ? db.users.find((u) => u.id === userId) : undefined;
+    const isAdminOrOwnerOfRequestedShop = Boolean(
+      activeUser?.role === 'ADMIN' ||
+        (params.shopId &&
+          db.shops.some(
+            (s) =>
+              s.id === params.shopId &&
+              (s.ownerId === userId ||
+                (activeUser?.email && s.ownerEmail?.toLowerCase() === activeUser.email.toLowerCase()))
+          ))
+    );
+    const closedShopIds = new Set(db.shops.filter((s) => s.isOpen === false).map((s) => s.id));
+
     let items = [...db.menuItems];
+
+    if (!isAdminOrOwnerOfRequestedShop) {
+      items = items.filter((i) => !closedShopIds.has(i.shopId));
+    }
 
     if (params.shopId) {
       items = items.filter((i) => i.shopId === params.shopId);
@@ -371,7 +450,9 @@ export const apiClient = {
     // Country/Region scoping across shops (unless inspecting a specific shop directly)
     if (!params.shopId && (params.country || params.regionId)) {
       const allowedShopIds = new Set(
-        db.shops.filter((s) => matchesRegionFilter(s, params.regionId, params.country)).map((s) => s.id)
+        db.shops
+          .filter((s) => s.isOpen !== false && matchesRegionFilter(s, params.regionId, params.country))
+          .map((s) => s.id)
       );
       items = items.filter((i) => allowedShopIds.has(i.shopId));
     }
@@ -540,17 +621,43 @@ export const apiClient = {
   },
 
   // Update menu item
-  async updateMenuItem(id: string, data: Partial<MenuItem>, token?: string | null): Promise<boolean> {
+  async updateMenuItem(
+    id: string,
+    data: Partial<MenuItem>,
+    token?: string | null,
+    syncContext?: BackendSyncContext
+  ): Promise<boolean> {
+    const attemptPut = async (bearerToken: string) =>
+      fetch(`/api/menu-items/${id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${bearerToken}`,
+        },
+        body: JSON.stringify(data),
+      });
+
     try {
-      if (token) {
-        const res = await fetch(`/api/menu-items/${id}`, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify(data),
-        });
+      let activeToken = token || null;
+      if (!activeToken && syncContext?.user) {
+        const synced = await apiClient.syncFirebaseAccount(syncContext.user, syncContext.shop);
+        if (synced.token) {
+          activeToken = synced.token;
+          syncContext.onSessionSynced?.(synced);
+        }
+      }
+
+      if (activeToken) {
+        let res = await attemptPut(activeToken);
+        if (shouldRetryWithBackendSync(res.status) && syncContext?.user) {
+          const synced = await apiClient.syncFirebaseAccount(syncContext.user, syncContext.shop);
+          if (synced.token) {
+            activeToken = synced.token;
+            syncContext.onSessionSynced?.(synced);
+            res = await attemptPut(activeToken);
+          }
+        }
+
         if (res.ok) {
           const db = getLocalDb();
           const idx = db.menuItems.findIndex((m) => m.id === id);
@@ -559,7 +666,7 @@ export const apiClient = {
             saveLocalDb(db);
           }
           return true;
-        } else if (res.status >= 400 && res.status < 500) {
+        } else if (isHardBusinessRejectionStatus(res.status) || res.status === 403) {
           const errBody = await res.json().catch(() => ({}));
           const apiErr = new Error(errBody.error || `Failed to update menu item (${res.status})`);
           (apiErr as any).isApiError = true;
@@ -587,7 +694,30 @@ export const apiClient = {
       saveLocalDb(db);
       return true;
     }
-    return false;
+
+    if (data.shopId) {
+      const targetShop = db.shops.find((s) => s.id === data.shopId);
+      const upsertedItem: MenuItem = {
+        id,
+        shopId: data.shopId,
+        shopName: data.shopName || targetShop?.name || '',
+        title: data.title || 'Untitled Dish',
+        description: data.description || '',
+        image: data.image || '/src/assets/images/burmeal_mohinga_dish_1793906770254.jpg',
+        price: typeof data.price === 'number' ? data.price : parseFloat(data.price as any) || 0,
+        category: data.category || 'Noodles & Broth',
+        menuType: data.menuType || 'WEEKLY',
+        isVegetarian: Boolean(data.isVegetarian),
+        isHalal: Boolean(data.isHalal),
+        specialDate: data.specialDate,
+        availableDays: data.availableDays,
+        createdAt: data.createdAt || new Date().toISOString(),
+        isSaved: false,
+      };
+      db.menuItems.unshift(upsertedItem);
+      saveLocalDb(db);
+    }
+    return true;
   },
 
   // Delete menu item
@@ -629,8 +759,9 @@ export const apiClient = {
     if (!userId) return [];
 
     const savedIds = db.savedItems.filter((s) => s.customerId === userId).map((s) => s.itemId);
+    const closedShopIds = new Set(db.shops.filter((s) => s.isOpen === false).map((s) => s.id));
     return db.menuItems
-      .filter((m) => savedIds.includes(m.id))
+      .filter((m) => savedIds.includes(m.id) && !closedShopIds.has(m.shopId))
       .map((m) => {
         const s = db.shops.find((shp) => shp.id === m.shopId);
         return {

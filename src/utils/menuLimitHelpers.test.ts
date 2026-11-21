@@ -117,3 +117,35 @@ test('blocks switching an existing Regular item to Weekly when Weekly already ha
   assert.equal(retrySwitch.currentCount, 5);
   assert.equal(retrySwitch.remaining, 1);
 });
+
+test('allows editing existing items in-place when shop already has >6 legacy items in that menuType', () => {
+  const legacyItems = [
+    makeDish('w1', 'WEEKLY'),
+    makeDish('w2', 'WEEKLY'),
+    makeDish('w3', 'WEEKLY'),
+    makeDish('w4', 'WEEKLY'),
+    makeDish('w5', 'WEEKLY'),
+    makeDish('w6', 'WEEKLY'),
+    makeDish('w7', 'WEEKLY'),
+    makeDish('w8', 'WEEKLY'),
+    makeDish('r1', 'PERMANENT'),
+  ];
+
+  // Updating an existing WEEKLY item when there are 8 WEEKLY items must succeed
+  const editWeekly = validateMenuItemLimit(legacyItems, 'WEEKLY', 'w4');
+  assert.equal(editWeekly.allowed, true);
+  assert.equal(editWeekly.remaining, 0);
+
+  // Creating a brand-new WEEKLY item is still blocked
+  const createWeekly = validateMenuItemLimit(legacyItems, 'WEEKLY');
+  assert.equal(createWeekly.allowed, false);
+
+  // Switching an item from PERMANENT -> WEEKLY when WEEKLY has 8 items is still blocked
+  const switchToWeekly = validateMenuItemLimit(legacyItems, 'WEEKLY', 'r1');
+  assert.equal(switchToWeekly.allowed, false);
+
+  // Switching an item OUT of an over-limit WEEKLY (8) into PERMANENT (1) is allowed
+  const switchOutOfWeekly = validateMenuItemLimit(legacyItems, 'PERMANENT', 'w8');
+  assert.equal(switchOutOfWeekly.allowed, true);
+});
+

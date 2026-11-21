@@ -59,7 +59,13 @@ export function validateMenuItemLimit(
   }
 
   const currentCount = countMenuItemsByType(items, targetMenuType, excludeItemId);
-  const allowed = currentCount < MENU_ITEM_MAX_PER_TYPE;
+  const existingTargetItem = excludeItemId
+    ? items.find((item) => item && item.id === excludeItemId)
+    : undefined;
+  const isEditingSameTypeInPlace = Boolean(
+    existingTargetItem && existingTargetItem.menuType === targetMenuType
+  );
+  const allowed = isEditingSameTypeInPlace || currentCount < MENU_ITEM_MAX_PER_TYPE;
   const remaining = Math.max(0, MENU_ITEM_MAX_PER_TYPE - currentCount);
 
   if (!allowed) {

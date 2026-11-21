@@ -255,4 +255,38 @@ describe('dailySpecialHelpers', () => {
     assert.equal(shouldRetryWithBackendSync(400), false);
     assert.equal(shouldRetryWithBackendSync(409), false);
   });
+
+  it('hides daily special posts belonging to closed shops unless includeClosed is true', () => {
+    const nowMs = Date.parse('2026-11-16T12:00:00.000Z');
+    const shops: Shop[] = [
+      {
+        id: 'shop_closed',
+        ownerId: 'u1',
+        name: 'Closed Kitchen',
+        bio: '',
+        coverImage: '',
+        avatarImage: '',
+        status: 'APPROVED',
+        cuisineType: 'Burmese',
+        locationArea: 'Yangon',
+        country: 'Myanmar',
+        isOpen: false,
+        createdAt: '2026-11-01T00:00:00.000Z',
+      },
+    ];
+    const posts: DailySpecialPost[] = [
+      {
+        id: 'dsp_closed_1',
+        shopId: 'shop_closed',
+        shopName: 'Closed Kitchen',
+        title: 'Special Soup',
+        post: 'Hidden when shop is closed',
+        createdAt: '2026-11-16T10:00:00.000Z',
+        expiresAt: '2026-11-18T10:00:00.000Z',
+      },
+    ];
+
+    assert.equal(filterDailySpecialPosts(posts, { shopsLookup: shops, nowMs }).length, 0);
+    assert.equal(filterDailySpecialPosts(posts, { shopsLookup: shops, nowMs, includeClosed: true }).length, 1);
+  });
 });

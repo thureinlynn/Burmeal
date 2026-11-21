@@ -123,7 +123,11 @@ export const ShopProfileView: React.FC<ShopProfileViewProps> = ({
   const hasPinnedCoords = hasValidCoordinates(shop.latitude, shop.longitude);
 
   return (
-    <div className="space-y-6 animate-in fade-in zoom-in-95 duration-300">
+    <div
+      key={shop.id}
+      data-testid="shop-profile-view"
+      className="space-y-6 animate-shop-expand"
+    >
       {/* Top back button */}
       <div>
         <button
@@ -429,38 +433,40 @@ export const ShopProfileView: React.FC<ShopProfileViewProps> = ({
       </div>
 
       {/* Dish Grid for All Item / Weekly Highlights / Regular Menu */}
-      {filteredItems.length === 0 ? (
-        <div className="bg-white dark:bg-stone-900 rounded-xl border border-stone-200 dark:border-stone-800 p-8 text-center text-xs text-stone-400">
-          {t.noDishesFound}
-        </div>
-      ) : (
-        <div className="space-y-4">
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-6">
-            {paginatedDishes.visibleItems.map((item) => (
-              <MenuCard
-                key={item.id}
-                item={{
-                  ...item,
-                  shopCountry: item.shopCountry || shop.country,
-                  shopName: item.shopName || shop.name,
-                }}
-                onToggleSave={onToggleSave}
-                onSelectItem={onSelectItem}
-                onViewImage={onViewImage}
-              />
-            ))}
+      <div key={selectedMenuType} className="animate-tab-enter">
+        {filteredItems.length === 0 ? (
+          <div className="bg-white dark:bg-stone-900 rounded-xl border border-stone-200 dark:border-stone-800 p-8 text-center text-xs text-stone-400">
+            {t.noDishesFound}
           </div>
-          <ScrollLoadMoreSentinel
-            sentinelRef={paginatedDishes.sentinelRef}
-            visibleCount={paginatedDishes.visibleCount}
-            totalCount={paginatedDishes.totalCount}
-            pageSize={PAGE_LIMITS.WEEKLY_AND_MASTER}
-            hasMore={paginatedDishes.hasMore}
-            onLoadMore={paginatedDishes.loadMore}
-            itemLabel="dishes"
-          />
-        </div>
-      )}
+        ) : (
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-6">
+              {paginatedDishes.visibleItems.map((item) => (
+                <MenuCard
+                  key={item.id}
+                  item={{
+                    ...item,
+                    shopCountry: item.shopCountry || shop.country,
+                    shopName: item.shopName || shop.name,
+                  }}
+                  onToggleSave={onToggleSave}
+                  onSelectItem={onSelectItem}
+                  onViewImage={onViewImage}
+                />
+              ))}
+            </div>
+            <ScrollLoadMoreSentinel
+              sentinelRef={paginatedDishes.sentinelRef}
+              visibleCount={paginatedDishes.visibleCount}
+              totalCount={paginatedDishes.totalCount}
+              pageSize={PAGE_LIMITS.WEEKLY_AND_MASTER}
+              hasMore={paginatedDishes.hasMore}
+              onLoadMore={paginatedDishes.loadMore}
+              itemLabel="dishes"
+            />
+          </div>
+        )}
+      </div>
     </div>
   );
 };
